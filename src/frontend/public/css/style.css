@@ -39,7 +39,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
   padding: .5rem .75rem; background: var(--surface); border-bottom: 1px solid var(--line);
 }
-.app-header .user { min-width: 0; font-size: .875rem; color: var(--muted); }
+.app-header .user {
+  flex: 1 1 auto; min-width: 0; font-size: .875rem; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal;
+}
+.app-header .btn { flex-shrink: 0; white-space: nowrap; }
 .app-main { padding: .75rem .75rem calc(var(--tap) + 2rem + env(safe-area-inset-bottom)); max-width: 720px; margin: 0 auto; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: .875rem; margin-bottom: .75rem; }
 

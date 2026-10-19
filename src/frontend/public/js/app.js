@@ -8,6 +8,7 @@ async function main() {
   try {
     const { user } = await api.me();
     $('user-email').textContent = user.email; // textContent 만 사용
+    $('user-email').title = user.email; // 말줄임 시 전체 확인용 (스크린리더는 전체 텍스트를 읽음)
   } catch (e) {
     if (e.status === 401) { location.replace('/login.html'); return; }
     $('flash').textContent = e.message;
