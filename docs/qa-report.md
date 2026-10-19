@@ -196,7 +196,7 @@ e2e 의 로그인 제한 테스트(C40, C41, frontend "로그인 연속 실패 5
 
 범위: P1, P3, P4, P5, P6(남기기까지), P7, P8(360px 에뮬레이션), reviewer 추가 확인 3건. P2 는 메인 세션, P9·X1 은 메인 세션 담당이라 제외. 공개 HTTP 와 Playwright 로만 실행했고 DB 직접 접속은 하지 않았다. 소스는 수정하지 않았다.
 
-### 결과 요약: 통과 8 / 실패 0 / 검증 불가·미실행 2 (P6 재배포 후 확인, P8 실제 휴대폰)
+### 결과 요약: 통과 11 / 실패 0 / 검증 불가·미실행 1 (P8 실제 휴대폰). 재배포(커밋 2959dcf) 후 재확인 3건(P6, 헤더 수정, 간단 회귀)은 아래 "재배포 후 확인" 참고
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
@@ -205,7 +205,7 @@ e2e 의 로그인 제한 테스트(C40, C41, frontend "로그인 연속 실패 5
 | P4 가입->로그인->거래 CRUD->대시보드 | 통과 | API: 가입 201, 로그인 200, me 200/무쿠키 401, 거래 3건 생성 201, PUT 200(createdAt 유지), 목록·summary·stats/monthly·categories·category-monthly·insights·quick·autocomplete 모두 200 이고 값 일치(수입 100000 / 지출 17000 / 잔액 83000), 검증 오류 5종(0원, 1.5, 상한 초과, 2026-02-30, 잘못된 카테고리) 400, 삭제 204 후 재삭제 404, 정리 후 목록 0건. UI(Playwright): 미로그인 `/`가 login.html 로 이동, 가입, 지출·수입 추가, 수정, 대시보드 KPI/도넛/월별/추이 렌더(NaN/undefined 없음), 로그아웃, 재로그인 후 거래 유지, UI 삭제(confirm) |
 | P4 기존 e2e 재사용 | 불가(대체함) | `env.js` 는 `BASE_URL` 을 받지만 헬퍼가 계정을 대량 생성하고 `x-forwarded-for` 를 위조해 IP 제한을 피하는 구조(TRUST_PROXY 전용)라 이 공유 DB 에서 쓰면 가입 한도(10/시간)와 계정 수 제한을 어긴다. API 스크립트 + 별도 Playwright 스모크로 대체 |
 | P5 C49 격리 | 통과 | B 가 A 의 거래 id 로 PUT 404 NOT_FOUND, DELETE 404. B 의 목록 0건, summary 0/0/카테고리 0, monthly 0, insights 비어 있음, autocomplete 비어 있음. 이후 A 가 같은 거래를 PUT 200(B 의 시도로 훼손 없음). 비UUID id PUT 404, 존재하지 않는 UUID DELETE 404, 무세션 목록 401 |
-| P6 재배포 후 유지 | 검증 불가(대기) | 재배포 전 확인용 거래만 남김. 아래 "재배포 후 확인 대기" 참고 |
+| P6 재배포 후 유지 | 통과 | 재배포(2959dcf) 후 거래가 그대로 유지됨. 아래 "재배포 후 확인" 참고 |
 | P7 보안 헤더 / CSRF / 415 / no-store | 통과 | 정적(`/`, `/index.html`, `/js/app.js`, `/css/style.css`, 404 페이지)과 API(200/404/405 응답) 모두 CSP(`default-src 'self'; … frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` 존재. 프레임 금지는 CSP frame-ancestors 로만 제공(X-Frame-Options 헤더는 없음). `/`, `/index.html` `Cache-Control: no-store`. API 는 `no-store`. `Origin: https://evil.example` POST: 거래 403 CSRF_REJECTED, 로그인 403, 가입 403(쿠키 발급 없음). Origin 없는 로그인 403. `text/plain` 415, form-urlencoded 415. 20KB 본문 413. PATCH 405 + `Allow: GET, POST` |
 | 추가 1: 잘못된 JSON | 통과 | `{bad json` 을 거래(인증), 로그인, 가입에 전송 -> 모두 400 `INVALID_JSON`(500 아님). `[1,2]` 도 400 INVALID_JSON |
 | 추가 2: Vercel 에서 IP/이메일 제한 | 통과 | 없는 이메일로 순차 실패 로그인 6회: 401 x5, 6번째 429 `TOO_MANY_ATTEMPTS`, `Retry-After: 899`. 잠긴 후 올바른 비밀번호도 429, 잘못된 비밀번호도 429(`Retry-After: 900`) |
@@ -218,7 +218,7 @@ IP 기반 제한에 대한 한계: 클라이언트 IP 의 `x-forwarded-for` 해�
 ### 관찰사항 (결함 아님)
 - 정적 `/` 응답에 `Access-Control-Allow-Origin: *` 가 있다(Vercel 정적 파일 기본값으로 추정). API 응답에는 없다. 정적 공개 파일이라 영향은 작다.
 - `/` 응답에 `Cache-Control: no-store` 이면서 `Age: 471`, `X-Vercel-Cache: HIT` 가 함께 보였다(Vercel 엣지 캐시 사용). 브라우저 캐시 금지 목적은 달성되지만 엣지에서는 캐시될 수 있다.
-- 360px 에서 헤더의 로그아웃 버튼 글자가 두 줄("로그아/웃")로 꺾이고 이메일도 줄바꿈된다(`shot-3-dashboard.png`). 기능에는 문제 없고 외관상 개선 여지다. 풀페이지 스크린샷에서 하단 탭바가 화면 중간에 겹쳐 보이는 것은 fixed 요소의 캡처 특성이다.
+- (재배포 전 관찰, 수정 확인됨) 360px 에서 헤더의 로그아웃 버튼 글자가 두 줄로 꺾이고 이메일도 줄바꿈되던 문제는 2959dcf 에서 해소됨(아래 참고). 풀페이지 스크린샷에서 하단 탭바가 화면 중간에 겹쳐 보이는 것은 fixed 요소의 캡처 특성이다.
 - 브라우저 콘솔에 401 리소스 오류 3건: 미로그인 상태의 `/api/auth/me` 호출로 보이며 기대 동작이다.
 - `quick` 추천은 거래 1~2건 계정에서 빈 목록이었다(임계치 미달로 추정, 규칙 검증은 배포 범위 아님).
 
@@ -226,21 +226,31 @@ IP 기반 제한에 대한 한계: 클라이언트 IP 의 `x-forwarded-for` 해�
 실패 항목은 없다. 주의가 필요한 순서는 다음과 같다.
 1. IP 기반 제한(실패 20/15분, 가입 10/시간)의 Vercel 동작은 미증명(위험 때문에 미시험). 이메일 제한만 확인.
 2. 정적 응답의 `Access-Control-Allow-Origin: *` 와 no-store 가 엣지에서 HIT 인 점(낮음, 정적 공개 파일).
-3. 360px 헤더의 로그아웃 버튼 줄바꿈(낮음, UI 외관).
+3. (해소) 360px 헤더 로그아웃 버튼 줄바꿈은 재배포로 수정 확인됨.
 
 ### 생성한 테스트 계정 (이메일만, 총 5개, example.com)
 - qa-deploy-1792425483117-1@example.com (P3/P4/P5 계정 A, 거래 정리 완료)
 - qa-deploy-1792425483117-2@example.com (P5 계정 B)
-- qa-deploy-1792425483117-3@example.com (P6 재배포 후 확인 대기, 거래 1건 남김)
+- qa-deploy-1792425483117-3@example.com (P6 재배포 후 확인 완료, 거래 정리 완료)
 - qa-deploy-1792425483117-4@example.com (429 잠금 전용, 잠긴 상태)
 - qa-deploy-1792425483117-5@example.com (Playwright 360px UI 스모크, 거래 정리 완료)
 
 존재하지 않는 이메일 `qa-deploy-1792425483117-ghost@example.com` 으로 순차 로그인 실패 시도를 했으나 가입한 계정은 아니다.
 
-### P6: 재배포 후 확인 대기
-- 계정: qa-deploy-1792425483117-3@example.com (비밀번호는 리포트에 적지 않음. 메인 세션이 필요하면 임시 폴더 state 파일에서 가져가거나, 본 QA 에게 재확인을 요청할 것)
-- 거래 ID: c6413bc8-0785-4e39-9e78-0e9239d97b96 (지출 7777원, 기타, 메모 "QA 재배포 확인용", 날짜 2026-10-20, createdAt 2026-10-19T15:58:37.604Z)
-- 재배포 후 확인 방법: 위 계정 로그인 후 `GET /api/transactions?month=2026-10` 에 같은 id/금액이 남아 있는지 확인. 이 거래는 정리하지 않았다.
+### 재배포 후 확인 (커밋 2959dcf, 2026-10-20)
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| P6 거래 유지 | 통과 | 계정 -3 로그인 200(1회). `GET /api/transactions?month=2026-10` 200, 거래 1건: id c6413bc8-0785-4e39-9e78-0e9239d97b96, expense 7777, 기타, 메모 "QA 재배포 확인용", 2026-10-20, createdAt 2026-10-19T15:58:37.604Z (재배포 전과 동일) |
+| P6 정리 | 통과 | `DELETE /api/transactions/<id>` 204, 이후 같은 월 목록 0건, 로그아웃 204 |
+| 헤더 360x800 | 통과 | 계정 -5 로 로그인(Chromium, isMobile). 로그아웃 버튼(#logout-btn) 98x44px(한 줄, 높이 44). scrollWidth 360 = innerWidth 360, body.scrollWidth 360. 이메일 span#user-email 의 title 이 전체 이메일(`qa-deploy-1792425483117-5@example.com`)이며 표시 텍스트는 말줄임 처리 |
+| 헤더 320x640 | 통과 | 로그아웃 버튼 98x44px, scrollWidth 320 = innerWidth 320. 이메일 title 전체 이메일. 스크린샷에서 버튼 글자 한 줄("로그아웃"), 이메일은 말줄임(`…`), 가로 스크롤 없음 |
+| 회귀: 페이지 | 통과 | `/` 200, `/login.html` 200 |
+| 회귀: health | 통과 | `/api/health` -> `{"status":"ok","db":"ok"}` |
+| 회귀: 보안 헤더 | 통과 | `/`, `/login.html`, `/css/style.css` 모두 CSP(`default-src 'self'; … frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` |
+| 회귀: no-store | 통과 | `/` `Cache-Control: no-store` 유지 |
+
+비고: 로그아웃 버튼의 줄 수는 높이(44px = 한 줄 + 최소 터치 높이)와 스크린샷 육안으로 판단했다. 이메일은 긴 주소가 말줄임으로 잘리고 전체는 title(툴팁)로만 볼 수 있다(터치 기기에서는 툴팁이 뜨지 않음, 낮은 영향). 스크린샷은 레포 밖 임시 폴더에 `hdr-fix-360.png`, `hdr-fix-320.png` 로 저장했다. 로그인은 계정 -3 에서 1회(API), 계정 -5 에서 2회(UI 360/320). 새 가입 없음(계정 총 5개 유지). 계정 -3 은 거래 0건 상태로 정리됨.
 
 ### 실행 명령 요약
 - `curl -sI` http/https/`/index.html`/정적 자산/404/API 404 헤더, `curl -si /api/health`, `/__qa/*` 404 확인.
@@ -249,3 +259,8 @@ IP 기반 제한에 대한 한계: 클라이언트 IP 의 `x-forwarded-for` 해�
 - 임시 파일 위치: 레포 밖 작업용 임시 폴더(계정 비밀번호를 담은 state 파일 포함, 커밋 금지).
 - 스크린샷: 같은 폴더의 `shot-1-login.png`, `shot-2-record.png`, `shot-3-dashboard.png`, `shot-4-after-relogin.png`
 - 가입 시도 합계: IP 당 5회(제한 10/시간 이내).
+
+### 사용자 확인 항목 (2026-10-20)
+- P8 실제 휴대폰 확인: 사용자가 "다 정상"이라고 회신함(사용자 확인, QA 미실행, 스크린샷 없음).
+- P9 Vercel 환경변수(Production/Preview, 이름만): 사용자가 "다 정상"이라고 회신함(사용자 확인, QA·메인 세션이 값을 직접 보지 않음). 함수 지역 `sin1` 은 응답 헤더(`X-Vercel-Id`)로 확인함.
+- 남은 한계: IP 기반 제한(실패 20회/15분, 가입 10회/시간)의 운영 동작은 미증명(단위 테스트로만 검증). 실제 기기 bfcache 동작은 미확인. 헤더 이메일은 말줄임이라 터치 기기에서는 `title` 툴팁이 보이지 않음.
