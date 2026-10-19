@@ -1,0 +1,17 @@
+node_modules/
+.env*
+!.env.example
+.data/
+.vercel/
+e2e/test-results/
+e2e/playwright-report/
+e2e/node_modules/
+# 이 프로젝트와 무관한 폴더
+src/frontend/office/
+*.log
+
+# office-dashboard state (local only)
+.office/
+
+# oh-my-claudecode session state (local only)
+.omc/

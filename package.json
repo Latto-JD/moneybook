@@ -1,0 +1,23 @@
+{
+  "name": "moneybook",
+  "version": "0.1.0",
+  "private": true,
+  "description": "가계부 앱 (Vercel + Postgres)",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env src/backend/scripts/dev-server.js",
+    "test": "node --test \"src/**/test/*.test.js\"",
+    "db:migrate": "node --env-file-if-exists=.env src/backend/db/migrate.js",
+    "seed": "node --env-file-if-exists=.env src/backend/scripts/seed.js",
+    "qa:tools": "node --env-file-if-exists=.env src/backend/scripts/qa-tools.js"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10"
+  }
+}

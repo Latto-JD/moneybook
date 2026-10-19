@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>로그인 - 가계부</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="auth-wrap" id="main">
+    <h1 id="auth-title">가계부 로그인</h1>
+    <div class="card">
+      <div class="segmented" role="group" aria-label="로그인 또는 가입">
+        <button type="button" id="mode-login" aria-pressed="true">로그인</button>
+        <button type="button" id="mode-signup" aria-pressed="false">가입</button>
+      </div>
+      <form id="auth-form" method="post" action="/login.html" novalidate aria-labelledby="auth-title">
+        <div class="field">
+          <label for="email">이메일</label>
+          <input type="email" id="email" name="email" autocomplete="email" inputmode="email" required aria-describedby="email-error">
+          <p class="error-text" id="email-error"></p>
+        </div>
+        <div class="field">
+          <label for="password">비밀번호 (8자 이상)</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" minlength="8" required aria-describedby="password-error">
+          <p class="error-text" id="password-error"></p>
+          <label class="check-label" for="show-password"><input type="checkbox" id="show-password"> 비밀번호 보기</label>
+        </div>
+        <p class="error-text" id="form-error" role="alert"></p>
+        <button type="submit" class="btn btn-primary btn-block" id="submit-btn">로그인</button>
+      </form>
+    </div>
+  </main>
+  <script type="module" src="js/login.js"></script>
+</body>
+</html>

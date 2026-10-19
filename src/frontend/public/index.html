@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>가계부</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+  <header class="app-header">
+    <span class="user" id="user-email" aria-live="polite"></span>
+    <button type="button" class="btn" id="logout-btn">로그아웃</button>
+  </header>
+
+  <main class="app-main" id="main">
+    <p class="status-text" id="flash" role="status" aria-live="polite"></p>
+
+    <!-- 기록 탭 -->
+    <section id="panel-record" aria-label="기록">
+      <h1 class="visually-hidden">기록</h1>
+      <form class="card" id="tx-form" method="post" action="/" novalidate aria-label="거래 입력">
+        <div class="field">
+          <label for="amount">금액 (원)</label>
+          <input type="text" id="amount" name="amount" class="amount-input" inputmode="numeric" autocomplete="off" aria-describedby="amount-error">
+          <p class="error-text" id="amount-error"></p>
+        </div>
+        <div class="field">
+          <div class="segmented" role="group" aria-label="거래 종류">
+            <button type="button" id="type-expense" aria-pressed="true">지출</button>
+            <button type="button" id="type-income" aria-pressed="false">수입</button>
+          </div>
+        </div>
+        <fieldset>
+          <legend>카테고리</legend>
+          <ul class="chips" id="category-chips"></ul>
+          <p class="error-text" id="category-error"></p>
+        </fieldset>
+        <div class="field">
+          <label for="memo">메모 (선택)</label>
+          <input type="text" id="memo" name="memo" maxlength="50" autocomplete="off" aria-describedby="memo-error">
+          <p class="error-text" id="memo-error"></p>
+          <ul class="chips" id="memo-suggestions" aria-label="메모 제안"></ul>
+        </div>
+        <details class="field" id="date-details">
+          <summary>날짜: <span id="date-summary">오늘</span></summary>
+          <label for="date">날짜 변경</label>
+          <input type="date" id="date" name="date">
+          <p class="error-text" id="date-error"></p>
+        </details>
+        <p class="error-text" id="tx-error" role="alert"></p>
+        <button type="submit" class="btn btn-primary btn-block" id="save-btn">저장</button>
+        <button type="button" class="btn btn-block cancel-edit" id="cancel-edit-btn" hidden>수정 취소</button>
+      </form>
+
+      <section class="card" id="quick-section" aria-labelledby="quick-title" hidden>
+        <h2 id="quick-title">빠른 입력</h2>
+        <ul class="chips" id="quick-chips"></ul>
+      </section>
+
+      <section class="card" aria-labelledby="month-title-h">
+        <div class="month-nav">
+          <button type="button" class="btn" id="month-prev" aria-label="이전 달">&lt;</button>
+          <h2 class="month-title" id="month-title-h" tabindex="-1">이번 달</h2>
+          <button type="button" class="btn" id="month-next" aria-label="다음 달">&gt;</button>
+        </div>
+        <p class="error-text" id="month-error" role="alert"></p>
+        <div id="month-summary"></div>
+        <ul id="tx-list"></ul>
+      </section>
+
+      <section class="card" aria-labelledby="insight-title">
+        <h2 id="insight-title">인사이트</h2>
+        <div id="insights"></div>
+      </section>
+    </section>
+
+    <!-- 대시보드 탭 -->
+    <section id="panel-dashboard" aria-label="대시보드" hidden>
+      <h1 class="visually-hidden">대시보드</h1>
+      <div class="card">
+        <div class="month-nav">
+          <button type="button" class="btn" id="dash-prev" aria-label="이전 달">&lt;</button>
+          <h2 class="month-title" id="dash-month">이번 달</h2>
+          <button type="button" class="btn" id="dash-next" aria-label="다음 달">&gt;</button>
+        </div>
+        <div class="segmented" role="group" aria-label="추이 기간">
+          <button type="button" id="range-6" aria-pressed="true">6개월</button>
+          <button type="button" id="range-12" aria-pressed="false">12개월</button>
+        </div>
+      </div>
+      <p class="error-text" id="dash-error" role="alert"></p>
+      <div class="kpi-grid kpi-grid-3" id="kpi" aria-live="polite"></div>
+      <section class="card" id="chart-donut" aria-label="카테고리 지출 비중"></section>
+      <section class="card" id="chart-monthly" aria-label="월별 수입 대 지출"></section>
+      <section class="card" aria-label="카테고리별 월 추이">
+        <ul class="chips" id="cat-trend-chips" aria-label="카테고리 선택"></ul>
+        <div id="chart-cat-trend"></div>
+      </section>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="화면 전환">
+    <a href="#record" id="tab-record">기록</a>
+    <a href="#dashboard" id="tab-dashboard">대시보드</a>
+  </nav>
+  <script type="module" src="js/tabs.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

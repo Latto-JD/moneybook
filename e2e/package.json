@@ -1,0 +1,14 @@
+{
+  "name": "moneybook-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "QA 전용 Playwright 테스트 패키지 (앱 런타임과 분리)",
+  "scripts": {
+    "test": "playwright test",
+    "list": "playwright test --list"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

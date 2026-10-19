@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>차트 목업 (수동 확인용, 배포 대상 아님)</title>
+  <link rel="stylesheet" href="../../public/css/style.css">
+</head>
+<body>
+  <main class="app-main">
+    <h1>차트 목업</h1>
+    <div class="segmented" role="group" aria-label="추이 기간">
+      <button type="button" id="range-6" aria-pressed="true">6개월</button>
+      <button type="button" id="range-12" aria-pressed="false">12개월</button>
+    </div>
+    <section class="card" id="chart-donut" aria-label="카테고리 지출 비중"></section>
+    <section class="card" id="chart-monthly" aria-label="월별 수입 대 지출"></section>
+    <section class="card" id="chart-cat-trend" aria-label="카테고리별 월 추이"></section>
+    <section class="card" id="chart-empty" aria-label="빈 상태"></section>
+  </main>
+  <script type="module" src="chart-mock.js"></script>
+</body>
+</html>
