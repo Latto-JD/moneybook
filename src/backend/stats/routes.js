@@ -1,4 +1,5 @@
-import { categoryOrder } from '../lib/categories.js';
+import { loadOrderFn } from '../lib/categories.js';
+import { koCompare } from '../rules/common.js';
 import { monthsBetween, monthStart, nextMonthStart } from '../lib/dates.js';
 import { parseRange, parseType, requireMonth } from '../lib/params.js';
 
@@ -32,6 +33,7 @@ function buildMonths(rows, from, to) {
 }
 
 async function categoryRows(db, userId, from, to, type) {
+  const orderOf = await loadOrderFn(db, userId);
   const { rows } = await db.query(
     `select category, sum(amount)::bigint as total, count(*)::bigint as n
        from transactions
@@ -42,7 +44,12 @@ async function categoryRows(db, userId, from, to, type) {
   return rows
     .map((r) => ({ category: r.category, total: Number(r.total), count: Number(r.n) }))
     .filter((r) => r.total > 0)
-    .sort((a, b) => b.total - a.total || categoryOrder(type, a.category) - categoryOrder(type, b.category));
+    .sort(
+      (a, b) =>
+        b.total - a.total ||
+        orderOf(type, a.category) - orderOf(type, b.category) ||
+        koCompare(a.category, b.category),
+    );
 }
 
 function withRatio(items) {
@@ -85,6 +92,7 @@ async function categoryMonthly({ db, user, query }) {
   const { from, to } = parseRange(query);
   const type = parseType(query.type);
   const months = monthsBetween(from, to);
+  const orderOf = await loadOrderFn(db, user.id);
   const { rows } = await db.query(
     `select to_char(date, 'YYYY-MM') as month, category, sum(amount)::bigint as total
        from transactions
@@ -102,7 +110,12 @@ async function categoryMonthly({ db, user, query }) {
   const series = [...byCat.entries()]
     .map(([category, totals]) => ({ category, totals, sum: totals.reduce((a, b) => a + b, 0) }))
     .filter((s) => s.sum > 0)
-    .sort((a, b) => b.sum - a.sum || categoryOrder(type, a.category) - categoryOrder(type, b.category));
+    .sort(
+      (a, b) =>
+        b.sum - a.sum ||
+        orderOf(type, a.category) - orderOf(type, b.category) ||
+        koCompare(a.category, b.category),
+    );
   return { status: 200, body: { from, to, type, months, series } };
 }
 

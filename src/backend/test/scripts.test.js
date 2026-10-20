@@ -49,6 +49,8 @@ test('seed: PGlite 메모리 DB 에 사용자 생성 + 거래, 재실행은 --re
     assert.equal(r2.created, false);
     assert.equal((await db.query('select count(*)::int n from transactions')).rows[0].n, r2.count);
     assert.equal((await db.query("select count(*)::int n from users where email = 'other@ex.com'")).rows[0].n, 1);
+    // 시드 사용자는 기본 카테고리 12행을 가진다 (다시 시드해도 12행)
+    assert.equal((await db.query("select count(*)::int n from categories c join users u on u.id = c.user_id where u.email = 'seed@ex.com'")).rows[0].n, 12);
   } finally {
     await db.close();
   }

@@ -4,7 +4,10 @@ import { cmpRecent, koCompare, latest, memoKey } from './common.js';
 
 export const AUTOCOMPLETE = { windowDays: 180, limit: 5, maxQueryLength: 50 };
 
-function mostUsedCategory(items) {
+// activeNames 가 있으면 활성 카테고리만 센다. 하나도 없으면 null.
+function mostUsedCategory(items, activeNames) {
+  if (activeNames) items = items.filter((t) => activeNames.has(t.category));
+  if (!items.length) return null;
   const counts = new Map();
   for (const t of items) counts.set(t.category, (counts.get(t.category) || 0) + 1);
   const max = Math.max(...counts.values());
@@ -12,7 +15,7 @@ function mostUsedCategory(items) {
   return latest(items.filter((t) => counts.get(t.category) === max)).category;
 }
 
-export function autocomplete(transactions, q, type, today) {
+export function autocomplete(transactions, q, type, today, activeNames) {
   const query = memoKey(q);
   if (query.length < 1) return [];
   const from = addDays(today, -(AUTOCOMPLETE.windowDays - 1));
@@ -40,7 +43,7 @@ export function autocomplete(transactions, q, type, today) {
   }
   return result.slice(0, AUTOCOMPLETE.limit).map((e) => ({
     memo: e.last.memo.trim(),
-    category: mostUsedCategory(e.items),
+    category: mostUsedCategory(e.items, activeNames),
     amount: e.last.amount,
   }));
 }

@@ -7,6 +7,7 @@ import { createDb } from '../db/index.js';
 import { migrate } from '../db/migrate.js';
 import { hashPassword } from '../auth/password.js';
 import { isValidEmail, isValidPassword, normalizeEmail } from '../auth/validate.js';
+import { ensureDefaults } from '../lib/categories.js';
 import { addDays, addMonths, isValidDateStr, todayInSeoul } from '../lib/dates.js';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -86,6 +87,7 @@ export async function seed(db, { email, password, today, reset = false }) {
       await db.query('delete from transactions where user_id = $1', [userId]);
     }
   }
+  await ensureDefaults(db, userId); // 거래 카테고리가 기본 세트이므로 사용자에게 기본 세트가 있어야 한다
   const txs = buildSeedTransactions(today);
   await db.transaction(async (tx) => {
     for (const t of txs) {

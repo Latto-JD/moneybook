@@ -26,7 +26,7 @@ export default defineConfig({
     {
       name: 'tablet-768',
       // API 테스트는 뷰포트와 무관하므로 mobile-360 에서만 실행하고, 768 은 UI 테스트만 실행
-      testMatch: /(frontend|dashboard-ui)\.spec\.js/,
+      testMatch: /(frontend|dashboard-ui|categories-ui)\.spec\.js/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } },
     },
   ],

@@ -712,9 +712,9 @@ test.describe('C34 인사이트 영역', () => {
       },
     });
     const ins = page.locator('#insights');
-    await expect(ins).toContainText('과소비 알림');
-    await expect(ins.locator('.insight-overspending')).toContainText('초과');
-    await expect(ins.locator('.insight-overspending')).toContainText('식비: 이번 달 130,000원으로 평소 월 평균 100,000원보다 30% 더 썼어요');
+    await expect(ins).toContainText('평소보다 많은 지출');
+    await expect(ins.locator('.insight-overspending')).toContainText('평소보다 많음');
+    await expect(ins.locator('.insight-overspending')).toContainText('식비: 이번 달 130,000원으로 평소 월 평균 100,000원보다 30% 많아요');
     await expect(ins).toContainText('반복 거래');
     const soon = ins.locator('.insight.strong');
     await expect(soon).toContainText('곧 예정');
@@ -726,16 +726,16 @@ test.describe('C34 인사이트 영역', () => {
     await ctx.close();
   });
 
-  test('C34 시드 사용자(v2.1): 쇼핑·식비 초과, 교통 페이스 주의, 월세·넷플릭스는 과소비 알림에 없음', async ({ browser }, testInfo) => {
+  test('C34 시드 사용자(v2.1): 쇼핑·식비 평소보다 많음, 교통 지금 속도, 월세·넷플릭스는 평소보다 많은 지출 섹션에 없음', async ({ browser }, testInfo) => {
     test.skip(!SEED_EMAIL, 'SEED_EMAIL 필요');
     const api = await newApi();
     expect((await json(api, 'POST', '/api/auth/login', { email: SEED_EMAIL, password: SEED_PASSWORD })).status()).toBe(200);
     const { ctx, page } = await newUiPage(browser, testInfo, { api });
     await page.goto('/#record');
     const over = page.locator('#insights .insight-overspending');
-    await expect(over).toContainText('쇼핑: 이번 달 290,000원으로 평소 월 평균 100,000원보다 190% 더 썼어요');
-    await expect(over).toContainText('식비: 이번 달 420,000원으로 평소 월 평균 300,000원보다 40% 더 썼어요');
-    await expect(over).toContainText('페이스 주의');
+    await expect(over).toContainText('쇼핑: 이번 달 290,000원으로 평소 월 평균 100,000원보다 190% 많아요');
+    await expect(over).toContainText('식비: 이번 달 420,000원으로 평소 월 평균 300,000원보다 40% 많아요');
+    await expect(over).toContainText('지금 속도');
     await expect(over).toContainText('교통: 지금 속도면 이번 달 81,579원 예상이에요');
     await expect(over).not.toContainText('주거/통신');
     await expect(over).not.toContainText('문화/여가');

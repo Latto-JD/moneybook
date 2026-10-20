@@ -1,5 +1,5 @@
 import { ApiError } from '../http.js';
-import { CATEGORIES, TYPES } from '../lib/categories.js';
+import { TYPES, ensureDefaults } from '../lib/categories.js';
 import { isValidDateStr, nextMonthStart, monthStart } from '../lib/dates.js';
 import { requireMonth } from '../lib/params.js';
 
@@ -18,7 +18,8 @@ export function toTransaction(row) {
   };
 }
 
-// 거래 입력 검증. userId/id/createdAt 등 알 수 없는 필드는 무시한다.
+// 거래 입력 형식 검증. userId/id/createdAt 등 알 수 없는 필드는 무시한다.
+// category 가 사용자의 활성 카테고리인지는 DB 가 필요하므로 assertCategoryUsable 에서 따로 확인한다.
 export function validateTransactionInput(body) {
   const fields = {};
   const { type, amount, category, date } = body;
@@ -28,7 +29,7 @@ export function validateTransactionInput(body) {
   if (!(typeof amount === 'number' && Number.isInteger(amount) && amount >= 1 && amount <= 100_000_000)) {
     fields.amount = '금액은 1 이상 100000000 이하의 정수여야 해요.';
   }
-  if (!fields.type && !(typeof category === 'string' && CATEGORIES[type].includes(category))) {
+  if (!fields.type && typeof category !== 'string') {
     fields.category = '해당 구분에 없는 카테고리예요.';
   } else if (fields.type && typeof category !== 'string') {
     fields.category = '카테고리를 선택해 주세요.';
@@ -60,26 +61,66 @@ async function list({ db, user, query }) {
   return { status: 200, body: { month, transactions: rows.map(toTransaction) } };
 }
 
+// 같은 사용자의 카테고리 쓰기(이름 변경 등)와 거래 쓰기를 직렬화한다.
+// FOR NO KEY UPDATE 는 거래 INSERT 의 FK 확인(FOR KEY SHARE)과 충돌하지 않는다.
+// 이름 변경과 거래 쓰기가 겹쳐도 목록에 없는 옛 이름을 가진 새 거래가 생기지 않는다.
+async function lockUser(tx, userId) {
+  await tx.query('select id from users where id = $1 for no key update', [userId]);
+}
+
+// (type, category) 가 활성 카테고리가 아니면 400 VALIDATION_ERROR
+async function assertCategoryUsable(tx, userId, type, category) {
+  const find = () =>
+    tx.query('select active from categories where user_id = $1 and type = $2 and name = $3', [userId, type, category]);
+  let { rows } = await find();
+  if (!rows[0]) {
+    // 카테고리 행이 아직 없는 사용자라면 기본 세트를 만들고 다시 확인한다
+    await ensureDefaults(tx, userId);
+    ({ rows } = await find());
+  }
+  let message;
+  if (!rows[0]) message = '해당 구분에 없는 카테고리예요.';
+  else if (!rows[0].active) message = '사용 안 함으로 바꾼 카테고리예요. 다른 카테고리를 골라 주세요.';
+  if (message) throw new ApiError(400, 'VALIDATION_ERROR', message, { fields: { category: message } });
+}
+
 async function create({ db, user, body }) {
   const t = validateTransactionInput(body);
-  const { rows } = await db.query(
-    `insert into transactions (user_id, type, amount, category, memo, date)
-     values ($1, $2, $3, $4, $5, $6::date) returning ${COLUMNS}`,
-    [user.id, t.type, t.amount, t.category, t.memo, t.date],
-  );
-  return { status: 201, body: toTransaction(rows[0]) };
+  const row = await db.transaction(async (tx) => {
+    await lockUser(tx, user.id);
+    await assertCategoryUsable(tx, user.id, t.type, t.category);
+    const { rows } = await tx.query(
+      `insert into transactions (user_id, type, amount, category, memo, date)
+       values ($1, $2, $3, $4, $5, $6::date) returning ${COLUMNS}`,
+      [user.id, t.type, t.amount, t.category, t.memo, t.date],
+    );
+    return rows[0];
+  });
+  return { status: 201, body: toTransaction(row) };
 }
 
 async function update({ db, user, params, body }) {
   if (!UUID_RE.test(params.id)) throw notFound();
   const t = validateTransactionInput(body);
-  const { rows } = await db.query(
-    `update transactions set type = $3, amount = $4, category = $5, memo = $6, date = $7::date
-      where id = $1 and user_id = $2 returning ${COLUMNS}`,
-    [params.id, user.id, t.type, t.amount, t.category, t.memo, t.date],
-  );
-  if (!rows[0]) throw notFound();
-  return { status: 200, body: toTransaction(rows[0]) };
+  const row = await db.transaction(async (tx) => {
+    await lockUser(tx, user.id);
+    const { rows: cur } = await tx.query('select type, category from transactions where id = $1 and user_id = $2', [
+      params.id,
+      user.id,
+    ]);
+    if (!cur[0]) throw notFound();
+    // 거래의 현재 (type, category) 를 그대로 두는 수정은 사용 안 함 카테고리여도 허용한다
+    if (!(cur[0].type === t.type && cur[0].category === t.category)) {
+      await assertCategoryUsable(tx, user.id, t.type, t.category);
+    }
+    const { rows } = await tx.query(
+      `update transactions set type = $3, amount = $4, category = $5, memo = $6, date = $7::date
+        where id = $1 and user_id = $2 returning ${COLUMNS}`,
+      [params.id, user.id, t.type, t.amount, t.category, t.memo, t.date],
+    );
+    return rows[0];
+  });
+  return { status: 200, body: toTransaction(row) };
 }
 
 async function remove({ db, user, params }) {
@@ -89,12 +130,7 @@ async function remove({ db, user, params }) {
   return { status: 204 };
 }
 
-async function categories() {
-  return { status: 200, body: CATEGORIES };
-}
-
 export const transactionRoutes = [
-  { method: 'GET', path: '/api/categories', handler: categories },
   { method: 'GET', path: '/api/transactions', handler: list },
   { method: 'POST', path: '/api/transactions', handler: create },
   { method: 'PUT', path: '/api/transactions/:id', handler: update },

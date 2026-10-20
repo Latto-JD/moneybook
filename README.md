@@ -59,7 +59,25 @@ Windows PowerShell 에서 `.env` 없이 쓰려면 `$env:DB_DRIVER="pglite"; $env
 
 ### 마이그레이션
 
-`npm run db:migrate` 는 `src/backend/db/schema.sql`(멱등 SQL)을 적용합니다. 프로덕션에서는 `DATABASE_URL_UNPOOLED` 를 우선 사용합니다.
+`npm run db:migrate` 는 `src/backend/db/schema.sql`(멱등 SQL)을 적용합니다. 프로덕션에서는 `DATABASE_URL_UNPOOLED` 를 우선 사용합니다. 출력의 `driver=` 로 대상을 구분합니다: `driver=pglite` 는 로컬, `driver=pg` 가 실제 Postgres 입니다.
+
+주의: 이 스크립트는 `.env` 만 읽고, `.env` 에 `DB_DRIVER=pglite` 가 있으면 **운영이 아닌 로컬 PGlite** 에 적용되어 "완료"만 출력됩니다. 운영 DB에는 아래 `db:migrate:prod` 를 쓰세요.
+
+카테고리 마이그레이션(v3)은 `categories` 테이블을 추가하고, 카테고리 행이 하나도 없는 사용자에게만 기본 12개를 넣습니다(사용자가 바꾼 이름·상태는 재실행해도 되살아나지 않음). 기존 테이블은 바꾸지 않아 구버전 코드와 호환됩니다. 성공 출력: `마이그레이션 완료 (driver=pglite, categories 생성 사용자=N)`. 반드시 **백업 -> 마이그레이션 -> 코드 배포** 순서로 진행합니다(코드를 먼저 배포하면 `categories` 테이블이 없어 거래 저장·카테고리 조회가 500).
+
+#### 운영 DB 마이그레이션 (`db:migrate:prod`, 사용자가 직접 실행)
+
+1. **백업**: Neon 콘솔 -> Branches 에서 운영 브랜치로 `backup-before-categories-<날짜>` 브랜치를 만듭니다. 연결 문자열은 채팅·이슈에 붙여넣지 않습니다.
+2. **실행 전 기록**: Neon SQL Editor 에서 `select count(*) from users;`, `select count(*), sum(amount) from transactions;` 결과(숫자만)를 적어 둡니다.
+3. **환경변수 받기**: `vercel env pull .env.production.local --environment=production` (`.env*` 는 `.gitignore` 대상, 커밋 금지)
+4. **실행**: `npm run db:migrate:prod -- --yes`
+   - `.env.production.local` **만** 읽습니다(`.env` 는 읽지 않음). `DB_DRIVER` 가 파일이나 프로세스 환경에 있으면 거부하고, `--yes` 가 없으면 아무것도 실행하지 않으며, 접속 정보(`DATABASE_URL_UNPOOLED` -> `DATABASE_URL`)가 없으면 종료 코드 1 입니다.
+   - 출력이 `마이그레이션 완료 (driver=pg, categories 생성 사용자=N)` 인지 확인합니다. `driver=pg` 가 아니면 운영에 적용되지 않은 것입니다.
+5. **실행 후 확인** (Neon SQL Editor): `select count(*) from categories;` = 사용자 수 x 12, `select count(*) from users u where not exists (select 1 from categories c where c.user_id = u.id);` = 0, transactions 의 count·sum 이 2번과 같음.
+6. 같은 명령을 한 번 더 실행해 `생성 사용자=0` 인지 확인합니다(멱등).
+7. 끝나면 `.env.production.local` 을 삭제하는 것을 권장합니다.
+
+롤백: 마이그레이션 중 실패하면 SQL 이 한 번에 실행되므로 전부 롤백됩니다(원인 수정 후 재실행). 마이그레이션 후 코드 배포 전에는 구버전 코드가 `categories` 를 읽지 않아 그대로 동작합니다. 새 코드 배포 후 문제가 생기면 Vercel 에서 이전 배포로 Instant Rollback 하고 스키마는 그대로 둡니다(구버전 호환). 단, 새 코드에서 이름을 바꾸거나 새로 만든 카테고리의 거래는 구버전에서 조회·집계는 되지만 수정(PUT)이 400 이 됩니다. 데이터 손상 시 최후 수단은 백업 브랜치 복원이며 백업 이후의 모든 입력이 사라지므로 영향 범위를 확인하고 진행합니다.
 
 ### 테스트
 
@@ -133,7 +151,7 @@ DB_DRIVER=pglite PGLITE_DIR=<같은 디렉터리> npm run qa:tools -- age-attemp
 2. **Vercel 프로젝트 (CP2)**: Vercel 에서 저장소를 Import 합니다. Framework Preset 은 `Other`, Build Command 는 비웁니다. `vercel.json` 이 `outputDirectory: src/frontend/public`, `/api/*` → `api/index.js` rewrite, `regions: ["sin1"]`, 보안 헤더를 지정합니다.
 3. **Neon 추가**: Vercel 프로젝트 Storage/Marketplace 에서 Neon Postgres 를 추가하고 지역을 `AWS Asia Pacific (Singapore)` 로 선택해 프로젝트에 연결합니다. `DATABASE_URL`(pooled), `DATABASE_URL_UNPOOLED` 가 환경변수로 자동 주입되는지 확인합니다.
 4. **환경변수**: Production/Preview 에 필요 시 `SIGNUP_ENABLED`, `APP_ORIGINS` 를 설정합니다. `DB_DRIVER`, `COOKIE_SECURE=false`, `QA_TOOLS` 는 **설정하지 않습니다**.
-5. **마이그레이션**: `vercel env pull .env.local` 로 받은 값으로 `npm run db:migrate` 를 실행합니다(`.env.local` 은 커밋 금지, `.gitignore` 로 제외됨). 개발/프리뷰용 Neon 브랜치를 따로 쓰는 것을 권장합니다.
+5. **마이그레이션**: 위 "운영 DB 마이그레이션" 절차(`vercel env pull .env.production.local --environment=production` 후 `npm run db:migrate:prod -- --yes`)를 따릅니다. `npm run db:migrate` 는 `.env` 만 읽으므로(`.env.local`/`.env.production.local` 은 읽지 않음) 운영 대상에 쓰지 않습니다. 운영과 프리뷰가 같은 Neon DB 이면 프리뷰도 운영 데이터에 씁니다. 개발/프리뷰용 Neon 브랜치를 따로 쓰는 것을 권장합니다.
 6. **프리뷰 확인 (D3)**: 프리뷰 URL 에서 `/api/health` 가 `{"status":"ok","db":"ok"}` 인지, 가입→기록→대시보드, Set-Cookie 에 `Secure; HttpOnly; SameSite=Lax` 가 있는지 확인합니다.
 7. **프로덕션 배포 (CP3)**: 프리뷰 결과 확인 후 main 프로덕션 배포(또는 프리뷰 승격).
 8. (선택) Vercel 로컬 재현: `vercel link` → `vercel env pull .env.local` → `vercel dev`.

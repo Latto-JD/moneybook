@@ -62,7 +62,7 @@ test('도넛: 데이터 없음/합계 0 -> 빈 상태 문구', () => {
   }
 });
 
-test('묶은 막대: 수입 패턴 vs 지출 단색, 범례 텍스트, 잔액 열', () => {
+test('묶은 막대: 수입·지출 모두 서로 다른 무늬(같은 밀도), 범례 텍스트, 잔액 열', () => {
   const root = mount();
   const months = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'].map((m, i) => ({
     month: m, incomeTotal: 3000000, expenseTotal: 1000000 * (i % 3), balance: 3000000 - 1000000 * (i % 3), count: 3,
@@ -70,12 +70,19 @@ test('묶은 막대: 수입 패턴 vs 지출 단색, 범례 텍스트, 잔액 �
   renderGroupedBars(root, { title: '월별 수입 vs 지출', months });
   const fig = root.children[0];
   const svg = byTag(fig, 'svg').find((e) => e.attrs.role === 'img');
-  const fills = new Set(byTag(svg, 'rect').map((r) => r.attrs.fill).filter((f) => f && f !== '#fff'));
-  assert.ok([...fills].some((f) => f.startsWith('url(#')));
-  assert.ok([...fills].some((f) => f.startsWith('#')));
+  const fills = new Set(svg.children.filter((e) => e.tag === 'rect').map((r) => r.attrs.fill)); // 막대만 (패턴 안 rect 제외)
+  assert.equal(fills.size, 2);
+  assert.ok([...fills].every((f) => f.startsWith('url(#'))); // 어느 쪽도 단색이 아니다
+  const patterns = byTag(svg, 'pattern');
+  assert.equal(patterns.length, 2);
+  assert.equal(new Set(patterns.map((p) => p.attrs.id)).size, 2);
+  // 두 무늬는 같은 개수의 선(밀도)을 가진다
+  const strokes = patterns.map((p) => byTag(p, 'path').map((x) => (x.attrs.d.match(/M/g) || []).length));
+  assert.deepEqual(strokes[0], strokes[1]);
   const legend = byTag(fig, 'li').map((l) => l.textContent).join('|');
-  assert.match(legend, /수입/);
-  assert.match(legend, /지출/);
+  assert.match(legend, /수입 \(\/ 무늬\)/);
+  assert.match(legend, /지출 \(\\ 무늬\)/);
+  assert.doesNotMatch(legend, /단색/);
   const heads = byTag(byTag(fig, 'thead')[0], 'th').map((t) => t.textContent);
   assert.deepEqual(heads, ['월', '수입', '지출', '잔액']);
   assert.equal(byTag(byTag(fig, 'tbody')[0], 'tr').length, 6);
@@ -129,4 +136,92 @@ test('정적 HTML: viewport, 인라인 스크립트/핸들러/style 없음, 외�
       assert.match(html, new RegExp(`<label[^>]*for="${m[1]}"`), `${f}: label for ${m[1]}`);
     }
   }
+});
+
+const { PALETTE, OTHER_STYLE, PATTERN_KINDS } = await import('../public/js/charts.js');
+const { groupDonutItems } = await import('../public/js/lib/dashboard-data.js');
+
+const many = (n) => Array.from({ length: n }, (_, i) => ({ label: `카테고리${i + 1}`, value: 1000 * (n - i) }));
+
+test('도넛 묶음: 8개 이하는 그대로, 9개부터 상위 7 + "그 외 N개"', () => {
+  assert.equal(groupDonutItems(many(8)).length, 8);
+  assert.ok(groupDonutItems(many(8)).every((x) => !x.members));
+  assert.deepEqual(groupDonutItems([]), []);
+  assert.deepEqual(groupDonutItems(undefined), []);
+  for (const n of [9, 12, 30]) {
+    const g = groupDonutItems(many(n));
+    assert.equal(g.length, 8, `n=${n}`);
+    assert.equal(g[7].label, `그 외 ${n - 7}개`);
+    assert.notEqual(g[7].label, '기타');
+    assert.equal(g[7].members.length, n - 7);
+    assert.equal(g.reduce((a, x) => a + x.value, 0), many(n).reduce((a, x) => a + x.value, 0)); // 합계 보존
+    assert.deepEqual(g.slice(0, 7).map((x) => x.label), many(n).slice(0, 7).map((x) => x.label));
+  }
+  // 입력이 정렬되어 있지 않아도 금액순, 0 이하는 제외
+  const shuffled = [{ label: 'a', value: 1 }, { label: 'b', value: 0 }, ...many(9).reverse()];
+  const g = groupDonutItems(shuffled);
+  assert.equal(g[0].label, '카테고리1');
+  assert.equal(g[7].members.length, 3); // 9 + a(1) - 7
+});
+
+test('도넛 묶음 렌더: 조각 8개, 조각마다 (색,무늬) 다름, 범례 8행 + 묶인 이름, 표는 전체 행 + 합계', () => {
+  const items = many(12);
+  items.splice(2, 0, { label: '기타', value: 1 }); // 사용자 카테고리 "기타" 가 묶음에 들어가도 이름이 충돌하지 않는다
+  const total = items.reduce((a, x) => a + x.value, 0);
+  const root = mount();
+  renderDonut(root, { title: '카테고리 지출 비중', periodLabel: '2026년 10월', items: groupDonutItems(items) });
+  const fig = root.children[0];
+  const svg = byTag(fig, 'svg').find((e) => e.attrs.role === 'img');
+  const paths = svg.children.filter((p) => p.tag === 'path');
+  assert.equal(paths.length, 8);
+  assert.equal(new Set(paths.map((p) => p.attrs.fill)).size, 8);
+  // 묶음 조각의 패턴은 다른 조각이 쓰지 않는 색 + 무늬
+  const patterns = byTag(svg, 'pattern');
+  assert.equal(patterns.length, 7); // 첫 조각은 단색(solid)
+  const lastFill = paths[7].attrs.fill;
+  const lastPattern = patterns.find((p) => `url(#${p.attrs.id})` === lastFill);
+  assert.equal(lastPattern.children[0].attrs.fill, OTHER_STYLE.color);
+  assert.ok(!PALETTE.includes(OTHER_STYLE.color));
+  assert.ok(!PATTERN_KINDS.includes(OTHER_STYLE.kind));
+  // 범례
+  const legend = byTag(fig, 'ol')[0];
+  const rows = byTag(legend, 'li');
+  assert.equal(rows.length, 8);
+  assert.match(rows[7].textContent, /^그 외 6개/);
+  assert.ok(rows[7].children.some((c) => c.attrs.class === 'legend-members' && c.textContent.includes('기타')));
+  // 표: 묶지 않은 전체 13행 + 합계, 금액 합 = 전체
+  const table = byTag(fig, 'table')[0];
+  const body = byTag(byTag(table, 'tbody')[0], 'tr');
+  assert.equal(body.length, 13);
+  assert.ok(!body.some((r) => /그 외/.test(r.textContent)));
+  const foot = byTag(byTag(table, 'tfoot')[0], 'tr')[0];
+  assert.match(foot.textContent, new RegExp(`합계${total.toLocaleString('ko-KR')}원100\\.0%`));
+  const sum = body.reduce((a, r) => a + Number(byTag(r, 'td')[0].textContent.replace(/[^\d]/g, '')), 0);
+  assert.equal(sum, total);
+  assert.doesNotMatch(fig.textContent, BAD);
+});
+
+test('도넛: 수입 보기는 중심 라벨/문장이 수입', () => {
+  const root = mount();
+  renderDonut(root, { title: '카테고리 수입 비중', periodLabel: '2026년 10월', items: [{ label: '급여', value: 3000000 }], centerLabel: '총 수입', noun: '수입' });
+  const txt = root.children[0].textContent;
+  assert.match(txt, /총 수입/);
+  assert.match(txt, /수입 3,000,000원 중 급여 100\.0%/);
+  assert.doesNotMatch(txt, /지출/);
+});
+
+// 흰 배경 대비 (WCAG 상대 휘도)
+const lum = (hex) => {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+};
+const contrastOnWhite = (hex) => 1.05 / (lum(hex) + 0.05);
+
+test('팔레트 전 색(+ 묶음 색)이 흰 배경 대비 3:1 이상, 막대 색(수입/지출)도 동일', () => {
+  for (const c of [...PALETTE, OTHER_STYLE.color]) assert.ok(contrastOnWhite(c) >= 3, `${c} ${contrastOnWhite(c).toFixed(2)}`);
+  assert.ok(contrastOnWhite('#0072B2') >= 3 && contrastOnWhite('#C4500A') >= 3);
+  assert.ok(contrastOnWhite(OTHER_STYLE.color) >= 4.5);
+  // (색, 무늬) 조합은 8개 모두 다르다
+  assert.equal(new Set(PALETTE.map((c, i) => `${c}/${PATTERN_KINDS[i]}`)).size, 8);
 });

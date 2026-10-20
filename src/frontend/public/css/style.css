@@ -8,7 +8,6 @@
   --primary: #0b5cad;
   --primary-text: #fff;
   --danger: #b3261e;
-  --ok: #0b6b3a;
   --radius: 10px;
   --tap: 44px;
 }
@@ -71,7 +70,7 @@ input[type="text"], input[type="email"], input[type="password"], input[type="dat
 .amount-input { font-size: 1.5rem; font-weight: 700; text-align: right; }
 .error-text { color: var(--danger); font-size: .875rem; margin: .25rem 0 0; }
 .error-text:empty { display: none; }
-.status-text { color: var(--ok); font-weight: 600; }
+.status-text { color: var(--text); font-weight: 600; }
 .status-text:empty { display: none; }
 .hint { color: var(--muted); font-size: .875rem; }
 details > summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; }
@@ -124,7 +123,9 @@ details > summary { min-height: var(--tap); display: flex; align-items: center; 
 .legend { list-style: none; margin: 0; padding: 0; width: 100%; }
 .legend li { display: flex; align-items: center; gap: .5rem; min-height: 28px; padding: .125rem 0; }
 .legend .swatch { flex: none; width: 16px; height: 16px; }
+.legend li { flex-wrap: wrap; }
 .legend .legend-label { flex: 1; min-width: 0; }
+.legend .legend-members { flex-basis: 100%; padding-left: 24px; font-size: .8125rem; color: var(--muted); }
 .legend .legend-amount { font-variant-numeric: tabular-nums; }
 .legend .legend-ratio { min-width: 3.5rem; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .legend-inline { display: flex; flex-wrap: wrap; gap: .25rem 1rem; }
@@ -141,8 +142,8 @@ details > summary { min-height: var(--tap); display: flex; align-items: center; 
 /* 기록 탭 */
 .kpi-grid-3 { grid-template-columns: 1fr; }
 .kpi-extra { font-size: .875rem; margin-top: .125rem; }
-.kpi-extra.up { color: var(--danger); font-weight: 600; }
-.kpi-extra.down { color: var(--ok); font-weight: 600; }
+/* 증감에는 빨강/초록을 쓰지 않는다 (수입·지출 모두 같은 본문색). 방향은 ▲/▼ 기호와 문장으로 알린다. */
+.kpi-extra.up, .kpi-extra.down { color: var(--text); font-weight: 600; }
 .kpi-extra.muted, .kpi-extra.same { color: var(--muted); }
 #month-summary .kpi-grid { grid-template-columns: repeat(3, 1fr); }
 #month-summary .kpi { padding: .5rem; min-width: 0; }
@@ -154,6 +155,9 @@ details > summary { min-height: var(--tap); display: flex; align-items: center; 
 .cat-bar-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bar-track { height: 10px; background: #e3e7ec; border-radius: 5px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--primary); }
+/* 수입 = 파랑 + / 무늬, 지출 = 주황 + \ 무늬 (월별 막대와 같은 색·무늬, 같은 밀도) */
+.bar-fill.income { background: repeating-linear-gradient(135deg, #0072B2 0 4px, #fff 4px 5px); }
+.bar-fill.expense { background: repeating-linear-gradient(45deg, #C4500A 0 4px, #fff 4px 5px); }
 #tx-list, .tx-rows { list-style: none; margin: 0; padding: 0; }
 .tx-date { font-size: .875rem; color: var(--muted); margin: .75rem 0 .25rem; }
 .tx-row { display: flex; align-items: stretch; gap: .5rem; border-bottom: 1px solid var(--line); padding: .25rem 0; }
@@ -188,3 +192,25 @@ details > summary { min-height: var(--tap); display: flex; align-items: center; 
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 #chart-cat-trend { margin-top: .75rem; }
+
+/* 카테고리 보기 / 관리 */
+.catview-head, .cat-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; }
+.catview-label { font-weight: 700; }
+.cat-top h1 { margin: 0; flex: 1; text-align: right; }
+fieldset { position: relative; }
+fieldset > legend { min-height: var(--tap); display: flex; align-items: center; }
+.cat-edit-link { position: absolute; right: 0; top: calc(var(--tap) * -1); } /* legend 줄 오른쪽 (legend 는 fieldset 내용 영역 밖) */
+.chip-status { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.cat-list { list-style: none; margin: 0 0 .75rem; padding: 0; }
+.cat-row { border-bottom: 1px solid var(--line); padding: .25rem 0; }
+.cat-line { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; }
+.cat-name { flex: 1 1 8rem; min-width: 0; font-weight: 600; }
+.cat-used { flex: none; color: var(--muted); font-size: .875rem; }
+.cat-actions { display: flex; flex-wrap: wrap; gap: .25rem; }
+.cat-rename { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; }
+.cat-rename input { flex: 1 1 8rem; width: auto; min-width: 0; }
+.cat-add { margin: .75rem 0; }
+.cat-add-row { display: flex; gap: .5rem; }
+.cat-add-row input { flex: 1; min-width: 0; }
+#catm-list-title { margin-top: .75rem; }
+.cat-inactive { margin-top: .5rem; }

@@ -47,6 +47,7 @@ export function arcPath(cx, cy, outerR, innerR, startDeg, endDeg) {
 /**
  * 도넛 조각 계산. items: [{label, value}]. value<=0 / 비정상 값은 제외,
  * 금액 내림차순(동률은 입력 순서) 정렬, 12시부터 시계방향. 합계 0이면 [].
+ * pinLast 가 true 인 항목("그 외" 묶음)은 금액과 무관하게 맨 뒤에 둔다.
  */
 export function donutSegments(items, { cx = 100, cy = 100, outerR = 90, innerR = 55 } = {}) {
   const list = (Array.isArray(items) ? items : [])
@@ -54,7 +55,7 @@ export function donutSegments(items, { cx = 100, cy = 100, outerR = 90, innerR =
     .filter((it) => isNum(it.value) && it.value > 0);
   const total = list.reduce((s, it) => s + it.value, 0);
   if (total <= 0) return [];
-  list.sort((a, b) => b.value - a.value || a._i - b._i);
+  list.sort((a, b) => (a.pinLast ? 1 : 0) - (b.pinLast ? 1 : 0) || b.value - a.value || a._i - b._i);
   let angle = 0;
   return list.map((it, idx) => {
     const ratio = it.value / total;

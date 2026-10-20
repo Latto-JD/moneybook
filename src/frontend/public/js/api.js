@@ -2,13 +2,14 @@
 // fetch 와 401 핸들러를 주입할 수 있어 Node 에서 단위 테스트 가능.
 
 export class ApiError extends Error {
-  constructor({ status, code, message, fields, retryAfter }) {
+  constructor({ status, code, message, fields, retryAfter, categoryId }) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.fields = fields || null;
     this.retryAfter = retryAfter ?? null; // 초 단위 정수 또는 null
+    this.categoryId = categoryId ?? null; // CATEGORY_INACTIVE 에서만
   }
 }
 
@@ -74,6 +75,7 @@ export function createApi({ fetchImpl, onUnauthorized = () => {} } = {}) {
       code: err.code || 'ERROR',
       message: err.message || STATUS_MESSAGES[res.status] || '요청을 처리하지 못했어요.',
       fields: err.fields,
+      categoryId: err.categoryId,
       retryAfter: parseRetryAfter(res.headers && res.headers.get ? res.headers.get('Retry-After') : null),
     });
     // 로그인/가입 실패의 401 은 만료가 아니다. 세션 확인(noRedirect)도 호출자가 처리한다.
@@ -90,6 +92,8 @@ export function createApi({ fetchImpl, onUnauthorized = () => {} } = {}) {
     logout: () => request('POST', '/api/auth/logout'),
     // 거래
     categories: () => request('GET', '/api/categories'),
+    createCategory: (type, name) => request('POST', '/api/categories', { body: { type, name } }),
+    updateCategory: (id, patch) => request('PATCH', `/api/categories/${encodeURIComponent(id)}`, { body: patch }),
     listTransactions: (month) => request('GET', '/api/transactions', { query: { month } }),
     createTransaction: (tx) => request('POST', '/api/transactions', { body: tx }),
     updateTransaction: (id, tx) => request('PUT', `/api/transactions/${encodeURIComponent(id)}`, { body: tx }),

@@ -165,6 +165,8 @@ const ZERO_ID = '00000000-0000-4000-8000-000000000000';
 const PROTECTED = [
   ['GET', '/api/auth/me'],
   ['GET', '/api/categories'],
+  ['POST', '/api/categories', { type: 'expense', name: '반려동물' }],
+  ['PATCH', `/api/categories/${ZERO_ID}`, { active: false }],
   ['GET', '/api/transactions?month=2026-10'],
   ['POST', '/api/transactions', VALID_TX],
   ['PUT', `/api/transactions/${ZERO_ID}`, VALID_TX],

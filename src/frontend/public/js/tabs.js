@@ -1,5 +1,6 @@
 // 하단 탭: 해시(#record / #dashboard)로 화면 전환. 새로고침/뒤로가기 유지.
-const TABS = ['record', 'dashboard'];
+// #categories 는 하단 탭 없이 기록/대시보드에서 링크로 들어가는 패널이다.
+const TABS = ['record', 'dashboard', 'categories'];
 
 function currentTab() {
   const name = location.hash.replace('#', '');

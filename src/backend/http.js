@@ -35,6 +35,7 @@ export function sendResult(res, { status = 200, body, headers = {} }) {
 export function errorResult(err) {
   const error = { code: err.code, message: err.message };
   if (err.extra?.fields) error.fields = err.extra.fields;
+  if (err.extra?.categoryId) error.categoryId = err.extra.categoryId;
   return { status: err.status, body: { error }, headers: err.extra?.headers || {} };
 }
 

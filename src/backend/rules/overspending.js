@@ -1,6 +1,7 @@
 // R4. 카테고리별 과소비 알림 - 순수 함수
 import { addMonths, monthDays } from '../lib/dates.js';
 import { categoryOrder } from '../lib/categories.js';
+import { koCompare } from './common.js';
 import { detectRecurringGroups, recurringGroupKey } from './recurring.js';
 
 export const OVERSPENDING = {
@@ -18,7 +19,8 @@ const round2 = (x) => Math.round(x * 100) / 100;
 // month: 'YYYY-MM', today: 'YYYY-MM-DD'
 // recurringKeys: R3 가 감지한 그룹 키 Set (같은 거래 데이터·같은 today 의 결과). 생략하면 여기서 R3 를 실행한다.
 // pace 는 이 키에 속한 이번 달 거래(반복 거래)를 제외한 금액·건수로 판정하고, exceeded 는 반복 포함 누적으로 판정한다.
-export function detectOverspending(transactions, month, today, recurringKeys) {
+// orderOf(type, category): 정렬 동률 기준(사용자 카테고리 sortOrder). 생략하면 기본 세트 순서.
+export function detectOverspending(transactions, month, today, recurringKeys, orderOf = categoryOrder) {
   const rkeys = recurringKeys ?? new Set(detectRecurringGroups(transactions, today).map((g) => g.key));
   // 카테고리 -> 월 -> 합계 (지출만, 월 라벨은 date 앞 7자)
   const totals = new Map();
@@ -88,7 +90,8 @@ export function detectOverspending(transactions, month, today, recurringKeys) {
     (a, b) =>
       (a.level === b.level ? 0 : a.level === 'exceeded' ? -1 : 1) ||
       b.ratio - a.ratio ||
-      categoryOrder('expense', a.category) - categoryOrder('expense', b.category),
+      orderOf('expense', a.category) - orderOf('expense', b.category) ||
+      koCompare(a.category, b.category),
   );
   return out;
 }

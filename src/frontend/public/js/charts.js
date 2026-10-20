@@ -12,6 +12,13 @@ export const EMPTY_TEXT = '아직 이 기간에 기록이 없어요';
 // 흰 배경 대비 3:1 이상, 색각이상 친화(파랑/주황/청록 계열 위주)
 export const PALETTE = ['#0072B2', '#C4500A', '#00875F', '#A8448F', '#7A6200', '#4A4A4A', '#3B6FB6', '#8E5B2E'];
 export const PATTERN_KINDS = ['solid', 'diag', 'dots', 'hstripe', 'cross', 'vstripe', 'backdiag', 'grid'];
+// "그 외 N개" 묶음 조각 전용 (PALETTE 의 어떤 색과도, 다른 조각의 무늬와도 겹치지 않는다). 흰 배경 대비 4.5:1 이상.
+export const OTHER_STYLE = { color: '#6B6B6B', kind: 'checker' };
+/** 조각 i 의 (색, 무늬). 묶음 조각이면 전용 조합 */
+export function pieceStyle(i, isOther) {
+  if (isOther) return OTHER_STYLE;
+  return { color: PALETTE[i % PALETTE.length], kind: PATTERN_KINDS[i % PATTERN_KINDS.length] };
+}
 
 let uid = 0;
 const nextId = (p) => `${p}${++uid}`;
@@ -42,6 +49,10 @@ function addPattern(defs, id, color, kind) {
     case 'vstripe': p.appendChild(s('path', { ...mark, d: 'M2 0V8M6 0V8' })); break;
     case 'cross': p.appendChild(s('path', { ...mark, d: 'M0 0L8 8M8 0L0 8' })); break;
     case 'grid': p.appendChild(s('path', { ...mark, d: 'M4 0V8M0 4H8' })); break;
+    case 'checker':
+      p.appendChild(s('rect', { x: 0, y: 0, width: 4, height: 4, fill: '#fff' }));
+      p.appendChild(s('rect', { x: 4, y: 4, width: 4, height: 4, fill: '#fff' }));
+      break;
     case 'dots':
       p.appendChild(s('circle', { cx: 2, cy: 2, r: 1.3, fill: '#fff' }));
       p.appendChild(s('circle', { cx: 6, cy: 6, r: 1.3, fill: '#fff' }));
@@ -126,6 +137,8 @@ function legendItem(fill, label, extra) {
 /**
  * 도넛. opts: { title, periodLabel, items:[{label,value}], centerLabel='총 지출', noun='지출' }
  * 조각 순서 = 범례 순서 = 금액 내림차순 (12시 방향 시계방향).
+ * items 에 { members:[{label,value}], pinLast:true } 인 "그 외 N개" 묶음이 있으면 마지막 조각으로 그리고,
+ * 범례에 묶인 이름을 나열하며, 표 대체에는 묶지 않은 전체 행을 싣는다.
  */
 export function renderDonut(container, opts) {
   const { title, periodLabel = '', items, centerLabel = '총 지출', noun = '지출' } = opts;
@@ -137,8 +150,10 @@ export function renderDonut(container, opts) {
 
   const figure = figureShell(title);
   const { svg, defs } = svgShell(200, 200, title, summary);
-  const fills = segs.map((seg, i) =>
-    addPattern(defs, nextId('pt'), PALETTE[i % PALETTE.length], PATTERN_KINDS[i % PATTERN_KINDS.length]));
+  const fills = segs.map((seg, i) => {
+    const st = pieceStyle(i, Array.isArray(seg.members));
+    return addPattern(defs, nextId('pt'), st.color, st.kind);
+  });
   segs.forEach((seg, i) => {
     svg.appendChild(s('path', { d: seg.path, fill: fills[i], stroke: '#fff', 'stroke-width': 1.5, 'fill-rule': 'evenodd' }));
   });
@@ -149,13 +164,17 @@ export function renderDonut(container, opts) {
   body.appendChild(svg);
   const legend = h('ol', { class: 'legend legend-list' });
   segs.forEach((seg, i) => {
-    legend.appendChild(legendItem(fills[i], seg.label, [['legend-amount', formatWon(seg.value)], ['legend-ratio', formatPercent(seg.ratio)]]));
+    const li = legendItem(fills[i], seg.label, [['legend-amount', formatWon(seg.value)], ['legend-ratio', formatPercent(seg.ratio)]]);
+    if (Array.isArray(seg.members)) li.appendChild(h('span', { class: 'legend-members' }, seg.members.map((m) => m.label).join(', ')));
+    legend.appendChild(li);
   });
+  // 표는 묶지 않은 전체 카테고리 행 + 합계
+  const tableRows = segs.flatMap((x) => (Array.isArray(x.members) ? x.members : [x]));
   body.appendChild(legend);
   figure.appendChild(body);
   figure.appendChild(h('p', { class: 'chart-summary' }, summary));
   figure.appendChild(buildTable(`${title} 표`, '카테고리', ['금액', '비율'],
-    segs.map((x) => ({ head: x.label, cells: [formatWon(x.value), formatPercent(x.ratio)] })),
+    tableRows.map((x) => ({ head: x.label, cells: [formatWon(x.value), formatPercent(ratioOf(x.value, total))] })),
     { head: '합계', cells: [formatWon(total), formatPercent(1)] }));
   container.replaceChildren(figure);
 }
@@ -188,7 +207,7 @@ function drawAxes(svg, labels, maxValue) {
 }
 
 /**
- * 묶은 막대: 월별 수입(사선 패턴) vs 지출(단색).
+ * 묶은 막대: 월별 수입(/ 무늬) vs 지출(\ 무늬).
  * opts: { title, months:[{month, incomeTotal, expenseTotal, balance}] }  (api stats/monthly 의 months 그대로)
  */
 export function renderGroupedBars(container, opts) {
@@ -202,8 +221,8 @@ export function renderGroupedBars(container, opts) {
 
   const figure = figureShell(title);
   const { svg, defs } = svgShell(VB_W, VB_H, title, summary);
-  const incomeFill = addPattern(defs, nextId('pt'), PALETTE[0], 'diag');
-  const expenseFill = addPattern(defs, nextId('pt'), PALETTE[1], 'solid');
+  const incomeFill = addPattern(defs, nextId('pt'), PALETTE[0], 'diag'); // 수입 = / 무늬
+  const expenseFill = addPattern(defs, nextId('pt'), PALETTE[1], 'backdiag'); // 지출 = \ 무늬 (같은 밀도: 잉크 양을 맞춘다)
   const sc = drawAxes(svg, rows.map((r) => r.month), max);
   const lay = barLayout(rows.length, 2, PLOT_W, { groupGap: 0.25, barGap: 1 });
   rows.forEach((r, g) => {
@@ -218,8 +237,8 @@ export function renderGroupedBars(container, opts) {
   const body = h('div', { class: 'chart-body' });
   body.appendChild(svg);
   const legend = h('ul', { class: 'legend legend-inline' });
-  legend.appendChild(legendItem(incomeFill, '수입 (사선 무늬)'));
-  legend.appendChild(legendItem(expenseFill, '지출 (단색)'));
+  legend.appendChild(legendItem(incomeFill, '수입 (/ 무늬)'));
+  legend.appendChild(legendItem(expenseFill, '지출 (\\ 무늬)'));
   body.appendChild(legend);
   figure.appendChild(body);
   figure.appendChild(h('p', { class: 'chart-summary' }, summary));

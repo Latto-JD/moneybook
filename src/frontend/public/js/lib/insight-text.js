@@ -1,7 +1,7 @@
 // 인사이트(R3/R4/R5) -> 한 줄 문장. 순수 함수. 필드는 docs/api.md 6.3 기준.
 import { formatWon } from './money.js';
 
-export const INSIGHT_EMPTY_TEXT = '아직 알려드릴 내용이 없어요. 기록이 쌓이면 반복 지출과 평소보다 많이 쓴 곳을 알려드려요.';
+export const INSIGHT_EMPTY_TEXT = '아직 알려드릴 내용이 없어요. 기록이 쌓이면 반복 지출과 평소보다 지출이 많은 곳을 알려드려요.';
 
 const mdText = (dateStr) => {
   const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(dateStr));
@@ -13,12 +13,12 @@ export function overspendingLine(o) {
   const pct = Math.round(((o.ratio || 0) - 1) * 100);
   if (o.level === 'exceeded') {
     return {
-      icon: '⚠', label: '초과',
-      text: `${o.category}: 이번 달 ${formatWon(o.currentTotal)}으로 평소 월 평균 ${formatWon(o.baseline)}보다 ${Math.max(pct, 0)}% 더 썼어요`,
+      icon: '↗', label: '평소보다 많음',
+      text: `${o.category}: 이번 달 ${formatWon(o.currentTotal)}으로 평소 월 평균 ${formatWon(o.baseline)}보다 ${Math.max(pct, 0)}% 많아요`,
     };
   }
   return {
-    icon: '⏳', label: '페이스 주의',
+    icon: '⏳', label: '지금 속도',
     text: `${o.category}: 지금 속도면 이번 달 ${formatWon(o.projectedTotal ?? 0)} 예상이에요 (평소 월 평균 ${formatWon(o.baseline)})`,
   };
 }
@@ -51,7 +51,7 @@ export function buildInsightSections(data) {
   const over = Array.isArray(d.overspending) ? d.overspending : [];
   const rec = Array.isArray(d.recurring) ? d.recurring : [];
   const big = Array.isArray(d.largeExpenses) ? d.largeExpenses : [];
-  if (over.length) sections.push({ key: 'overspending', title: '과소비 알림', lines: over.map(overspendingLine) });
+  if (over.length) sections.push({ key: 'overspending', title: '평소보다 많은 지출', lines: over.map(overspendingLine) });
   if (rec.length) sections.push({ key: 'recurring', title: '반복 거래', lines: rec.map(recurringLine) });
   if (big.length) sections.push({ key: 'large', title: '평소보다 큰 지출', lines: big.map(largeExpenseLine) });
   return sections;

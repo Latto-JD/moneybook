@@ -34,6 +34,7 @@
         </div>
         <fieldset>
           <legend>카테고리</legend>
+          <a class="btn cat-edit-link" href="#categories" aria-label="카테고리 편집">편집</a>
           <ul class="chips" id="category-chips"></ul>
           <p class="error-text" id="category-error"></p>
         </fieldset>
@@ -92,12 +93,58 @@
       </div>
       <p class="error-text" id="dash-error" role="alert"></p>
       <div class="kpi-grid kpi-grid-3" id="kpi" aria-live="polite"></div>
+      <div class="card">
+        <div class="catview-head">
+          <span class="catview-label" id="catview-label">카테고리 보기</span>
+          <a class="btn" href="#categories">카테고리 관리</a>
+        </div>
+        <div class="segmented" role="group" aria-labelledby="catview-label">
+          <button type="button" id="catview-expense" aria-pressed="true">지출</button>
+          <button type="button" id="catview-income" aria-pressed="false">수입</button>
+        </div>
+      </div>
       <section class="card" id="chart-donut" aria-label="카테고리 지출 비중"></section>
       <section class="card" id="chart-monthly" aria-label="월별 수입 대 지출"></section>
       <section class="card" aria-label="카테고리별 월 추이">
         <ul class="chips" id="cat-trend-chips" aria-label="카테고리 선택"></ul>
         <div id="chart-cat-trend"></div>
       </section>
+    </section>
+
+    <!-- 카테고리 관리 (하단 탭 없음) -->
+    <section id="panel-categories" aria-labelledby="cat-title" hidden>
+      <div class="card">
+        <div class="cat-top">
+          <a class="btn" href="#record" id="catm-back">&larr; 기록으로</a>
+          <h1 id="cat-title" tabindex="-1">카테고리 관리</h1>
+        </div>
+        <div class="segmented" role="group" aria-label="카테고리 종류">
+          <button type="button" id="catm-expense" aria-pressed="true">지출</button>
+          <button type="button" id="catm-income" aria-pressed="false">수입</button>
+        </div>
+        <p class="status-text" id="catm-status" role="status" aria-live="polite"></p>
+        <div id="catm-load-error" hidden>
+          <p class="error-text" id="catm-load-error-text" role="alert"></p>
+          <button type="button" class="btn" id="catm-retry">다시 시도</button>
+        </div>
+        <h2 id="catm-list-title" tabindex="-1">카테고리를 불러오는 중이에요</h2>
+        <ul class="cat-list" id="catm-active"></ul>
+        <form id="catm-add" class="cat-add" method="post" action="/" novalidate hidden>
+          <label for="catm-name" id="catm-name-label">새 카테고리 이름</label>
+          <div class="cat-add-row">
+            <input type="text" id="catm-name" autocomplete="off" aria-describedby="catm-add-error">
+            <button type="submit" class="btn btn-primary" id="catm-add-btn">추가</button>
+          </div>
+          <p class="error-text" id="catm-add-error" role="alert"></p>
+          <div id="catm-restore" hidden>
+            <button type="button" class="btn" id="catm-restore-btn" aria-label="같은 이름의 사용 안 함 카테고리 다시 사용">다시 사용</button>
+          </div>
+        </form>
+        <details class="cat-inactive" id="catm-inactive-details" hidden>
+          <summary id="catm-inactive-title">사용 안 함 (0)</summary>
+          <ul class="cat-list" id="catm-inactive"></ul>
+        </details>
+      </div>
     </section>
   </main>
 

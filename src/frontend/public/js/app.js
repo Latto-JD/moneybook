@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { $ } from './dom.js';
 import { initRecord } from './record.js';
 import { initDashboard } from './dashboard.js';
+import { initCategoryManager } from './category-manager.js';
 
 async function main() {
   try {
@@ -21,6 +22,7 @@ async function main() {
   });
   initRecord();
   initDashboard();
+  initCategoryManager();
 }
 main();
 

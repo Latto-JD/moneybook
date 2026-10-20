@@ -21,10 +21,12 @@ test.describe('api.md 1장 공통', () => {
     expect(res.headers()['content-type']).toBe('application/json; charset=utf-8');
     expect(res.headers()['cache-control']).toContain('no-store');
     expect(res.headers()['x-content-type-options']).toBe('nosniff');
-    expect(await res.json()).toEqual({
-      expense: ['식비', '카페/간식', '교통', '쇼핑', '주거/통신', '의료/건강', '문화/여가', '기타'],
-      income: ['급여', '용돈', '부수입', '기타'],
-    });
+    // v3: 활성 이름 배열(기존 형식 유지) + items(활성/비활성 전체). 신규 가입자는 기본 12개가 모두 활성.
+    const body = await res.json();
+    expect(body.expense).toEqual(['식비', '카페/간식', '교통', '쇼핑', '주거/통신', '의료/건강', '문화/여가', '기타']);
+    expect(body.income).toEqual(['급여', '용돈', '부수입', '기타']);
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items).toHaveLength(12);
   });
 
   test('검사 순서: Origin(403)이 Content-Type(415)/JSON(400)보다 먼저, 인증(401)은 JSON 파싱 뒤', async () => {

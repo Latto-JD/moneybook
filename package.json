@@ -11,6 +11,7 @@
     "dev": "node --env-file-if-exists=.env src/backend/scripts/dev-server.js",
     "test": "node --test \"src/**/test/*.test.js\"",
     "db:migrate": "node --env-file-if-exists=.env src/backend/db/migrate.js",
+    "db:migrate:prod": "node src/backend/scripts/migrate-prod.js",
     "seed": "node --env-file-if-exists=.env src/backend/scripts/seed.js",
     "qa:tools": "node --env-file-if-exists=.env src/backend/scripts/qa-tools.js"
   },

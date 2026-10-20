@@ -13,7 +13,7 @@ test('migrate 는 두 번 실행해도 오류가 없다 (멱등)', async () => {
     );
     assert.deepEqual(
       rows.map((r) => r.table_name),
-      ['auth_attempts', 'sessions', 'transactions', 'users'],
+      ['auth_attempts', 'categories', 'sessions', 'transactions', 'users'],
     );
   } finally {
     await db.close();

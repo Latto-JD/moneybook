@@ -1,11 +1,12 @@
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './auth/routes.js';
+import { categoryRoutes } from './categories/routes.js';
 import { transactionRoutes } from './transactions/routes.js';
 import { statsRoutes } from './stats/routes.js';
 import { ruleRoutes } from './rules/routes.js';
 
 // 라우트 정의: { method, path('/api/x/:id'), auth(기본 true), handler(ctx) -> {status, body, headers} }
-export const routes = [...healthRoutes, ...authRoutes, ...transactionRoutes, ...statsRoutes, ...ruleRoutes];
+export const routes = [...healthRoutes, ...authRoutes, ...categoryRoutes, ...transactionRoutes, ...statsRoutes, ...ruleRoutes];
 
 function compile(route) {
   const names = [];

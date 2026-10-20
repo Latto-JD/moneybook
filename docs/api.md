@@ -1,6 +1,23 @@
-# API 계약 (v2)
+# API 계약 (v3)
 
-작성: backend / 기준: `docs/plan.md` v2 / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+작성: backend / 기준: `docs/plan.md` v2.1 + `docs/plan-categories.md` / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+
+## 0. v3 변경 요약 (v2 대비)
+
+v3은 사용자별 카테고리 관리(추가, 이름 변경, 사용 안 함/다시 사용)를 추가한다. 이 문서의 카테고리 관련 서술이 plan.md와 다르면 이 문서가 우선한다.
+
+| 구분 | 변경 | v2 클라이언트 호환 |
+|---|---|---|
+| 추가 | `GET /api/categories` 응답에 `items` 추가 (3A.2) | 호환 (`expense`/`income` 배열은 그대로) |
+| 추가 | `POST /api/categories`, `PATCH /api/categories/:id` (3A.3, 3A.4), `DELETE`는 405 (3A.5) | 호환 (신규) |
+| 추가 | 에러 코드 `CATEGORY_EXISTS`, `CATEGORY_INACTIVE`, `CATEGORY_LIMIT`, `CATEGORY_LAST_ACTIVE` (1.1) | 호환 (신규 코드) |
+| 추가 | 상태 변경 메서드에 `PATCH` 포함 (1.2) | 호환 |
+| **비호환** | 거래 `category` 검증 기준이 "고정 목록"에서 "세션 사용자의 **활성** 카테고리"로 바뀜. 사용 안 함 카테고리를 신규 선택(POST, 또는 PUT으로 변경)하면 400 (4) | 하드코딩 목록을 쓰는 클라이언트는 사용 안 함/사용자 추가 카테고리에서 어긋남 |
+| **비호환** | `GET /api/recommendations/autocomplete` 항목의 `category`가 **`null`** 일 수 있음 (6.2) | `category`를 항상 문자열로 가정하면 깨짐 |
+| 동작 변경 | `GET /api/recommendations/quick`은 사용 안 함 카테고리 그룹을 제외 (6.1) | 응답 형식 동일, 항목 수 감소 가능 |
+| 동작 변경 | 이름 변경 시 과거 거래의 `category` 문자열이 일괄 바뀜 (3A.4). 같은 거래를 이전에 조회한 클라이언트의 캐시는 낡음 | 클라이언트가 재조회해야 함 |
+| 동작 변경 | stats/summary/R4의 "고정 순서" 동률 기준이 사용자 카테고리 `sortOrder`로 바뀜 (5, 6.3). 기본 세트 사용자는 결과 동일 | 호환 |
+| 불변 | 거래 객체, 집계/인사이트 응답 형식, 인증, 쿠키, 보안 헤더, 사용 안 함 카테고리의 과거 거래 조회·집계·R3/R4/R5 포함 | - |
 
 ## 1. 공통 규약
 
@@ -15,7 +32,7 @@
 { "error": { "code": "VALIDATION_ERROR", "message": "금액은 1 이상 100000000 이하의 정수여야 합니다." } }
 ```
 
-`message`는 사람이 읽을 수 있는 한국어 문장이며 비밀 값/스택/SQL을 포함하지 않는다. 프론트는 `code`로 분기한다. 필드별 검증 실패 시 `error.fields`(선택)에 `{ "필드명": "사유" }` 객체가 함께 올 수 있다.
+`message`는 사람이 읽을 수 있는 한국어 문장이며 비밀 값/스택/SQL을 포함하지 않는다. 프론트는 `code`로 분기한다. 필드별 검증 실패 시 `error.fields`(선택)에 `{ "필드명": "사유" }` 객체가 함께 올 수 있다. `CATEGORY_INACTIVE`에서만 `error.categoryId`(문자열 uuid)가 추가로 온다.
 
 | 상태 | code | 상황 |
 |---|---|---|
@@ -28,6 +45,10 @@
 | 404 | `NOT_FOUND` | 없는 경로/리소스, 다른 사용자의 리소스, UUID 아닌 id |
 | 405 | `METHOD_NOT_ALLOWED` | 해당 경로에서 허용되지 않는 메서드 |
 | 409 | `EMAIL_TAKEN` | 이미 가입된 이메일 |
+| 409 | `CATEGORY_EXISTS` | 같은 유형에 같은 이름(정규화 키 기준)의 다른 카테고리가 있음 (3A.3, 3A.4) |
+| 409 | `CATEGORY_INACTIVE` | 추가하려는 이름이 같은 유형의 **사용 안 함** 카테고리와 같음. `error.categoryId` 포함 (3A.3) |
+| 409 | `CATEGORY_LIMIT` | 유형별 활성 30개 또는 사용자 전체 120개 초과 (3A.3, 3A.4) |
+| 409 | `CATEGORY_LAST_ACTIVE` | 그 유형의 마지막 활성 카테고리를 사용 안 함으로 바꾸려 함 (3A.4) |
 | 413 | `PAYLOAD_TOO_LARGE` | 본문 16KB(16384바이트) 초과 |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | 본문이 있는 요청의 Content-Type이 `application/json`이 아님 |
 | 429 | `TOO_MANY_ATTEMPTS` | 로그인/가입 시도 제한. `Retry-After`(초) 헤더 포함 |
@@ -38,7 +59,7 @@
 ### 1.2 CSRF 규칙
 
 1. 쿠키는 `SameSite=Lax`.
-2. **상태 변경 요청(POST/PUT/DELETE)** 은 `Origin` 헤더가 **반드시 있어야** 한다 (로그인/가입/로그아웃 포함, 세션 유무 무관). Origin의 host(포트 포함)가 요청 호스트(`x-forwarded-host` 우선, 없으면 `Host`)와 같거나, 환경변수 `APP_ORIGINS`(쉼표 구분 전체 Origin 목록)에 있어야 한다. 아니면 403 `CSRF_REJECTED`. 브라우저의 same-origin `fetch`는 POST/PUT/DELETE에 Origin을 자동으로 붙인다. GET은 검사하지 않는다.
+2. **상태 변경 요청(POST/PUT/PATCH/DELETE)** 은 `Origin` 헤더가 **반드시 있어야** 한다 (로그인/가입/로그아웃 포함, 세션 유무 무관). Origin의 host(포트 포함)가 요청 호스트(`x-forwarded-host` 우선, 없으면 `Host`)와 같거나, 환경변수 `APP_ORIGINS`(쉼표 구분 전체 Origin 목록)에 있어야 한다. 아니면 403 `CSRF_REJECTED`. 브라우저의 same-origin `fetch`는 POST/PUT/PATCH/DELETE에 Origin을 자동으로 붙인다. GET은 검사하지 않는다.
 3. 본문이 있는 요청(Content-Length > 0 또는 Transfer-Encoding)은 `Content-Type: application/json`(charset 파라미터 허용)만 허용, 아니면 415. 본문 없는 POST(예: logout)는 Content-Type 불필요.
 
 프론트 `fetch`는 `credentials: "same-origin"`(기본값)과 본문이 있을 때 `Content-Type: application/json`을 사용한다.
@@ -123,14 +144,146 @@ Origin 필수. 본문 없음. 세션이 없어도 **204**. DB 세션을 삭제�
 ```
 DB 연결 실패 시 **200** `{ "status": "ok", "db": "error" }` (프로세스는 살아있음을 의미; 세부 오류 미노출).
 
-### 3.2 GET /api/categories
+## 3A. 카테고리 (v3)
+
+거래는 카테고리를 **이름 문자열**로 저장한다(ID 참조 아님). `categories` 테이블은 "사용자가 고를 수 있는 목록과 상태"만 관리한다. 모든 카테고리 API는 세션 필수(없으면 401)이고, 세션 사용자의 카테고리만 읽고 쓴다.
+
+### 3A.1 카테고리 객체
+
+```json
+{ "id": "0b9e6c3a-6a0e-4d0f-9c55-3d6f1a2b7e10", "type": "expense", "name": "식비", "active": true, "sortOrder": 0, "usedCount": 21 }
+```
+
+| 필드 | 설명 |
+|---|---|
+| id | uuid |
+| type | `expense` \| `income`. 생성 후 변경 불가 |
+| name | 정규화된 표시 이름 (아래 이름 규칙) |
+| active | `true` 새 거래에서 선택 가능 / `false` 사용 안 함 |
+| sortOrder | 유형별 정렬 순서(0부터, 정수, 오름차순). 유형 안에서 유일하다는 보장은 없다(동률이면 `name` 가나다순). 새 카테고리는 그 유형의 `max(sortOrder)+1`(비활성 포함), 다시 사용해도 값 유지 |
+| usedCount | 세션 사용자의 같은 유형·같은 이름 거래 건수(전 기간, 비활성 카테고리 포함). 기본 0 |
+
+**이름 규칙** (POST의 `name`, PATCH의 `name` 공통)
+1. 문자열이어야 한다(아니면 400).
+2. 정규화: 유니코드 NFC, 앞뒤 공백 제거, 연속 공백(탭·줄바꿈 포함)을 공백 1칸으로. 저장·응답은 정규화된 값.
+3. 정규화 후 길이 1~15 코드포인트. 제어문자(U+0000~U+001F, U+007F)가 있으면 400. `/`, `<`, 이모지 등 그 밖의 문자는 허용한다. 서버는 이스케이프하지 않고 그대로 돌려주므로 **프론트는 `textContent`로만 출력한다**.
+4. 중복 판정 키 = 정규화된 이름의 소문자화. 같은 사용자 + 같은 유형 안에서 활성·비활성 구분 없이 키가 같으면 중복(`netflix` = `Netflix` = ` NETFLIX `). 다른 유형의 같은 이름은 허용(예: 지출 "기타"와 수입 "기타").
+
+**한도** (서버 코드 상수, 설정 UI 없음)
+
+| 항목 | 값 |
+|---|---|
+| 유형별 활성 카테고리 | 최대 30 |
+| 사용자 전체 카테고리(비활성 포함) | 최대 120 |
+| 이름 길이 | 1~15 코드포인트 |
+| 유형별 활성 카테고리 하한 | 최소 1 (마지막 하나는 사용 안 함 불가) |
+
+**기본 세트**: 가입 시(같은 트랜잭션) 아래 12개가 사용자 행으로 복사된다. 기본 카테고리도 이름 변경·사용 안 함이 가능하다("기타" 포함).
+- 지출(sortOrder 0~7): 식비, 카페/간식, 교통, 쇼핑, 주거/통신, 의료/건강, 문화/여가, 기타
+- 수입(sortOrder 0~3): 급여, 용돈, 부수입, 기타
+
+**지연 생성**: 카테고리 행이 0개인 사용자(예: 마이그레이션 후 구버전 코드로 가입)는 카테고리를 읽는 모든 경로(`GET /api/categories`, `POST /api/categories`, 거래 POST/PUT 검증, quick/autocomplete, 그리고 정렬 동률 기준을 읽는 `GET /api/summary`, `/api/stats/categories`, `/api/stats/category-monthly`, `/api/insights`)에서 기본 세트가 자동 생성된다. 즉 통계·인사이트 같은 조회 요청도 행이 없는 사용자에게는 쓰기(기본 12행 INSERT)를 일으킨다(응답 형식은 불변). 동시 요청이 와도 12행으로 수렴한다. 클라이언트가 신경 쓸 것은 없다.
+
+### 3A.2 GET /api/categories
+
+v2 형식을 유지하고 `items`를 추가한다.
+
 ```json
 {
-  "expense": ["식비", "카페/간식", "교통", "쇼핑", "주거/통신", "의료/건강", "문화/여가", "기타"],
-  "income": ["급여", "용돈", "부수입", "기타"]
+  "expense": ["식비", "카페/간식", "교통", "쇼핑", "주거/통신", "의료/건강", "문화/여가", "기타", "반려동물"],
+  "income": ["급여", "용돈", "부수입", "기타"],
+  "items": [
+    { "id": "0b9e6c3a-6a0e-4d0f-9c55-3d6f1a2b7e10", "type": "expense", "name": "식비", "active": true, "sortOrder": 0, "usedCount": 21 },
+    { "id": "7c1d2e4f-1b3a-4a55-8f20-9e6d5c4b3a21", "type": "expense", "name": "경조사", "active": false, "sortOrder": 8, "usedCount": 4 },
+    { "id": "f2a4c6e8-0b1d-4c3e-a5f7-192837465abc", "type": "income", "name": "급여", "active": true, "sortOrder": 0, "usedCount": 6 }
+  ]
 }
 ```
-배열 순서가 "고정 순서"이다.
+
+- `expense`/`income`: **활성** 카테고리 이름만, `sortOrder` 오름차순(동률은 이름 가나다순). 기록 폼 칩은 이 배열을 쓴다.
+- `items`: 활성+비활성 **전부**, 지출 먼저 그다음 수입, 각 유형 안에서 `sortOrder` 오름차순(동률은 이름 가나다순). 관리 화면은 이 배열을 쓴다.
+- 오류: 401만 (입력 없음).
+
+### 3A.3 POST /api/categories
+
+Origin 필수. 요청:
+```json
+{ "type": "income", "name": "  이자 " }
+```
+**201** (카테고리 객체 자체, 래핑 없음):
+```json
+{ "id": "a1b2c3d4-0000-4000-8000-00000000abcd", "type": "income", "name": "이자", "active": true, "sortOrder": 4, "usedCount": 0 }
+```
+`usedCount`는 같은 이름의 과거 거래가 이미 있으면 0이 아닐 수 있다(예: 이름 변경으로 비워진 이름을 다시 만든 경우).
+
+검사 순서: 입력 검증(400) -> 중복(409 EXISTS/INACTIVE) -> 한도(409 LIMIT).
+
+| 상태 | code | 상황 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `type`이 expense/income 아님 -> `fields.type`; `name`이 문자열 아님·정규화 후 0자·16자 이상·제어문자 -> `fields.name` |
+| 409 | `CATEGORY_EXISTS` | 같은 유형에 같은 키의 **활성** 카테고리가 있음 |
+| 409 | `CATEGORY_INACTIVE` | 같은 유형에 같은 키의 **사용 안 함** 카테고리가 있음. 새로 만들지 않는다. `error.categoryId`로 복구 대상을 알려 준다 |
+| 409 | `CATEGORY_LIMIT` | 그 유형의 활성이 이미 30개이거나 사용자 전체가 이미 120개 |
+
+예 - 400:
+```json
+{ "error": { "code": "VALIDATION_ERROR", "message": "카테고리 이름은 1자 이상 15자 이하여야 해요.", "fields": { "name": "카테고리 이름은 1자 이상 15자 이하여야 해요." } } }
+```
+예 - 409 EXISTS:
+```json
+{ "error": { "code": "CATEGORY_EXISTS", "message": "이미 같은 이름의 카테고리가 있어요." } }
+```
+예 - 409 INACTIVE (프론트는 "다시 사용할까요?"를 묻고 `PATCH /api/categories/{categoryId}` `{ "active": true }` 호출):
+```json
+{ "error": { "code": "CATEGORY_INACTIVE", "message": "같은 이름의 사용 안 함 카테고리가 있어요.", "categoryId": "7c1d2e4f-1b3a-4a55-8f20-9e6d5c4b3a21" } }
+```
+예 - 409 LIMIT:
+```json
+{ "error": { "code": "CATEGORY_LIMIT", "message": "지출 카테고리는 사용 중인 것이 30개까지예요." } }
+```
+(사용자 전체 120개 초과 메시지: "카테고리는 모두 합쳐 120개까지 만들 수 있어요.")
+
+### 3A.4 PATCH /api/categories/:id
+
+Origin 필수. 본문에 `name`, `active` 중 **1개 이상**. 둘 다 있으면 한 트랜잭션에서 이름 변경 후 상태 변경을 처리하고, 어느 한쪽이 실패하면 둘 다 반영되지 않는다. 본문의 `type`, `userId`, `id`, `sortOrder` 등 그 밖의 필드는 무시한다(유형·소유자 불변). 값이 `undefined`(키 없음)인 필드만 "없음"으로 본다(`null`이면 있는 것으로 보고 타입 검증에 걸려 400).
+
+요청 예 (이름 변경):
+```json
+{ "name": "커피" }
+```
+요청 예 (사용 안 함): `{ "active": false }` / (다시 사용): `{ "active": true }` / (둘 다): `{ "name": "커피", "active": true }`
+
+**200** 갱신된 카테고리 객체:
+```json
+{ "id": "...", "type": "expense", "name": "커피", "active": true, "sortOrder": 1, "usedCount": 5 }
+```
+
+검사 순서: 입력 검증(400) -> 대상 조회(404) -> 이름 중복(409 EXISTS) -> 마지막 활성(409 LAST_ACTIVE) -> 한도(409 LIMIT).
+
+| 상태 | code | 상황 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `name`/`active` 둘 다 없음(`fields` 없이 message만: "name 또는 active 중 하나는 보내 주세요."); `name` 규칙 위반 -> `fields.name`; `active`가 boolean 아님 -> `fields.active` |
+| 404 | `NOT_FOUND` | 없는 id, 다른 사용자의 id, UUID 형식이 아닌 id (message "카테고리를 찾을 수 없어요.") |
+| 409 | `CATEGORY_EXISTS` | 새 이름의 키가 같은 유형의 **다른** 카테고리(활성·비활성 모두)와 같음. 병합은 지원하지 않는다 |
+| 409 | `CATEGORY_LAST_ACTIVE` | 그 유형의 활성 카테고리가 이 하나뿐인데 `active:false`로 바꾸려 함. message "카테고리가 하나는 있어야 해요." |
+| 409 | `CATEGORY_LIMIT` | `active:true`로 되돌리면 그 유형의 활성이 30개를 넘음 |
+
+동작 규칙
+- **이름 변경은 과거 거래를 함께 바꾼다.** 한 DB 트랜잭션에서 `categories.name`과, `user_id = 세션 사용자 AND type = 그 카테고리의 유형 AND category = 옛 이름`인 모든 거래의 `category`를 새 이름으로 UPDATE한다. 다른 사용자, 다른 유형(지출 "기타"를 바꿔도 수입 "기타"는 그대로)의 거래는 바뀌지 않는다. 응답 이후 어느 API에도 옛 이름은 나오지 않는다(거래 목록, summary, stats, 추천, 인사이트). 프론트는 변경 성공 후 거래/대시보드를 다시 조회해야 한다.
+- 자기 자신과 키가 같은 이름(대소문자·공백만 변경, `netflix` -> `Netflix`)은 허용하고 거래 문자열도 새 표기로 바뀐다. 정규화 결과가 현재 이름과 완전히 같으면 200, 변화 없음.
+- 이미 같은 상태로 바꾸는 요청(`active:true`인데 이미 활성, `active:false`인데 이미 비활성)은 200, 변화 없음(멱등). 이 경우 LAST_ACTIVE/LIMIT 검사는 하지 않는다.
+- 비활성 카테고리도 이름 변경이 가능하다(활성 여부와 무관).
+- 사용 안 함은 **새 입력에서만** 빠진다. 그 카테고리의 과거 거래는 조회·집계·R3/R4/R5에 그대로 나온다.
+- 이름 변경과 거래 쓰기가 동시에 일어나도 "목록에 없는 옛 이름을 가진 새 거래"가 생기지 않도록 서버가 보장한다. 구현: 카테고리 POST/PATCH와 거래 POST/PUT은 모두 시작할 때 세션 사용자의 `users` 행에 `FOR NO KEY UPDATE` 잠금을 걸어 같은 사용자의 쓰기를 직렬화한다(거래 INSERT의 FK 확인과는 충돌하지 않는다). 카테고리 행 공유 잠금 방식은 PUT(거래 행 -> 카테고리 행)과 이름 변경(카테고리 행 -> 거래 행)의 잠금 순서가 엇갈려 교착될 수 있어 쓰지 않는다.
+
+### 3A.5 DELETE /api/categories/:id
+
+지원하지 않는다. 405 `METHOD_NOT_ALLOWED`, `Allow: PATCH`. 삭제 = 사용 안 함(3A.4). `/api/categories` 컬렉션 경로의 PUT/PATCH/DELETE도 405(`Allow: GET, POST`).
+
+### 3A.6 오류 처리 요약 (카테고리 API 공통)
+
+- 401 `UNAUTHENTICATED`(세션 없음, GET 포함), 403 `CSRF_REJECTED`(POST/PATCH에 Origin 없음/불일치), 413(16KB 초과), 415(JSON 아닌 Content-Type), 400 `INVALID_JSON`은 1장 규약 그대로.
+- 모든 오류는 `{ "error": { "code", "message" } }` 형식이며 SQL·스택을 포함하지 않는다.
 
 ## 4. 거래
 
@@ -142,7 +295,11 @@ DB 연결 실패 시 **200** `{ "status": "ok", "db": "error" }` (프로세스�
 입력 검증(POST/PUT 공통, 모두 필수 필드 `type, amount, category, date`, `memo` 선택(기본 ""))
 - type: `expense` | `income`
 - amount: 정수(JSON number, 1.5/문자열 불가), 1 ~ 100,000,000
-- category: 해당 type의 고정 카테고리 중 하나
+- category: 문자열. 세션 사용자의 해당 type **활성** 카테고리 이름과 **정확히 같아야** 한다(정규화·대소문자 무시 없음, `GET /api/categories`의 `expense`/`income` 배열 값을 그대로 보낸다). 다른 사용자의 카테고리 이름은 불일치다. PUT에는 예외가 있다(아래 4.3).
+  - 목록에 없는 이름 -> `fields.category = "해당 구분에 없는 카테고리예요."`
+  - 사용 안 함 카테고리 이름 -> `fields.category = "사용 안 함으로 바꾼 카테고리예요. 다른 카테고리를 골라 주세요."`
+  - 문자열이 아님 -> type이 올바르지 않으면 `fields.category = "카테고리를 선택해 주세요."`, type이 올바르면 `"해당 구분에 없는 카테고리예요."` (v2 동작과 동일)
+  - 형식 오류(type/amount/date/memo, category가 문자열 아님)가 하나라도 있으면 그 오류만 `fields`에 담기고, 카테고리 이름 검사(목록에 없음/사용 안 함)는 형식이 통과한 뒤에 DB로 판정한다.
 - date: 실존하는 `YYYY-MM-DD` (`2026-02-30`, `20261019` 불가)
 - memo: 문자열, 앞뒤 공백 제거 후 0~50자
 - 본문의 `userId`/`user_id`/`id`/`createdAt` 등 알 수 없는 필드는 무시 (소유자는 항상 세션 사용자)
@@ -159,6 +316,10 @@ month 필수(형식 오류/누락 400). 응답: date 내림차순, 같은 날은
 ### 4.3 PUT /api/transactions/:id
 전체 필드 교체(POST와 같은 본문). 200 거래 객체(`createdAt`은 유지). 없는 id, 타 사용자 id, UUID 형식이 아닌 id는 모두 404 `NOT_FOUND`.
 
+**카테고리 유지 예외 (v3)**: 요청의 `(type, category)`가 **그 거래의 현재 저장 값과 같으면**, 그 카테고리가 사용 안 함이거나 목록에 없어도 허용한다(과거 기록의 금액·메모·날짜만 고치는 경우). 다른 카테고리나 다른 type으로 바꾸면 대상이 활성 카테고리여야 한다(POST와 같은 검증).
+- 검사 순서: type/amount/date/memo 형식 검증(400) -> 대상 거래 조회(404) -> 카테고리 검증(400 `fields.category`). 즉 존재하지 않는 거래에 잘못된 카테고리를 보내면 404이고, 존재하는 거래에 형식 오류와 카테고리 오류가 함께 있으면 형식 오류 400 하나만 `fields`에 담긴다(카테고리 오류는 형식이 통과한 뒤에 판정).
+- 예: "경조사"(사용 안 함)로 기록된 거래의 금액만 고치기: `PUT {type:"expense", amount:50000, category:"경조사", ...}` -> 200. 같은 거래를 활성 "식비"로 바꾸기 -> 200. 다른 거래를 "경조사"로 바꾸기 -> 400.
+
 ### 4.4 DELETE /api/transactions/:id
 204 (본문 없음). 404 규칙은 PUT과 동일.
 
@@ -171,7 +332,11 @@ month 필수(형식 오류/누락 400). 응답: date 내림차순, 같은 날은
   "byCategory": [ { "category": "식비", "total": 400000, "count": 21, "ratio": 0.3252 } ]
 }
 ```
-`byCategory`는 **지출**만, total > 0인 카테고리, total 내림차순(동률은 고정 순서), ratio = total/expenseTotal(소수 넷째 자리 반올림). 데이터 없으면 모두 0, `byCategory: []`.
+`byCategory`는 **지출**만, total > 0인 카테고리(사용 안 함 카테고리의 과거 거래도 포함), total 내림차순(동률은 아래 "정렬 동률 기준"), ratio = total/expenseTotal(소수 넷째 자리 반올림). 데이터 없으면 모두 0, `byCategory: []`.
+
+### 정렬 동률 기준 (v3, summary·stats/categories·stats/category-monthly·R4 공통)
+
+v2의 "고정 순서"는 v3에서 **세션 사용자의 카테고리 `sortOrder`**(비활성 포함, 같은 type 기준)로 바뀐다. 금액(또는 sum) 동률이면 `sortOrder` 오름차순, `categories`에 없는 문자열은 맨 뒤, 그다음 이름 가나다순(ko 로케일 비교). 기본 세트만 가진 사용자는 v2와 결과가 같다. 새 카테고리는 기본 세트 뒤에 온다.
 
 ### 집계 공통 파라미터
 (`/api/stats/monthly`는 `type`을 사용하지 않지만 `expense|income` 외 값이면 마찬가지로 400이다.)
@@ -194,7 +359,7 @@ from~to **모든 달**, 오래된 순, 거래 없는 달은 0.
 { "from": "2026-10", "to": "2026-10", "type": "expense", "grandTotal": 1230000,
   "items": [ { "category": "식비", "total": 400000, "count": 21, "ratio": 0.3252 } ] }
 ```
-total > 0만, total 내림차순(동률은 고정 순서), ratio는 소수 넷째 자리 반올림(0~1 값, % 아님). 없으면 `grandTotal: 0, items: []`.
+total > 0만(사용 안 함 카테고리 포함), total 내림차순(동률은 위 "정렬 동률 기준"), ratio는 소수 넷째 자리 반올림(0~1 값, % 아님). 없으면 `grandTotal: 0, items: []`.
 
 ### 5.4 GET /api/stats/category-monthly?from=&to=&type=
 ```json
@@ -202,7 +367,7 @@ total > 0만, total 내림차순(동률은 고정 순서), ratio는 소수 넷�
   "months": ["2026-08", "2026-09", "2026-10"],
   "series": [ { "category": "식비", "totals": [380000, 410000, 400000], "sum": 1190000 } ] }
 ```
-totals 길이 = months 길이, sum > 0인 카테고리만, sum 내림차순(동률은 고정 순서).
+totals 길이 = months 길이, sum > 0인 카테고리만(사용 안 함 카테고리 포함), sum 내림차순(동률은 위 "정렬 동률 기준").
 
 ## 6. 추천 / 인사이트
 
@@ -213,12 +378,18 @@ type 기본 expense(`expense|income` 외 400). 최대 5개:
 ```json
 { "items": [ { "memo": "스타벅스", "category": "카페/간식", "amount": 4500, "count": 12, "lastDate": "2026-10-17", "weekdayMatch": true } ] }
 ```
+v3: 새 입력용 제안이므로 `category`가 **사용 안 함**이거나 사용자 카테고리 목록에 없는 그룹은 후보에서 제외한다(제외 후 최대 5개를 채운다). 같은 메모를 다른 활성 카테고리로 3건 이상 쓴 그룹은 그대로 제안된다. 응답 형식은 v2와 같고 `category`는 항상 활성 카테고리 이름 문자열이다. 이름 변경 후에는 과거 거래도 새 이름이므로 `category`가 새 이름이고 `count`는 유지된다.
 
 ### 6.2 GET /api/recommendations/autocomplete?q=&type=&today=
 q는 정규화 후 1글자 이상일 때만 동작(빈 값이면 `items: []`, 400 아님). q 최대 50자(초과 400). 최대 5개:
 ```json
 { "items": [ { "memo": "스타벅스", "category": "카페/간식", "amount": 4500 } ] }
 ```
+v3 (**비호환**): `category`는 그 메모 그룹에서 가장 많이 쓴 **활성** 카테고리(동률은 가장 최근 사용)이고, 그룹의 카테고리가 모두 사용 안 함이거나 목록에 없으면 **`null`** 이다. 이때 `memo`와 `amount`는 그대로 제안된다.
+```json
+{ "items": [ { "memo": "조의금", "category": null, "amount": 50000 } ] }
+```
+프론트는 `category`가 `null`이면 카테고리를 채우지 않는다(선택 상태 변경 없음).
 
 ### 6.3 GET /api/insights?month=YYYY-MM&today=
 ```json
@@ -246,8 +417,85 @@ q는 정규화 후 1글자 이상일 때만 동작(빈 값이면 `items: []`, 40
 - `recurring`/`quick`/`autocomplete`는 `date <= today`인 거래만 쓴다. `largeExpenses`/`overspending`은 **month 안의 거래 전체**를 쓰므로, `today` 이후 날짜로 미리 입력한 이번 달 거래(`date > today`)도 `currentTotal`(과 exceeded 판정)에 **포함된다**. pace 대상도 같은 집합(반복 제외)에서 시작해 미리 입력한 거래가 합계·건수에 들어가지만, 경과일은 today 기준이다. (R4-Q4: 현재 구현 동작을 그대로 문서화했으며 변경하지 않음)
 - 거래 `memo` 비교는 정규화 키(앞뒤 공백 제거, 연속 공백 1칸, 소문자화)로 하고, 응답의 `memo`는 가장 최근 거래의 원래 메모(앞뒤 공백 제거)이다.
 
+### 6.4 카테고리 변경이 인사이트에 주는 영향 (v3)
+
+응답 형식은 v2와 같다. 규칙은 거래의 카테고리 **문자열**로 묶으므로 다음과 같이 동작한다.
+
+| 상황 | R3 recurring | R4 overspending | R5 largeExpenses |
+|---|---|---|---|
+| 이름 변경 | 과거 거래도 새 이름이라 그룹·건수·간격이 이어진다 | 직전 3개월 baseline이 새 이름으로 합쳐져 연속(같은 `currentTotal`/`baseline`/`ratio`) | 비교군 연속 |
+| 사용 안 함 | 계속 감지·표시 | 계속 판정(`level`/값 불변). 정렬 동률만 `sortOrder` 기준 | 계속 판정 |
+| 새 카테고리 | 기존 규칙(건수 조건) | 기록 있는 달 2개월 미만이면 판정 없음 | 비교군 5건 미만이면 판정 없음 |
+
+`level` 값(`exceeded`/`pace`) 등 응답 필드는 바뀌지 않는다. 사용 안 함 여부는 응답에 담지 않는다(프론트는 `GET /api/categories`의 `items`로 판단한다).
+
 ## 7. 로컬 확인용 메모
 
 - 서버 오류 재현(C48), 세션 만료/시도 제한 해제 등 DB 조작이 필요한 검증 방법은 README "QA/테스트 지원" 절 참고(`QA_TOOLS=true` 개발 서버의 `/__qa/*`, `npm run qa:tools`). 이 도구는 API 계약의 일부가 아니며 프로덕션에서는 동작하지 않는다.
 - 다른 방법의 서버 오류 재현(C48): 개발 서버에서 `DB_DRIVER` 없이 잘못된 `DATABASE_URL`(예: 닫힌 포트의 로컬 주소)로 기동하면 형식이 올바른 세션 쿠키가 있는 요청(DB 조회 필요)은 500 `INTERNAL_ERROR`(형식이 틀린 쿠키는 DB 조회 없이 401), `/api/health`는 `db: "error"`가 된다.
 - 개발 서버의 정적 파일 요청도 같은 보안 헤더를 받는다(API만 `Cache-Control: no-store`).
+
+## 8. 마이그레이션 계약 (v3)
+
+API가 아니라 배포 계약이다. 운영 반영 순서는 **백업 -> 마이그레이션 -> 코드 배포**이며 코드를 먼저 배포하면 안 된다(새 코드가 없는 `categories` 테이블을 읽어 거래 저장·카테고리 조회가 500).
+
+### 8.1 스키마 (추가 전용)
+
+`src/backend/db/schema.sql`에 아래만 추가한다. 기존 테이블 ALTER/DROP, `transactions` 쓰기, `transactions`에 FK/CHECK 추가는 하지 않는다(구버전 코드와 호환 유지).
+
+```sql
+create table if not exists categories (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  type text not null check (type in ('expense', 'income')),
+  name text not null check (char_length(name) between 1 and 15),
+  name_key text not null,
+  active boolean not null default true,
+  sort_order integer not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, type, name_key)
+);
+create index if not exists categories_user_type_sort_idx on categories (user_id, type, sort_order);
+```
+- `unique (user_id, type, name_key)`는 활성·비활성 모두에 적용된다(같은 이름의 카테고리가 둘이면 문자열 저장 구조에서 구분할 수 없다).
+- `transactions.category`는 계속 이름 문자열이다.
+
+### 8.2 데이터 이관 (멱등)
+
+1. **기본 세트**: `categories` 행이 **하나도 없는** 사용자에게만 기본 12행(3A.1의 이름·순서, 모두 active)을 INSERT한다. "행이 하나도 없는 사용자" 조건이 핵심이다. 이 조건이 없으면 사용자가 "식비"를 "밥"으로 바꾼 뒤 마이그레이션을 다시 돌릴 때 "식비"가 되살아난다.
+2. **방어용 비활성 행**: 기존 거래에 사용자·유형별로 기본 세트 밖의 카테고리 문자열이 있으면 그 (사용자, 유형, 문자열)마다 `active=false` 행을 만든다(관리 화면에서 보이고 다시 사용 가능). 이름이 15자를 넘거나 `name_key`가 겹치면 건너뛴다(거래는 그대로). 현재 검증상 생길 수 없는 경우를 대비한 안전망이며 정상 운영 DB에서는 0건이어야 한다.
+3. 두 번 이상 실행해도 결과가 같다. 사용자가 바꾼 이름·상태·순서는 재실행으로 덮어쓰지 않는다.
+4. 원자성: 마이그레이션 SQL은 한 번에 실행되어 중간 실패 시 전체가 롤백되어야 한다(Postgres 단순 쿼리는 암묵 트랜잭션; PGlite `exec` 동작은 구현 시 확인하고 다르면 BEGIN/COMMIT으로 감싼다).
+5. 구버전 코드는 `categories`를 읽지 않으므로 마이그레이션 후 코드 배포 전에는 구버전 코드로 정상 운영된다. 그 사이 구버전으로 가입한 사용자는 행이 없지만 새 코드의 지연 생성(3A.1)과 마이그레이션 재실행으로 해소된다.
+
+### 8.3 `npm run db:migrate`
+
+기존 스크립트. `.env`만 읽고 `DB_DRIVER=pglite`이면 로컬 PGlite에 적용된다. 출력의 `driver=`로 대상을 구분한다. v3부터 성공 출력에 카테고리 행이 생성된 사용자 수를 덧붙인다(비밀 값 없음).
+
+```
+마이그레이션 완료 (driver=pglite, categories 생성 사용자=3)
+```
+
+### 8.4 `npm run db:migrate:prod` (신규)
+
+운영 DB 마이그레이션 전용. 사용자가 직접 실행한다.
+
+```
+npm run db:migrate:prod -- --yes
+```
+
+| 규칙 | 동작 |
+|---|---|
+| 환경 파일 | `.env.production.local`**만** 읽는다(`vercel env pull .env.production.local --environment=production`으로 준비). `.env`는 읽지 않는다. 파일이 없으면 종료 코드 1과 안내 메시지 |
+| `--yes` | 없으면 아무것도 실행하지 않고 종료 코드 1(대상 driver 이름만 안내) |
+| `DB_DRIVER` | 환경 파일에 또는 프로세스 환경에 설정되어 있으면(값 무관) 거부, 종료 코드 1 |
+| 접속 정보 | `DATABASE_URL_UNPOOLED` -> `DATABASE_URL` 순. 둘 다 없으면 종료 코드 1 |
+| 출력 | 성공: `마이그레이션 완료 (driver=pg, categories 생성 사용자=N)` / 실패: 코드·이름만(연결 문자열 마스킹), 종료 코드 1 |
+| 확인 | `driver=pg`가 아니면 운영에 적용되지 않은 것 |
+| 멱등 | 같은 명령을 다시 실행해도 오류 없고 `생성 사용자=0` |
+
+실행 후 사용자가 확인할 쿼리(Neon SQL Editor, 숫자만 보고):
+- `select count(*) from categories;` = 사용자 수 x 12 (방어용 비활성 행 0건 가정)
+- `select count(*) from users u where not exists (select 1 from categories c where c.user_id = u.id);` = 0
+- `select count(*), sum(amount) from transactions;` 이 실행 전 기록과 같음

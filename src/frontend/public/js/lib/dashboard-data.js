@@ -2,8 +2,8 @@
 import { shiftMonth } from './date.js';
 
 /**
- * KPI: stats/monthly 의 months 와 기준 월에서 수입/지출/잔액/지출 전월 대비를 계산.
- * change: null(전월 지출 0 또는 전월 행 없음) | { direction:'up'|'down'|'same', percent:number(소수 첫째 자리), text }
+ * KPI: stats/monthly 의 months 와 기준 월에서 수입/지출/잔액과 수입·지출 각각의 전월 대비를 계산.
+ * incomeChange / expenseChange: null(전월 0 또는 전월 행 없음) | { direction:'up'|'down'|'same', percent:number(소수 첫째 자리), text }
  */
 export function buildKpi(months, baseMonth) {
   const rows = Array.isArray(months) ? months : [];
@@ -12,28 +12,60 @@ export function buildKpi(months, baseMonth) {
   const income = cur.incomeTotal || 0;
   const expense = cur.expenseTotal || 0;
   const balance = Number.isFinite(cur.balance) ? cur.balance : income - expense;
+  const prevIncome = prev ? prev.incomeTotal || 0 : 0;
   const prevExpense = prev ? prev.expenseTotal || 0 : 0;
-  return { income, expense, balance, prevExpense, change: expenseChange(expense, prevExpense) };
+  return {
+    income, expense, balance, prevIncome, prevExpense,
+    incomeChange: amountChange(income, prevIncome, '수입'),
+    expenseChange: amountChange(expense, prevExpense, '지출'),
+  };
 }
 
 export const NO_PREV_TEXT = '비교할 지난달 기록이 없어요';
 
-export function expenseChange(expense, prevExpense) {
-  if (!(prevExpense > 0)) return null;
-  if (expense === prevExpense) return { direction: 'same', percent: 0, text: '지난달과 같아요' };
-  const pct = Math.round((Math.abs(expense - prevExpense) / prevExpense) * 1000) / 10;
-  const up = expense > prevExpense;
+/** 수입·지출에 같은 문장 형식을 쓴다: "지난달보다 수입이 5.0% 늘었어요" (좋고 나쁨을 가르지 않는다). noun: '수입' | '지출' */
+export function amountChange(value, prevValue, noun) {
+  if (!(prevValue > 0)) return null;
+  if (value === prevValue) return { direction: 'same', percent: 0, text: '지난달과 같아요' };
+  const pct = Math.round((Math.abs(value - prevValue) / prevValue) * 1000) / 10;
+  const up = value > prevValue;
   return {
     direction: up ? 'up' : 'down',
     percent: pct,
-    text: `지난달보다 ${pct.toFixed(1)}% ${up ? '더 썼어요' : '덜 썼어요'}`,
+    text: `지난달보다 ${noun}이 ${pct.toFixed(1)}% ${up ? '늘었어요' : '줄었어요'}`,
   };
 }
+export const incomeChange = (value, prev) => amountChange(value, prev, '수입');
+export const expenseChange = (value, prev) => amountChange(value, prev, '지출');
 
 /** stats/categories -> 도넛 입력 [{label, value}] (이미 total 내림차순) */
 export function donutItemsFrom(resp) {
   const items = resp && Array.isArray(resp.items) ? resp.items : [];
   return items.filter((i) => i && i.total > 0).map((i) => ({ label: i.category, value: i.total }));
+}
+
+export const DONUT_MAX_PIECES = 8;
+
+/**
+ * 도넛 조각 수를 최대 8개로 줄인다: 금액 내림차순 상위 7개 + 나머지를 "그 외 N개" 1조각으로 묶는다.
+ * 나머지가 1개뿐이면 묶지 않고 그대로 8개. 묶음은 members(묶인 항목, 금액 내림차순)를 가지며 항상 마지막(pinLast).
+ * 이름을 "기타" 로 하지 않는다: 사용자 카테고리 "기타" 와 구분되어야 한다.
+ */
+export function groupDonutItems(items, max = DONUT_MAX_PIECES) {
+  const list = (Array.isArray(items) ? items : [])
+    .map((it, i) => ({ it, i }))
+    .filter(({ it }) => it && typeof it.value === 'number' && Number.isFinite(it.value) && it.value > 0)
+    .sort((a, b) => b.it.value - a.it.value || a.i - b.i)
+    .map(({ it }) => it);
+  if (list.length <= max) return list;
+  const head = list.slice(0, max - 1);
+  const rest = list.slice(max - 1);
+  return [...head, {
+    label: `그 외 ${rest.length}개`,
+    value: rest.reduce((a, it) => a + it.value, 0),
+    members: rest,
+    pinLast: true,
+  }];
 }
 
 /** stats/category-monthly -> 칩 목록 [{category, index}] (sum 내림차순 그대로) */

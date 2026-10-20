@@ -252,7 +252,8 @@ test('C55 집계 검증: from>to, 25개월, 형식, 누락, type 오류는 400, 
 
 test('C43 인증 필요: 신규 엔드포인트 모두 쿠키 없이 401', async () => {
   const paths = [
-    ['GET', '/api/categories'], ['GET', '/api/transactions?month=2026-10'], ['POST', '/api/transactions'],
+    ['GET', '/api/categories'], ['POST', '/api/categories'], ['PATCH', '/api/categories/00000000-0000-4000-8000-000000000000'],
+    ['GET', '/api/transactions?month=2026-10'], ['POST', '/api/transactions'],
     ['PUT', '/api/transactions/00000000-0000-4000-8000-000000000000'], ['DELETE', '/api/transactions/00000000-0000-4000-8000-000000000000'],
     ['GET', '/api/summary?month=2026-10'], ['GET', '/api/stats/monthly?from=2026-01&to=2026-02'],
     ['GET', '/api/stats/categories?from=2026-01&to=2026-02'], ['GET', '/api/stats/category-monthly?from=2026-01&to=2026-02'],

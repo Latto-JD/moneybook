@@ -114,9 +114,17 @@ test.describe('시드 사용자 대시보드 (C62~C65)', () => {
     expect(kpis[1].value).toBe(fmtWon(cur.expenseTotal));
     expect(kpis[2].value).toBe(fmtWon(cur.balance));
     expect(cur.balance).toBe(cur.incomeTotal - cur.expenseTotal);
-    const pct = (Math.round((Math.abs(cur.expenseTotal - prev.expenseTotal) / prev.expenseTotal) * 1000) / 10).toFixed(1);
-    const more = cur.expenseTotal > prev.expenseTotal;
-    expect(kpis[1].extra).toBe(`${more ? '▲' : '▼'} 지난달보다 ${pct}% ${more ? '더 썼어요' : '덜 썼어요'}`);
+    // v3(C-C35): 수입·지출 모두 같은 문장 형식 "지난달보다 {수입|지출}이 N% 늘었어요/줄었어요"
+    const expectExtra = (curV, prevV, noun) => {
+      if (!(prevV > 0)) return '비교할 지난달 기록이 없어요';
+      if (curV === prevV) return '= 지난달과 같아요';
+      const p = (Math.round((Math.abs(curV - prevV) / prevV) * 1000) / 10).toFixed(1);
+      const up = curV > prevV;
+      return `${up ? '▲' : '▼'} 지난달보다 ${noun}이 ${p}% ${up ? '늘었어요' : '줄었어요'}`;
+    };
+    expect(kpis[0].extra).toBe(expectExtra(cur.incomeTotal, prev.incomeTotal, '수입'));
+    expect(kpis[1].extra).toBe(expectExtra(cur.expenseTotal, prev.expenseTotal, '지출'));
+    expect(kpis[2].extra).toBe('');
     await expectNoBadNumbers(page);
     await ctx.close();
   });
@@ -213,16 +221,19 @@ test.describe('시드 사용자 대시보드 (C62~C65)', () => {
     expect(new Set(segFills).size).toBe(segFills.length);
     // 수입/지출 막대 fill: 서로 다르고 하나는 url(#...) 패턴
     const barFills = await page.locator('#chart-monthly svg.chart-svg > rect').evaluateAll((rs) => [...new Set(rs.map((r) => r.getAttribute('fill')))]);
+    // v3(C-C37): 수입·지출 모두 서로 다른 무늬 패턴(url(#...)), 단색 없음
     expect(barFills).toHaveLength(2);
-    expect(barFills.filter((f) => /^url\(#.+\)$/.test(f))).toHaveLength(1);
-    expect(barFills.filter((f) => !/^url\(#/.test(f))).toHaveLength(1);
-    const patId = barFills.find((f) => f.startsWith('url(')).slice(5, -1);
-    expect(await page.locator(`#chart-monthly svg pattern[id="${patId}"]`).count()).toBeGreaterThan(0);
-    // 범례 견본(swatch)도 같은 구분: 수입 = 패턴, 지출 = 단색
+    expect(barFills.filter((f) => /^url\(#.+\)$/.test(f))).toHaveLength(2);
+    expect(new Set(barFills).size).toBe(2);
+    for (const f of barFills) expect(await page.locator(`#chart-monthly svg pattern[id="${f.slice(5, -1)}"]`).count()).toBeGreaterThan(0);
+    // 범례 견본(swatch)도 같은 구분: 수입 = / 무늬, 지출 = \ 무늬 (둘 다 패턴, 서로 다름), 문구에 무늬 표기
     const sw = await page.locator('#chart-monthly .legend li svg rect').evaluateAll((rs) => rs.map((r) => r.getAttribute('fill')));
     expect(sw).toHaveLength(2);
     expect(sw[0]).toMatch(/^url\(#/);
-    expect(sw[1]).not.toMatch(/^url\(#/);
+    expect(sw[1]).toMatch(/^url\(#/);
+    expect(sw[0]).not.toBe(sw[1]);
+    expect(legendText).toContain('수입 (/ 무늬)');
+    expect(legendText).toContain('지출 (\\ 무늬)');
     await ctx.close();
   });
 

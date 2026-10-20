@@ -13,7 +13,8 @@ function representativeAmount(items) {
   return latest(modes).amount;
 }
 
-export function quickSuggestions(transactions, type, today) {
+// activeNames: 활성 카테고리 이름 Set. 있으면 그 밖의 카테고리(사용 안 함, 목록에 없음) 그룹은 제안하지 않는다.
+export function quickSuggestions(transactions, type, today, activeNames) {
   const from = addDays(today, -(QUICK.windowDays - 1));
   const weekdayFrom = addDays(today, -(QUICK.weekdayWindowDays - 1));
   const todayWeekday = weekday(today);
@@ -28,6 +29,7 @@ export function quickSuggestions(transactions, type, today) {
   const out = [];
   for (const items of groups.values()) {
     if (items.length < QUICK.minCount) continue;
+    if (activeNames && !activeNames.has(items[0].category)) continue;
     const last = latest(items);
     const weekdayCount = items.filter((t) => t.date >= weekdayFrom && weekday(t.date) === todayWeekday).length;
     out.push({

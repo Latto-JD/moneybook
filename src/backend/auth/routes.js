@@ -1,4 +1,5 @@
 import { ApiError } from '../http.js';
+import { ensureDefaults } from '../lib/categories.js';
 import { clientIp } from '../security.js';
 import { hashPassword, verifyPassword, dummyVerify } from './password.js';
 import { normalizeEmail, isValidEmail, isValidPassword } from './validate.js';
@@ -31,11 +32,15 @@ async function signup({ req, db, config, body }) {
   const passwordHash = await hashPassword(body.password);
   let user;
   try {
-    const { rows } = await db.query(
-      'insert into users (email, password_hash) values ($1, $2) returning id, email',
-      [email, passwordHash],
-    );
-    user = rows[0];
+    // 사용자와 기본 카테고리 12개를 한 트랜잭션에서 만든다
+    user = await db.transaction(async (tx) => {
+      const { rows } = await tx.query(
+        'insert into users (email, password_hash) values ($1, $2) returning id, email',
+        [email, passwordHash],
+      );
+      await ensureDefaults(tx, rows[0].id);
+      return rows[0];
+    });
   } catch (e) {
     if (e.code === '23505') throw new ApiError(409, 'EMAIL_TAKEN', '이미 가입된 이메일이에요.');
     throw e;

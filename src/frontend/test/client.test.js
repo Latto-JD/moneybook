@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import { createApi, ApiError, parseRetryAfter, buildQuery } from '../public/js/api.js';
 import { authErrorMessage, waitText } from '../public/js/lib/messages.js';
 import {
-  buildKpi, expenseChange, donutItemsFrom, trendCategories, defaultTrendCategory, seriesFor,
+  buildKpi, expenseChange, incomeChange, donutItemsFrom, trendCategories, defaultTrendCategory, seriesFor,
 } from '../public/js/lib/dashboard-data.js';
-import { buildInsightSections, overspendingLine, recurringLine, largeExpenseLine } from '../public/js/lib/insight-text.js';
+import { buildInsightSections, overspendingLine, recurringLine, largeExpenseLine, INSIGHT_EMPTY_TEXT } from '../public/js/lib/insight-text.js';
 import { debounce } from '../public/js/lib/debounce.js';
 
 function mockFetch(status, body, headers = {}) {
@@ -33,6 +33,22 @@ test('api: GET 은 same-origin 쿠키, 쿼리 인코딩, Content-Type 없음', a
   assert.equal(c.init.headers['Content-Type'], undefined);
   assert.match(c.url, /^\/api\/recommendations\/autocomplete\?q=/);
   assert.equal(new URL(c.url, 'http://x').searchParams.get('q'), '스타 벅스');
+});
+
+test('api: 카테고리 추가/수정은 POST/PATCH + JSON 본문, CATEGORY_INACTIVE 는 categoryId 유지', async () => {
+  const f = mockFetch(201, { id: 'c1' });
+  const api = createApi({ fetchImpl: f });
+  await api.createCategory('income', '이자');
+  assert.equal(f.calls[0].url, '/api/categories');
+  assert.equal(f.calls[0].init.method, 'POST');
+  assert.deepEqual(JSON.parse(f.calls[0].init.body), { type: 'income', name: '이자' });
+  const f2 = mockFetch(200, { id: 'c1' });
+  await createApi({ fetchImpl: f2 }).updateCategory('a/b', { active: false });
+  assert.equal(f2.calls[0].url, '/api/categories/a%2Fb');
+  assert.equal(f2.calls[0].init.method, 'PATCH');
+  assert.deepEqual(JSON.parse(f2.calls[0].init.body), { active: false });
+  const f3 = mockFetch(409, { error: { code: 'CATEGORY_INACTIVE', message: 'm', categoryId: 'id-1' } });
+  await assert.rejects(() => createApi({ fetchImpl: f3 }).createCategory('expense', '교통'), (e) => e.code === 'CATEGORY_INACTIVE' && e.categoryId === 'id-1');
 });
 
 test('api: POST 는 JSON Content-Type 과 본문, 204 는 null', async () => {
@@ -110,20 +126,29 @@ const MONTHLY = [
   { month: '2026-10', incomeTotal: 2500000, expenseTotal: 1123000, balance: 1377000, count: 6 },
 ];
 
-test('KPI: 전월 대비 증가/감소/없음', () => {
+test('KPI: 수입·지출 전월 대비는 같은 문장 형식, 전월 0이면 둘 다 없음', () => {
   const k = buildKpi(MONTHLY, '2026-10');
   assert.equal(k.expense, 1123000);
   assert.equal(k.balance, 1377000);
-  assert.equal(k.change.direction, 'up');
-  assert.equal(k.change.text, '지난달보다 12.3% 더 썼어요');
+  assert.equal(k.expenseChange.direction, 'up');
+  assert.equal(k.expenseChange.text, '지난달보다 지출이 12.3% 늘었어요');
+  assert.equal(k.incomeChange.direction, 'same');
+  assert.equal(k.incomeChange.text, '지난달과 같아요');
   const down = buildKpi(MONTHLY, '2026-09');
-  assert.equal(down.change, null); // 전월(8월) 지출 0
-  assert.equal(expenseChange(900, 1000).text, '지난달보다 10.0% 덜 썼어요');
+  assert.equal(down.expenseChange, null); // 전월(8월) 지출 0
+  assert.equal(down.incomeChange, null); // 전월(8월) 수입 0: 양쪽 대칭
+  assert.equal(expenseChange(900, 1000).text, '지난달보다 지출이 10.0% 줄었어요');
   assert.equal(expenseChange(900, 1000).direction, 'down');
+  assert.equal(incomeChange(1050, 1000).text, '지난달보다 수입이 5.0% 늘었어요');
+  assert.equal(incomeChange(950, 1000).text, '지난달보다 수입이 5.0% 줄었어요');
   assert.equal(expenseChange(1000, 1000).direction, 'same');
   assert.equal(expenseChange(5, 0), null);
+  assert.equal(incomeChange(5, 0), null);
   const none = buildKpi([], '2026-10');
-  assert.deepEqual([none.income, none.expense, none.balance, none.change], [0, 0, 0, null]);
+  assert.deepEqual([none.income, none.expense, none.balance, none.incomeChange, none.expenseChange], [0, 0, 0, null, null]);
+  // 질책·평가 어조가 없다
+  const words = JSON.stringify([k, expenseChange(900, 1000), incomeChange(1050, 1000)]);
+  assert.doesNotMatch(words, /더 썼|덜 썼|과소비|초과/);
 });
 
 test('도넛/추이 어댑터', () => {
@@ -152,8 +177,10 @@ test('인사이트 문장: api.md 6.3 예시', () => {
   };
   const secs = buildInsightSections(data);
   assert.deepEqual(secs.map((s) => s.key), ['overspending', 'recurring', 'large']);
-  assert.equal(overspendingLine(data.overspending[0]).text, '식비: 이번 달 130,000원으로 평소 월 평균 100,000원보다 30% 더 썼어요');
-  assert.equal(overspendingLine(data.overspending[0]).label, '초과');
+  assert.equal(secs[0].title, '평소보다 많은 지출');
+  assert.equal(overspendingLine(data.overspending[0]).text, '식비: 이번 달 130,000원으로 평소 월 평균 100,000원보다 30% 많아요');
+  assert.equal(overspendingLine(data.overspending[0]).label, '평소보다 많음');
+  assert.equal(overspendingLine(data.overspending[1]).label, '지금 속도');
   assert.match(overspendingLine(data.overspending[1]).text, /132,000원 예상/);
   assert.equal(recurringLine(data.recurring[0]).text, '넷플릭스 17,000원 매월 반복 지출 · 다음 예정 11월 4일');
   assert.equal(recurringLine(data.recurring[0]).strong, true);
@@ -162,6 +189,7 @@ test('인사이트 문장: api.md 6.3 예시', () => {
   assert.deepEqual(buildInsightSections(null), []);
   const all = JSON.stringify(secs);
   assert.doesNotMatch(all, /NaN|undefined|Infinity|null/);
+  assert.doesNotMatch(all + INSIGHT_EMPTY_TEXT, /과소비|더 썼|덜 썼|초과|⚠/);
 });
 
 test('debounce: 마지막 호출만 실행, cancel', () => {

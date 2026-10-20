@@ -2,9 +2,6 @@
 import { parseAmount } from './money.js';
 import { isValidDate } from './date.js';
 
-export const EXPENSE_CATEGORIES = ['식비', '카페/간식', '교통', '쇼핑', '주거/통신', '의료/건강', '문화/여가', '기타'];
-export const INCOME_CATEGORIES = ['급여', '용돈', '부수입', '기타'];
-
 /** 이메일: 앞뒤 공백 제거 + 소문자. 1~254자, 공백 없음, @ 1개, 도메인에 '.'. */
 export function validateEmail(input) {
   const v = String(input ?? '').trim().toLowerCase();
@@ -40,19 +37,26 @@ export function validateMemo(input) {
   return { ok: true, value: v };
 }
 
-export function validateCategory(type, category) {
-  const list = type === 'income' ? INCOME_CATEGORIES : type === 'expense' ? EXPENSE_CATEGORIES : null;
-  if (!list || !list.includes(category)) return { ok: false, message: '카테고리를 선택해 주세요' };
+/**
+ * 카테고리 검증. categories: { expense: string[], income: string[] } (GET /api/categories 의 활성 이름).
+ * keep: 수정 중인 거래의 원래 { type, category }. 사용 안 함이어도 그대로 유지하는 것은 서버도 허용한다(api.md 4.3).
+ */
+export function validateCategory(type, category, categories, keep = null) {
+  const list = type === 'income' || type === 'expense' ? (categories && categories[type]) : null;
+  const kept = !!keep && keep.type === type && keep.category === category;
+  if (!Array.isArray(list) || (!list.includes(category) && !kept)) {
+    return { ok: false, message: '카테고리를 선택해 주세요' };
+  }
   return { ok: true, value: category };
 }
 
 /** 거래 폼 전체 검증. errors는 필드별 메시지. */
-export function validateTransaction({ type, amount, category, memo, date }) {
+export function validateTransaction({ type, amount, category, memo, date }, categories, keep = null) {
   const errors = {};
   if (type !== 'expense' && type !== 'income') errors.type = '지출/수입을 선택해 주세요';
   const a = validateAmount(amount);
   if (!a.ok) errors.amount = a.message;
-  const c = validateCategory(type, category);
+  const c = validateCategory(type, category, categories, keep);
   if (!c.ok) errors.category = c.message;
   const m = validateMemo(memo);
   if (!m.ok) errors.memo = m.message;

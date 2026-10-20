@@ -6,7 +6,7 @@ import {
   daysInMonth, monthTitle, monthShort, dayLabel,
 } from '../public/js/lib/date.js';
 import {
-  validateEmail, validatePassword, validateAmount, validateMemo, validateTransaction,
+  validateEmail, validatePassword, validateAmount, validateMemo, validateTransaction, validateCategory,
 } from '../public/js/lib/validate.js';
 
 test('parseAmount: 유효/무효', () => {
@@ -117,11 +117,29 @@ test('validateAmount / validateMemo', () => {
   assert.equal(validateMemo('  커피  ').value, '커피');
 });
 
+const CATS = { expense: ['식비', '카페/간식', '반려동물'], income: ['급여', '기타'] };
+
 test('validateTransaction', () => {
-  const ok = validateTransaction({ type: 'expense', amount: '4,500', category: '카페/간식', memo: ' 아메리카노 ', date: '2026-10-19' });
+  const ok = validateTransaction({ type: 'expense', amount: '4,500', category: '카페/간식', memo: ' 아메리카노 ', date: '2026-10-19' }, CATS);
   assert.equal(ok.ok, true);
   assert.deepEqual(ok.value, { type: 'expense', amount: 4500, category: '카페/간식', memo: '아메리카노', date: '2026-10-19' });
-  const bad = validateTransaction({ type: 'income', amount: '', category: '식비', memo: '', date: '2026-02-30' });
+  const bad = validateTransaction({ type: 'income', amount: '', category: '식비', memo: '', date: '2026-02-30' }, CATS);
   assert.equal(bad.ok, false);
   assert.deepEqual(Object.keys(bad.errors).sort(), ['amount', 'category', 'date']);
+});
+
+test('validateCategory: 사용자 활성 목록 기준, 수정 중 거래의 원래 카테고리는 유지 허용', () => {
+  assert.equal(validateCategory('expense', '반려동물', CATS).ok, true); // 사용자가 추가한 카테고리
+  assert.equal(validateCategory('expense', '경조사', CATS).ok, false); // 목록에 없음/사용 안 함
+  assert.equal(validateCategory('income', '식비', CATS).ok, false); // 유형이 다르면 불일치
+  assert.equal(validateCategory('income', '기타', CATS).ok, true);
+  assert.equal(validateCategory('expense', '식비', undefined).ok, false); // 아직 못 받음
+  assert.equal(validateCategory('transfer', '식비', CATS).ok, false);
+  const keep = { type: 'expense', category: '경조사' };
+  assert.equal(validateCategory('expense', '경조사', CATS, keep).ok, true);
+  assert.equal(validateCategory('expense', '경조사', CATS, { type: 'income', category: '경조사' }).ok, false);
+  assert.equal(validateCategory('expense', '여행', CATS, keep).ok, false); // 다른 사용 안 함 카테고리로는 못 바꾼다
+  const tx = { type: 'expense', amount: '50,000', category: '경조사', memo: '', date: '2026-10-19' };
+  assert.equal(validateTransaction(tx, CATS).ok, false);
+  assert.equal(validateTransaction(tx, CATS, keep).ok, true);
 });
