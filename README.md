@@ -77,6 +77,13 @@ Windows PowerShell 에서 `.env` 없이 쓰려면 `$env:DB_DRIVER="pglite"; $env
 6. 같은 명령을 한 번 더 실행해 `생성 사용자=0` 인지 확인합니다(멱등).
 7. 끝나면 `.env.production.local` 을 삭제하는 것을 권장합니다.
 
+**사용자 이름 컬럼(v4)**: `users.name`(nullable)을 추가합니다. 위 절차와 같은 순서(**백업 -> `npm run db:migrate:prod -- --yes` -> 확인 쿼리 -> 코드 푸시**)를 지키세요. 새 코드는 로그인·세션 확인·가입에서 `users.name` 을 읽으므로 컬럼이 없는 DB 에 먼저 배포하면 모든 사용자가 앱을 쓸 수 없습니다(프리뷰 배포도 같은 DB 를 쓰면 마찬가지). 백업 브랜치 이름 예: `backup-before-user-name`. 확인 쿼리(숫자만):
+- `select count(*) from information_schema.columns where table_name = 'users' and column_name = 'name';` = 1
+- `select count(*), count(name) from users;` = (기존 사용자 수, 0)
+- transactions 의 count·sum, `select count(*) from categories;` 가 실행 전과 같음
+
+컬럼 추가는 멱등이라 재실행해도 무해하고, 롤백 시에도 컬럼은 그대로 둡니다(DROP 하지 않음).
+
 롤백: 마이그레이션 중 실패하면 SQL 이 한 번에 실행되므로 전부 롤백됩니다(원인 수정 후 재실행). 마이그레이션 후 코드 배포 전에는 구버전 코드가 `categories` 를 읽지 않아 그대로 동작합니다. 새 코드 배포 후 문제가 생기면 Vercel 에서 이전 배포로 Instant Rollback 하고 스키마는 그대로 둡니다(구버전 호환). 단, 새 코드에서 이름을 바꾸거나 새로 만든 카테고리의 거래는 구버전에서 조회·집계는 되지만 수정(PUT)이 400 이 됩니다. 데이터 손상 시 최후 수단은 백업 브랜치 복원이며 백업 이후의 모든 입력이 사라지므로 영향 범위를 확인하고 진행합니다.
 
 ### 테스트

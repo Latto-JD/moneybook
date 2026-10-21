@@ -88,7 +88,8 @@ export function createApi({ fetchImpl, onUnauthorized = () => {} } = {}) {
     // 인증
     me: () => request('GET', '/api/auth/me', { noRedirect: true }),
     login: (email, password) => request('POST', '/api/auth/login', { body: { email, password } }),
-    signup: (email, password) => request('POST', '/api/auth/signup', { body: { email, password } }),
+    signup: (email, password, name) => request('POST', '/api/auth/signup', { body: { email, password, name } }),
+    updateMe: (name) => request('PATCH', '/api/auth/me', { body: { name } }),
     logout: () => request('POST', '/api/auth/logout'),
     // 거래
     categories: () => request('GET', '/api/categories'),

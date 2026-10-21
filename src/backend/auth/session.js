@@ -21,16 +21,16 @@ export function readSessionToken(req) {
   return token && TOKEN_RE.test(token) ? token : null;
 }
 
-// 유효한 세션이면 {id, email}, 아니면 null
+// 유효한 세션이면 {id, email, name}, 아니면 null
 export async function findSessionUser(db, req) {
   const token = readSessionToken(req);
   if (!token) return null;
   const { rows } = await db.query(
-    `select u.id, u.email from sessions s join users u on u.id = s.user_id
+    `select u.id, u.email, u.name from sessions s join users u on u.id = s.user_id
      where s.token_hash = $1 and s.expires_at > now()`,
     [hashToken(token)],
   );
-  return rows[0] ? { id: rows[0].id, email: rows[0].email } : null;
+  return rows[0] ? { id: rows[0].id, email: rows[0].email, name: rows[0].name ?? null } : null;
 }
 
 export async function deleteSession(db, token) {

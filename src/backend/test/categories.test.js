@@ -17,7 +17,7 @@ beforeEach(async () => {
 });
 
 async function newUser(email) {
-  const r = await app.request('POST', '/api/auth/signup', { body: { email, password: GOOD_PASSWORD } });
+  const r = await app.request('POST', '/api/auth/signup', { body: { email, password: GOOD_PASSWORD, name: '테스터' } });
   assert.equal(r.status, 201);
   return { cookie: cookieFrom(r), id: r.json.user.id };
 }
@@ -513,7 +513,7 @@ test('이름 변경과 거래 POST 가 동시에 와도 목록에 없는 옛 이
 
 test('가입은 사용자와 기본 카테고리를 함께 만든다 (이메일 중복이면 둘 다 없음)', async () => {
   await A();
-  const dup = await app.request('POST', '/api/auth/signup', { body: { email: 'a@example.com', password: GOOD_PASSWORD } });
+  const dup = await app.request('POST', '/api/auth/signup', { body: { email: 'a@example.com', password: GOOD_PASSWORD, name: '테스터' } });
   assert.equal(dup.status, 409);
   assert.equal((await app.db.query('select count(*)::int n from categories')).rows[0].n, 12);
   await B();

@@ -12,7 +12,7 @@ export function uniqueIp() {
   ipSeq += 1;
   return `10.${ipBase}.${(ipMid + Math.floor(ipSeq / 250)) % 250}.${(ipSeq % 250) + 1}`;
 }
-import { newAccount } from './accounts.js';
+import { newAccount, DEFAULT_NAME } from './accounts.js';
 
 /**
  * API 컨텍스트 생성. 쿠키는 컨텍스트가 보관한다.
@@ -44,8 +44,8 @@ export function json(api, method, url, body, opts = {}) {
 export const get = (api, url, opts = {}) => api.get(url, { failOnStatusCode: false, ...opts });
 
 /** 가입 (자동 로그인, 쿠키가 api 컨텍스트에 저장됨). */
-export async function signup(api, { email, password }, headers) {
-  return json(api, 'POST', '/api/auth/signup', { email, password }, { headers });
+export async function signup(api, { email, password, name = DEFAULT_NAME }, headers) {
+  return json(api, 'POST', '/api/auth/signup', { email, password, name }, { headers });
 }
 
 export async function login(api, { email, password }, headers) {

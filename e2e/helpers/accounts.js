@@ -8,7 +8,8 @@ export function uniqueEmail(tag = '') {
 }
 
 export const PASSWORD = 'QaPassw0rd!';
+export const DEFAULT_NAME = '큐에이 테스터';
 
 export function newAccount(tag = '') {
-  return { email: uniqueEmail(tag), password: PASSWORD };
+  return { email: uniqueEmail(tag), password: PASSWORD, name: DEFAULT_NAME };
 }

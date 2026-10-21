@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>가계부</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <script src="js/theme-init.js"></script>
   <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/components.css">
@@ -14,7 +15,13 @@
 <body>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
   <header class="app-header">
-    <span class="user" id="user-email" aria-live="polite"></span>
+    <a class="user" id="user-name" href="#account"></a>
+    <label class="visually-hidden" for="theme-select">화면 모드</label>
+    <select class="theme-select" id="theme-select">
+      <option value="auto">자동</option>
+      <option value="light">라이트</option>
+      <option value="dark">다크</option>
+    </select>
     <button type="button" class="btn btn--ghost btn--sm" id="logout-btn">로그아웃</button>
   </header>
 
@@ -169,6 +176,28 @@
           <summary id="catm-inactive-title">사용 안 함 (0)</summary>
           <ul class="cat-list" id="catm-inactive"></ul>
         </details>
+      </div>
+    </section>
+
+    <!-- 내 정보 (하단 탭 없음, 기록 탭이 활성) -->
+    <section id="panel-account" aria-labelledby="account-title" hidden>
+      <div class="cat-top">
+        <a class="btn btn--ghost btn--sm" href="#record" id="account-back" aria-label="뒤로"><span class="icon icon--back" aria-hidden="true"></span></a>
+        <h1 id="account-title" tabindex="-1">내 정보</h1>
+      </div>
+      <div class="card">
+        <p class="field__label">로그인에 쓰는 이메일</p>
+        <p id="account-email"></p>
+        <form id="account-form" class="stack" method="post" action="/" novalidate>
+          <div class="field">
+            <label for="account-name">이름 (20자 이하)</label>
+            <input type="text" id="account-name" class="input" autocomplete="name" maxlength="40" aria-describedby="account-hint account-name-error">
+            <p class="hint" id="account-hint"></p>
+            <p class="error-text" id="account-name-error" role="alert"></p>
+          </div>
+          <p class="status-text" id="account-status" role="status" aria-live="polite"></p>
+          <button type="submit" class="btn btn-primary btn--primary btn--block" id="account-save">저장</button>
+        </form>
       </div>
     </section>
   </main>

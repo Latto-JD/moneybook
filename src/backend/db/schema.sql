@@ -7,6 +7,10 @@ create table if not exists users (
   created_at timestamptz not null default now()
 );
 
+-- v4: 표시용 이름. 기존 사용자는 null (헤더는 이메일로 폴백). 추가 전용, 재실행해도 아무 일도 하지 않는다.
+alter table users add column if not exists name text
+  check (name is null or char_length(name) between 1 and 20);
+
 create table if not exists sessions (
   token_hash text primary key,
   user_id uuid not null references users(id) on delete cascade,

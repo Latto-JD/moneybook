@@ -2,7 +2,7 @@ import { ApiError } from '../http.js';
 import { ensureDefaults } from '../lib/categories.js';
 import { clientIp } from '../security.js';
 import { hashPassword, verifyPassword, dummyVerify } from './password.js';
-import { normalizeEmail, isValidEmail, isValidPassword } from './validate.js';
+import { normalizeEmail, isValidEmail, isValidPassword, normalizeName } from './validate.js';
 import { createSession, deleteSession, readSessionToken, sessionCookie, clearCookie } from './session.js';
 import {
   beginLoginAttempt,
@@ -15,7 +15,7 @@ import {
 
 const CLEANUP_PROBABILITY = 0.05;
 
-const userBody = (u) => ({ user: { id: u.id, email: u.email } });
+const userBody = (u) => ({ user: { id: u.id, email: u.email, name: u.name ?? null } });
 
 async function signup({ req, db, config, body }) {
   if (!config.signupEnabled) throw new ApiError(403, 'SIGNUP_DISABLED', '지금은 새로 가입할 수 없어요.');
@@ -23,6 +23,8 @@ async function signup({ req, db, config, body }) {
   const fields = {};
   if (typeof body.email !== 'string' || !isValidEmail(email)) fields.email = '올바른 이메일 형식이 아니에요.';
   if (!isValidPassword(body.password)) fields.password = '비밀번호는 8자 이상 128자 이하여야 해요.';
+  const n = normalizeName(body.name);
+  if (n.error) fields.name = n.error;
   if (Object.keys(fields).length) {
     throw new ApiError(400, 'VALIDATION_ERROR', Object.values(fields)[0], { fields });
   }
@@ -35,8 +37,8 @@ async function signup({ req, db, config, body }) {
     // 사용자와 기본 카테고리 12개를 한 트랜잭션에서 만든다
     user = await db.transaction(async (tx) => {
       const { rows } = await tx.query(
-        'insert into users (email, password_hash) values ($1, $2) returning id, email',
-        [email, passwordHash],
+        'insert into users (email, password_hash, name) values ($1, $2, $3) returning id, email, name',
+        [email, passwordHash, n.name],
       );
       await ensureDefaults(tx, rows[0].id);
       return rows[0];
@@ -63,7 +65,7 @@ async function login({ req, db, config, body }) {
   // 서버리스는 응답 후 백그라운드 실행이 보장되지 않으므로 낮은 확률로 응답 전에 await 한다.
   if (Math.random() < CLEANUP_PROBABILITY) await cleanup(db).catch(() => {});
 
-  const { rows } = await db.query('select id, email, password_hash from users where email = $1', [email]);
+  const { rows } = await db.query('select id, email, name, password_hash from users where email = $1', [email]);
   const user = rows[0];
   const ok = user ? await verifyPassword(body.password.slice(0, 1024), user.password_hash) : await dummyVerify(body.password.slice(0, 1024));
   if (!ok) {
@@ -86,9 +88,17 @@ async function me({ user }) {
   return { status: 200, body: userBody(user) };
 }
 
+async function updateMe({ db, user, body }) {
+  const n = normalizeName(body.name);
+  if (n.error) throw new ApiError(400, 'VALIDATION_ERROR', n.error, { fields: { name: n.error } });
+  const { rows } = await db.query('update users set name = $1 where id = $2 returning id, email, name', [n.name, user.id]);
+  return { status: 200, body: userBody(rows[0]) };
+}
+
 export const authRoutes = [
   { method: 'POST', path: '/api/auth/signup', auth: false, handler: signup },
   { method: 'POST', path: '/api/auth/login', auth: false, handler: login },
   { method: 'POST', path: '/api/auth/logout', auth: false, handler: logout },
   { method: 'GET', path: '/api/auth/me', auth: true, handler: me },
+  { method: 'PATCH', path: '/api/auth/me', auth: true, handler: updateMe },
 ];

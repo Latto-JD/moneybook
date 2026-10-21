@@ -552,3 +552,79 @@ frontend 가 예고한 `frontend.spec.js:61,63,497`(칩 비동기 로드)은 신
 - 실행: 포트 3000번대에 남은 서버 없음 확인, 새 임시 PGlite(마이그레이션, 시드), 포트 3500. 범위는 design.spec.js 전체(스크린샷 제외), categories-ui.spec.js·frontend.spec.js 중 C-C23~C-C29, C-C32, 이름 바꾸기·이름 변경, 칩, C29~C31 관련 케이스를 mobile-360 + tablet-768 에서 실행(전체 재실행 아님).
 - 결과: 188 통과 / 0 실패. C-D1(OFL 본문 검사 포함), C-D13/C-D14/C-D24, C-C28 모두 통과.
 - 미검증: 이번 범위 밖 e2e 는 다시 돌리지 않았다(직전 전체 재실행 결과 530 통과 / C-C28 테스트 수정 후 통과 유지).
+
+---
+
+# 다크/라이트 전환 + 가입 이름 QA (docs/plan-theme-name.md, 커밋 전 작업 트리)
+
+## 요약
+
+- 완료 기준 C-T1~C-T10, C-N1~C-N10, C-TN1~C-TN4 중 **통과 24 / 실패 0 / 검증 불가·미검증 0**, 사용자 확인 항목 P-TN1·P-TN2 는 범위 밖(미검증). 앱 결함은 발견하지 못했다.
+- 가장 눈에 띄는 점 3개(모두 결함은 아님):
+  1. 기존 e2e C27 "select 없음"이 헤더 화면 모드 select(계획서 6.1 이 정한 설계)와 충돌해 실패했다. 테스트를 `select:not(#theme-select)` 로 고쳤다(기록 화면에 카테고리용 select 가 없다는 원래 의도 유지).
+  2. 로그인 화면은 로드 때 `GET /api/auth/me` 로 로그인 여부를 확인하므로 비로그인 상태에서 콘솔에 "401 Failed to load resource" 가 남는다(기존 동작, CSP 위반 아님). 새 테스트는 이 메시지만 허용한다.
+  3. 마이그레이션 직후 구버전 코드(440e9e6)가 그대로 로그인·가입되는 것을 확인했다(롤백 안전).
+- 앱 소스는 수정하지 않았다. 변경한 것은 e2e 테스트·헬퍼·설정뿐이다.
+
+## 실행 환경과 명령
+
+- 포트 3000 에 남은 서버가 없음을 확인한 뒤, 임시 PGlite 에 마이그레이션과 시드(`seed.js --today=2026-10-19`)를 적용하고 개발 서버를 띄웠다: `DB_DRIVER=pglite QA_TOOLS=true COOKIE_SECURE=false TRUST_PROXY=true PGLITE_DIR=<임시> PORT=3000` (TRUST_PROXY=true 는 e2e README 요구, IP 별 가입 제한 회피). 끝난 뒤 서버를 종료하고 임시 디렉터리를 지웠다.
+- `npm test`: 234 통과 / 0 실패.
+- `cd e2e && BASE_URL=http://localhost:3000 TRUST_PROXY=true SEED_*=... npx playwright test --project=mobile-360 --project=tablet-768`: 601개 중 580 통과 / 3 실패 / 18 skip(10.0분). 실패 3건은 모두 테스트 쪽 원인이라 고쳤다(아래). 고친 뒤에는 `-g "C27|C-N5"` 로 해당 테스트만 재실행해 15 통과 / 1 skip. **고친 뒤 전체를 한 번에 다시 돌리지는 않았다.**
+  - C27 기록 탭 (mobile-360, tablet-768): 위 요약 1번.
+  - C-N5 (mobile-360): 새 테스트가 이름을 이메일 칸에 넣어 로그인 실패를 반복하는데 그 값이 실행마다 같아 이메일별 시도 제한(429)에 걸렸다. 이름을 실행마다 고유값으로 바꿨다.
+- skip 18: 새 spec 의 API/정적/마이그레이션 테스트(tablet-768 에서는 건너뛰도록 `onlyMobile`)와 기존 skip(C64 등)이다. 항목별 내역은 세지 않았다.
+
+## 항목별 결과
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| C-T1 저장값 없음 | 통과 | OS 라이트 배경 rgb(247,245,240), OS 다크 rgb(20,20,18), `data-theme` 속성 없음, select 값 auto (360, 768) |
+| C-T2 저장값 우선 | 통과 | dark+OS라이트, light+OS다크 모두 배경·글자색이 저장값 기준, 메인·로그인 화면 모두 |
+| C-T3 전환·유지 | 통과 | 자동->라이트->다크->자동 즉시 색 변경, 주소 이동(framenavigated) 0회, localStorage `light`/`dark`/없음, 새로고침·새 탭에서 유지 |
+| C-T4 깜빡임 | 통과 | 저장값 dark + OS 라이트에서 DOMContentLoaded·첫 rAF 시점에 `data-theme=dark` 와 다크 배경(index, login). 정적: 두 HTML head 에서 theme-init.js 가 첫 stylesheet 앞, module/defer/async 없음, 서버가 JS MIME 으로 제공 |
+| C-T5 잘못된 값·저장소 예외 | 통과 | `blue` 저장값은 자동 처리, getItem/setItem/removeItem 모두 throw 해도 페이지 오류 0, 메인에서 select 변경은 화면에 적용됨 |
+| C-T6 다른 탭 동기화 | 통과 | 탭 B 에서 dark, auto 로 바꾸면 탭 A 의 색과 select 값이 따라 바뀜 |
+| C-T7 차트·수동 모드 | 통과 | 도넛·월별·카테고리 추이 SVG 에 표식을 붙이고 전환해도 표식 유지(다시 그리지 않음), `viz-fill-1..8`, 수입·지출 fill 이 tokens.css 의 라이트/다크 값과 일치. 수동 다크(OS 라이트)·수동 라이트(OS 다크)를 OS 모드와 비교해 기록·대시보드·카테고리 관리·내 정보 4화면의 모든 보이는 요소(color, background, border, outline, box-shadow, fill, stroke) 계산값이 완전히 같고, 수동 다크에서 흰 배경 0, 옛 stroke(검정) 0, Tab 포커스 링에 모드별 `--color-focus` 색 8개 이상. **한계**: C-D8/9/10/14 테스트 자체를 수동 모드로 재실행한 것이 아니라 "OS 모드와 동일"을 보여 대체했다(두 다크 블록 값이 같다는 계획서의 이론과 합치) |
+| C-T8 접근성 | 통과 | 이름 "화면 모드"인 combobox, 이름 링크에서 Tab 한 번에 도달, 포커스 링 색, `:focus-visible`, 방향키로 값 변경과 포커스 유지, 높이 44px 이상(select, 이름 링크, 로그아웃), 라벨 `visually-hidden`. **검증 불가**: axe 는 설치돼 있지 않아 실행하지 못했다(대신 위 항목과 기존 C27 라벨 검사로 갈음) |
+| C-T9 헤더 한 줄 | 통과 | 360, 768 모두: 짧은 이름 / 20자 한글 / 20자 W / 긴 이메일(이름 없음) x 자동·라이트·다크. 세 요소 세로 중심 차 6px 미만, 헤더 높이 80px 미만, 겹침·화면 밖 잘림 없음, text-overflow ellipsis, 긴 이메일은 실제로 말줄임, 가로 스크롤 없음 |
+| C-T10 CSP | 통과 | 4가지 모드 조합 x 4화면 + 로그인 가입 화면에서 securitypolicyviolation 0, 콘솔 오류 0(로그인 화면 401 프로브 제외, 위 요약 2번). 정적: 인라인 script/on*=/style=/`<style>` 없음, 새 JS 에 innerHTML 등 위험 API 없음. 기존 design.spec C-D5 도 전체 실행에서 통과 |
+| C-N1 스키마·마이그레이션 | 통과 | 440e9e6 코드·스키마로 기존 사용자와 거래 생성 -> 새 스키마 2회 적용 오류 없음, `users.name` text nullable 기본값 없음, name CHECK 제약 1개(중복 없음), 기존 사용자 name null, 거래 건수·합계 불변, name 없는 INSERT 성공, 21자·빈 문자열 INSERT 는 CHECK 위반, 20자 성공 |
+| C-N2 가입 검증 | 통과 | 누락/null/숫자/빈 문자열/공백만/탭줄바꿈만/21자/NUL·BEL·DEL/객체/배열/21자 이모지 모두 400 `VALIDATION_ERROR` + `fields.name`, 같은 이메일 로그인 401(생성 안 됨). 이메일+이름, 이메일+비밀번호+이름 동시 오류는 `fields` 에 모두 담김. 같은 IP 로 위 실패 15회 후에도 정상 가입 10회 연속 201, 11번째는 429(시도 기록에 안 남음, 제한 자체는 작동) |
+| C-N3 정규화 저장 | 통과 | `"  홍   길동 "`, 탭·줄바꿈 포함, NFD 한글 -> NFC, 한글 20자, 이모지 20자, 영문 19+이모지 1 모두 정규화 값 저장, 응답 = me |
+| C-N4 사용자 객체 | 통과 | signup/login/me 의 user 가 정확히 `{id,email,name}`, 응답에 password/hash/scrypt 없음. 기존 사용자 login/me 는 `name:null`(마이그레이션 절) |
+| C-N5 로그인 불변 | 통과 | 이름을 이메일 칸에 넣거나 `name` 키만 보내면 로그인 실패, 이메일 대소문자·공백 무시 로그인 200, 로그인 본문의 name 은 무시됨 |
+| C-N6 가입 화면 | 통과 | 로그인 모드에서 이름 칸 숨김, 가입 모드에서 `getByLabel('이름')` 표시(id name, autocomplete name, aria-describedby name-error), 로그인 요청 본문은 `{email,password}` 뿐. 빈/공백/21자/제어문자 -> `#name-error`·`aria-invalid`·포커스·가입 요청 0, 이메일·이름 동시 오류 시 이름이 먼저 포커스. 서버 `fields.name` 도 같은 자리에 표시. 실제 가입 후 헤더에 정규화된 이름, title 은 이메일 |
+| C-N7 헤더 표시 | 통과 | `<b>x</b>`, `<svg onload=__x=1>`, `&amp;<i>`, `"><u>` 이름이 문자 그대로 표시되고 헤더·내 정보 화면에 요소 생성 0, `__x` 미정의, 대화상자 0. 이름 null 이면 이메일 표시, title 이메일, 접근 이름 "내 정보: <이메일>, 이름 설정" |
+| C-N8 PATCH /api/auth/me | 통과 | 200 + 정규화 이름, me 반영, email·id 를 같이 보내도 불변(위조 이메일로 로그인 불가), 타 사용자 이름 불변. 빈 문자열/null/누락/공백/21자/제어문자/숫자 400 + `fields.name`(실패 후 값 유지), 세션 없음 401, Origin 없음·다른 Origin 403, 깨진 JSON 400, text/plain 415, PUT/DELETE/POST 405 + `Allow` 에 GET·PATCH |
+| C-N9 내 정보 화면 | 통과 | 헤더 이름 링크로 진입, 이메일은 텍스트(입력 아님), 탭바 활성 기록. 빈 값·21자는 `role=alert` 오류 + aria-invalid + 포커스 + PATCH 0. 저장 시 `role=status` "저장했어요", 헤더 즉시 갱신(주소 이동 0), 요청 본문 정규화 값, 새로고침 후 #account 유지·서버 반영, 뒤로 버튼과 브라우저 뒤로 가기, 다시 들어오면 편집 중 값 폐기. 서버 400 은 `#account-name-error` 에, 401 은 로그인 화면으로. 기존(null) 사용자: 이메일 폴백 -> 안내 문구 -> 이름 저장 -> 헤더 이름, DB 반영 |
+| C-N10 JS 없이 제출 | 통과 | 스크립트 요청을 모두 막고 이름 칸을 강제로 열어 제출: 주소·요청 URL 에 이름·이메일·비밀번호 표식 없음, POST 발생, form `method="post"` |
+| C-TN1 회귀 | 통과 | `npm test` 234/234. e2e 전체 580 통과(실패 3건은 테스트 쪽 원인, 수정 후 해당 테스트 재실행 통과). `design.spec.js` 의 emulateMedia 다크 검사 포함 통과. 단 수정 후 전체 재실행은 하지 않음 |
+| C-TN2 기존 기능 | 통과 | 거래, 대시보드, 카테고리 관리, 로그아웃, 세션 만료, 시도 제한 등 기존 spec 이 전체 실행에서 통과 |
+| C-TN3 변경 범위 | 통과 | 변경 파일은 `src/frontend/public/`, `src/frontend/test/`, `src/backend/`, `e2e/`, `docs/`, `README.md` 안. `src/frontend/office/`, `tokens.css`, 카테고리 검증 코드(`lib/categories.js`, `categories-data.js`)는 diff 0. `design_handoff_moneybook/` 는 untracked 상태 그대로(내용 변경은 확인하지 않음, 커밋 여부는 메인 세션 몫) |
+| C-TN4 문서 | 통과 | `docs/api.md` 8.5 와 README 에 "백업 -> `db:migrate:prod -- --yes` -> 확인 쿼리 -> 푸시" 순서와 확인 쿼리가 있음(문서를 읽어 확인) |
+| P-TN1 휴대폰 확인 | 미검증 | 사용자 확인 항목 |
+| P-TN2 운영 마이그레이션 | 미검증 | 사용자 확인 항목. 운영 DB 는 건드리지 않음 |
+
+## 테스트 코드 변경 (소스 수정 없음)
+
+- `e2e/tests/theme-name.spec.js` (신규, 32개): 위 C-T/C-N 항목. 마이그레이션 절은 `git archive` 로 440e9e6 를 임시 디렉터리에 풀어 구버전 서버로 사용(저장소 상태 변경 없음).
+- `e2e/helpers/accounts.js`, `e2e/helpers/api.js`: 계정에 `name`(기본 "큐에이 테스터") 추가, `signup` 헬퍼가 name 을 보냄(직접 `{email,password}` 만 넘기는 호출도 기본 이름이 채워짐).
+- `e2e/tests/auth.spec.js:52`: 사용자 객체에 name 포함. `#user-email` -> `#user-name` 4곳(`frontend.spec.js` 24, 196, 682 행 근처, `categories-ui.spec.js:46`)과 기대 텍스트를 이메일에서 이름으로 변경.
+- `e2e/tests/frontend.spec.js`: UI 가입 흐름 5곳(C58 계열)에 이름 입력 추가, C27 의 select 검사에서 `#theme-select` 제외.
+- `e2e/playwright.config.js`: tablet-768 testMatch 에 `theme-name` 추가(C-T9 를 768 에서 확인하기 위해). 새 spec 의 API/정적/마이그레이션 테스트는 768 에서 스스로 skip.
+- `contract.spec.js:84`, `auth.spec.js:236` 의 직접 가입 본문은 수정하지 않았다. 전자는 비밀번호 오류만 검사하고 후자는 Origin 없는 403 만 검사해서 name 없이도 의도대로 동작하며 통과했다.
+
+## 관찰 사항 / 한계
+
+- 미검증: 실제 휴대폰 브라우저의 깜빡임·select 선택창(P-TN1), `meta color-scheme="light dark"` + 수동 라이트 + OS 다크의 CSS 로드 전 어두운 캔버스(계획서 12장 위험 항목; Playwright 의 자동 측정으로는 DOMContentLoaded 이후만 봄), axe, 스크린리더, 운영 URL.
+- 이름 칸 `maxlength` 는 40(복사 붙여넣기 여유)이고 실제 제한 20자는 검증이 담당한다. 오류 문구가 뜨는 것은 확인했다.
+- 한 번 만든 테스트 계정은 실행 사이에 공유하므로(헤더 읽기 전용 테스트), 다른 spec 에서 그 계정의 이름을 바꾸면 영향이 있다. 현재는 바꾸는 테스트가 없다.
+
+## 재검증 3 (리뷰 R1: 헤더 `a.user` display:block 수정 후)
+
+- 앞선 C-T9 통과 판정은 부족했다. 당시 `a.user` 가 display:flex 라서 computed `text-overflow` 는 ellipsis 로 읽혔지만 실제로는 "…" 가 그려지지 않았을 수 있고, 내 검사는 computed style 과 `scrollWidth` 만 봤다. 이번에 렌더 기준 검사를 추가했다(`theme-name.spec.js` "말줄임이 실제로 그려진다": display 가 block, Range 로 잰 텍스트 폭이 박스 폭보다 큼, 헤더 스크린샷 저장).
+- 실행: 임시 PGlite 서버(포트 3000, 종료·정리 완료)에서 theme-name.spec.js 의 C-T 전부, C-N7, 그리고 frontend.spec.js 의 C58·C27·C33 계열을 mobile-360 + tablet-768 로 실행: 56 통과 / 3 skip / 1 실패. 실패 1건은 `-g` 필터가 직렬 마이그레이션 절의 앞 단계를 빼서 생긴 것이라, 그 절을 통째로 다시 실행해 5/5 통과했다. 전체 재실행은 하지 않았다.
+- 실측(360px): 긴 이메일(이름 없음) 텍스트 폭 993px, 이름 박스 폭 147px(헤더 360px) -> 잘림. 20자 W 이름은 텍스트 폭 236px 대비 박스 147px. 768px: 박스 267px, 긴 이메일은 잘림, 20자 W(236px)는 박스에 들어가 말줄임 없음(정상).
+- 스크린샷 확인(직접 열어 봄): 360px 에서 긴 이메일은 "verylongaddressverylo..." , 20자 이름은 "WWWWWWWWWWWWW..." 로 말줄임표가 실제로 그려지고, 모드 선택과 로그아웃 버튼은 잘리거나 겹치지 않는다. 파일: scratchpad/shots/ellipsis-{long-email,name20}-{360,768}.png.
+- 결과: C-T9 통과(렌더 기준 확인됨). 다른 항목 결과 변화 없음.

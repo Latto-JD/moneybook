@@ -49,7 +49,7 @@ test.describe('C36 가입', () => {
     const res = await signup(api, acc);
     expect(res.status()).toBe(201);
     const body = await res.json();
-    expect(body.user).toEqual({ id: expect.any(String), email: acc.email });
+    expect(body.user).toEqual({ id: expect.any(String), email: acc.email, name: acc.name });
     expect(JSON.stringify(body)).not.toMatch(/password|hash|scrypt/i);
     const sc = setCookieHeader(res);
     expect(sc).toMatch(/mb_sid=/);

@@ -25,6 +25,19 @@ export function validatePassword(input) {
   return { ok: true, value: v };
 }
 
+export const NAME_MAX = 20;
+const NAME_CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+
+/** 이름(api.md 2장 이름 규칙): 제어문자 거부 -> NFC -> trim -> 연속 공백 1칸 -> 1~20자(코드포인트). */
+export function validateName(input) {
+  if (typeof input !== 'string') return { ok: false, message: '이름을 입력해 주세요.' };
+  if (NAME_CONTROL.test(input)) return { ok: false, message: '이름에 쓸 수 없는 문자가 있어요.' };
+  const v = input.normalize('NFC').trim().replace(/\s+/g, ' ');
+  const len = [...v].length;
+  if (len < 1 || len > NAME_MAX) return { ok: false, message: '이름은 1자 이상 20자 이하여야 해요.' };
+  return { ok: true, value: v };
+}
+
 export const AMOUNT_RANGE_TEXT = '금액은 1원 이상 1억원 이하의 숫자로 입력해 주세요';
 
 export function validateAmount(input) {

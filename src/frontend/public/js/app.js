@@ -4,12 +4,25 @@ import { $ } from './dom.js';
 import { initRecord } from './record.js';
 import { initDashboard } from './dashboard.js';
 import { initCategoryManager } from './category-manager.js';
+import { initThemeSelect } from './lib/theme.js';
+import { userLabel } from './lib/user-label.js';
+import { initAccount } from './account.js';
+
+initThemeSelect($('theme-select'));
+
+// 헤더: 이름(없으면 이메일). textContent 만 사용. title 은 로그인 ID(이메일) 확인용.
+function showUser(user) {
+  const l = userLabel(user);
+  $('user-name').textContent = l.text;
+  $('user-name').title = l.title;
+  $('user-name').setAttribute('aria-label', l.ariaLabel);
+}
 
 async function main() {
+  let currentUser;
   try {
-    const { user } = await api.me();
-    $('user-email').textContent = user.email; // textContent 만 사용
-    $('user-email').title = user.email; // 말줄임 시 전체 확인용 (스크린리더는 전체 텍스트를 읽음)
+    currentUser = (await api.me()).user;
+    showUser(currentUser);
   } catch (e) {
     if (e.status === 401) { location.replace('/login.html'); return; }
     $('flash').textContent = e.message;
@@ -23,6 +36,7 @@ async function main() {
   initRecord();
   initDashboard();
   initCategoryManager();
+  initAccount(currentUser, showUser);
 }
 main();
 

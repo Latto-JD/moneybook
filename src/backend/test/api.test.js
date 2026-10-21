@@ -15,7 +15,7 @@ beforeEach(async () => {
 });
 
 async function newUser(email) {
-  const r = await app.request('POST', '/api/auth/signup', { body: { email, password: GOOD_PASSWORD } });
+  const r = await app.request('POST', '/api/auth/signup', { body: { email, password: GOOD_PASSWORD, name: '테스터' } });
   assert.equal(r.status, 201);
   return { cookie: cookieFrom(r), id: r.json.user.id };
 }

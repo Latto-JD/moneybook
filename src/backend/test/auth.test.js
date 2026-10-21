@@ -14,9 +14,9 @@ beforeEach(async () => {
 });
 
 const signup = (email = 'user@example.com', password = GOOD_PASSWORD, extra = {}) =>
-  app.request('POST', '/api/auth/signup', { body: { email, password }, ...extra });
+  app.request('POST', '/api/auth/signup', { body: { email, password, name: '테스터' }, ...extra });
 const login = (email = 'user@example.com', password = GOOD_PASSWORD, extra = {}) =>
-  app.request('POST', '/api/auth/login', { body: { email, password }, ...extra });
+  app.request('POST', '/api/auth/login', { body: { email, password, name: '테스터' }, ...extra });
 
 test('가입 성공: 201, user, 쿠키 속성, 비밀 값 미노출', async () => {
   const r = await signup('User@Example.com');
@@ -36,7 +36,7 @@ test('가입 성공: 201, user, 쿠키 속성, 비밀 값 미노출', async () =
 test('COOKIE_SECURE 기본값은 Secure 포함', async () => {
   const secure = await startApp({ COOKIE_SECURE: undefined });
   try {
-    const r = await secure.request('POST', '/api/auth/signup', { body: { email: 'a@ex.com', password: GOOD_PASSWORD } });
+    const r = await secure.request('POST', '/api/auth/signup', { body: { email: 'a@ex.com', password: GOOD_PASSWORD, name: '테스터' } });
     assert.match(r.headers['set-cookie'][0], /; Secure; SameSite=Lax/);
   } finally {
     await secure.close();
@@ -67,7 +67,7 @@ test('이메일 중복은 대소문자 무시 409', async () => {
 test('SIGNUP_ENABLED=false 면 가입 403', async () => {
   const closed = await startApp({ SIGNUP_ENABLED: 'false' });
   try {
-    const r = await closed.request('POST', '/api/auth/signup', { body: { email: 'a@ex.com', password: GOOD_PASSWORD } });
+    const r = await closed.request('POST', '/api/auth/signup', { body: { email: 'a@ex.com', password: GOOD_PASSWORD, name: '테스터' } });
     assert.equal(r.status, 403);
     assert.equal(r.json.error.code, 'SIGNUP_DISABLED');
   } finally {
@@ -182,7 +182,7 @@ test('TRUST_PROXY 미설정이면 x-forwarded-for 를 무시한다', async () =>
 });
 
 test('가입/로그인/로그아웃도 Origin 없으면 403', async () => {
-  const body = { email: 'a@ex.com', password: GOOD_PASSWORD };
+  const body = { email: 'a@ex.com', password: GOOD_PASSWORD, name: '테스터' };
   assert.equal((await app.request('POST', '/api/auth/signup', { body, origin: null })).status, 403);
   assert.equal((await app.request('POST', '/api/auth/login', { body, origin: null })).status, 403);
   assert.equal((await app.request('POST', '/api/auth/logout', { origin: null })).status, 403);

@@ -21,7 +21,7 @@ async function openRecord(browser, testInfo, { prepare, hash = '#record' } = {})
   if (prepare) await prepare(u.api, u);
   const ui = await newUiPage(browser, testInfo, { api: u.api });
   await ui.page.goto(`/${hash}`);
-  await expect(ui.page.locator('#user-email')).toHaveText(u.account.email);
+  await expect(ui.page.locator('#user-name')).toHaveText(u.account.name);
   return { ...ui, ...u };
 }
 const chip = (page, name) => page.locator('#category-chips button', { hasText: name }).first();
@@ -57,7 +57,7 @@ test.describe('C27 정적 접근성', () => {
     const { page, ctx } = await openRecord(browser, testInfo);
     await expect(page.locator('#amount')).toHaveAttribute('inputmode', 'numeric');
     expect(await unlabeledInputs(page)).toEqual([]);
-    expect(await page.locator('select').count()).toBe(0);
+    expect(await page.locator('select:not(#theme-select)').count()).toBe(0); // 헤더 화면 모드 select(#theme-select)는 계획서 6.1 로 추가됨
     expect(await page.locator('#category-chips button').count()).toBe(8);
     await page.locator('#type-income').click();
     expect(await page.locator('#category-chips button').count()).toBe(4);
@@ -184,16 +184,17 @@ test.describe('로그인 화면 동작 / 문구', () => {
 });
 
 test.describe('C58 가입', () => {
-  test('C58 가입 -> 앱 진입(금액칸 포커스, #user-email 표시), 로그인 상태', async ({ browser }, testInfo) => {
+  test('C58 가입 -> 앱 진입(금액칸 포커스, #user-name 에 이름 표시), 로그인 상태', async ({ browser }, testInfo) => {
     const acc = newAccount('c58new');
     const { ctx, page } = await newUiPage(browser, testInfo);
     await page.goto('/login.html');
     await page.locator('#mode-signup').click();
+    await page.locator('#name').fill('가입 테스터');
     await page.locator('#email').fill(acc.email);
     await page.locator('#password').fill(acc.password);
     await page.locator('#submit-btn').click();
     await page.waitForURL((u) => u.pathname === '/' || u.pathname === '/index.html');
-    await expect(page.locator('#user-email')).toHaveText(acc.email);
+    await expect(page.locator('#user-name')).toHaveText('가입 테스터');
     await expect(page.locator('#amount')).toBeFocused();
     await ctx.close();
   });
@@ -203,6 +204,7 @@ test.describe('C58 가입', () => {
     const { ctx, page } = await newUiPage(browser, testInfo);
     await page.goto('/login.html');
     await page.locator('#mode-signup').click();
+    await page.locator('#name').fill('가입 테스터');
     const typed = u.account.email.toUpperCase();
     await page.locator('#email').fill(typed);
     await page.locator('#password').fill('another-pass-1');
@@ -219,6 +221,7 @@ test.describe('C58 가입', () => {
     await page.route('**/api/auth/signup', (r) => { calls += 1; return r.continue(); });
     await page.goto('/login.html');
     await page.locator('#mode-signup').click();
+    await page.locator('#name').fill('가입 테스터');
     await page.locator('#email').fill('short-pw@example.com');
     await page.locator('#password').fill('1234567');
     await page.locator('#submit-btn').click();
@@ -237,6 +240,7 @@ test.describe('C58 가입', () => {
     const { ctx, page } = await newUiPage(browser, testInfo, { ip });
     await page.goto('/login.html');
     await page.locator('#mode-signup').click();
+    await page.locator('#name').fill('가입 테스터');
     const email = newAccount('c58rl11').email;
     await page.locator('#email').fill(email);
     await page.locator('#password').fill('password-ok-1');
@@ -255,6 +259,7 @@ test.describe('C58 가입', () => {
       const { ctx, page } = await newUiPage(browser, testInfo, { baseURL: s.url, ip: uniqueIp() });
       await page.goto('/login.html');
       await page.locator('#mode-signup').click();
+    await page.locator('#name').fill('가입 테스터');
       await page.locator('#email').fill('closed@example.com');
       await page.locator('#password').fill('password-ok-1');
       await page.locator('#submit-btn').click();
@@ -679,7 +684,7 @@ test.describe('C33 오류 처리', () => {
       const u = await createLoggedInUser('c33stop', { baseURL: s.url });
       const { ctx, page } = await newUiPage(browser, testInfo, { api: u.api, baseURL: s.url });
       await page.goto('/#record');
-      await expect(page.locator('#user-email')).toHaveText(u.account.email);
+      await expect(page.locator('#user-name')).toHaveText(u.account.name);
       await s.stop();
       await page.locator('#amount').fill('9900');
       await chip(page, '식비').click();

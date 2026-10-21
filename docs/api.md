@@ -1,6 +1,18 @@
-# API 계약 (v3)
+# API 계약 (v4)
 
-작성: backend / 기준: `docs/plan.md` v2.1 + `docs/plan-categories.md` / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+작성: backend / 기준: `docs/plan.md` v2.1 + `docs/plan-categories.md` + `docs/plan-theme-name.md` / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+
+## 0A. v4 변경 요약 (v3 대비): 사용자 이름
+
+| 구분 | 변경 | v3 클라이언트 호환 |
+|---|---|---|
+| **비호환** | 사용자 객체가 `{ id, email, name }` 이 됨. `name` 은 문자열 또는 `null` (2장) | `body.user` 를 `{id, email}` 와 정확 비교하면 깨짐 |
+| **비호환** | `POST /api/auth/signup` 에 `name` **필수**. 없으면 400 `fields.name` (2.1) | name 없이 가입하면 400 |
+| 추가 | `PATCH /api/auth/me` (2.5): 이름 설정·수정 | 호환 (신규) |
+| 추가 | `users.name` 컬럼 (nullable, 추가 전용, 8.5) | 구버전 코드와 호환 |
+| 불변 | 로그인 요청 형식(이메일+비밀번호), 로그아웃, 쿠키, 에러 코드, CSRF 규칙 | - |
+
+운영 반영 순서는 8.5 참고: 컬럼 없는 DB 에 새 코드가 배포되면 로그인·me·가입이 500 이므로 마이그레이션이 먼저다.
 
 ## 0. v3 변경 요약 (v2 대비)
 
@@ -100,28 +112,41 @@ v3은 사용자별 카테고리 관리(추가, 이름 변경, 사용 안 함/다
 
 ## 2. 인증
 
-사용자 객체: `{ "id": "uuid", "email": "a@ex.com" }` (비밀번호/해시는 어떤 응답에도 없음)
+사용자 객체 (v4): `{ "id": "uuid", "email": "a@ex.com", "name": "홍길동" }`. `name` 은 문자열 또는 `null`(이름을 아직 넣지 않은 기존 사용자). signup/login/me/PATCH me 모두 같은 모양이다. 비밀번호/해시는 어떤 응답에도 없다.
+
+이름 규칙 (signup·PATCH me 공통, 서버가 기준):
+1. 문자열이 아니면 "이름을 입력해 주세요."
+2. 제어문자 `[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]` 가 있으면 "이름에 쓸 수 없는 문자가 있어요." (탭·줄바꿈은 공백 취급이라 제외)
+3. 정규화: NFC -> 앞뒤 공백 제거 -> 연속 공백(탭·줄바꿈 포함) 1칸. **정규화된 값을 저장·응답**한다.
+4. 정규화 후 코드포인트(`[...s].length`) 1~20자. 아니면 "이름은 1자 이상 20자 이하여야 해요."
+5. 중복 허용, 대소문자 그대로. 보이지 않는 서식 문자(U+200B 등)만으로 된 이름은 이번에는 거부하지 않는다.
 
 ### 2.1 POST /api/auth/signup
 
 요청 (Origin 필수):
 ```json
-{ "email": "User@Example.com", "password": "correct horse" }
+{ "email": "User@Example.com", "password": "correct horse", "name": "  홍   길동 " }
 ```
 - email: 앞뒤 공백 제거 + 소문자화 후 1~254자, 공백 없음, `@` 정확히 1개, 로컬/도메인 비어있지 않음, 도메인에 `.` 포함하며 `.`로 시작/끝나지 않음
 - password: 문자열 8~128자 (조합 규칙 없음, 공백 그대로)
+- name: **필수**. 위 이름 규칙
 
 201 + `Set-Cookie`(자동 로그인):
 ```json
-{ "user": { "id": "5b1c6f0e-5b0a-4c36-8d0f-0c3b8f6a1e11", "email": "user@example.com" } }
+{ "user": { "id": "5b1c6f0e-5b0a-4c36-8d0f-0c3b8f6a1e11", "email": "user@example.com", "name": "홍 길동" } }
 ```
-오류: 400 `VALIDATION_ERROR`(`fields.email` / `fields.password`), 403 `CSRF_REJECTED` / `SIGNUP_DISABLED`, 409 `EMAIL_TAKEN`, 429 `TOO_MANY_ATTEMPTS`.
+오류: 400 `VALIDATION_ERROR`(`fields.email` / `fields.password` / `fields.name`, 여러 개면 모두 `fields` 에 담긴다. `message` 는 이메일, 비밀번호, 이름 순으로 첫 항목), 403 `CSRF_REJECTED` / `SIGNUP_DISABLED`, 409 `EMAIL_TAKEN`, 429 `TOO_MANY_ATTEMPTS`.
+
+```json
+{ "error": { "code": "VALIDATION_ERROR", "message": "이름은 1자 이상 20자 이하여야 해요.", "fields": { "name": "이름은 1자 이상 20자 이하여야 해요." } } }
+```
+형식 오류(400)는 이메일 형식 오류와 마찬가지로 가입 시도 기록에 남지 않는다. 이름은 시도 기록·로그에 저장하지 않는다.
 
 ### 2.2 POST /api/auth/login
 
 요청 (Origin 필수): `{ "email": "user@example.com", "password": "correct horse" }` (이메일 대소문자/앞뒤 공백 무시)
 
-200 + `Set-Cookie`: `{ "user": { "id": "...", "email": "user@example.com" } }`
+200 + `Set-Cookie`: `{ "user": { "id": "...", "email": "user@example.com", "name": "홍 길동" } }` (이름이 없는 기존 사용자는 `"name": null`). 로그인은 이메일로만 한다.
 
 오류:
 - 400 `VALIDATION_ERROR` (email/password가 문자열이 아니거나 비어 있음)
@@ -134,7 +159,19 @@ Origin 필수. 본문 없음. 세션이 없어도 **204**. DB 세션을 삭제�
 
 ### 2.4 GET /api/auth/me
 
-200 `{ "user": { "id": "...", "email": "..." } }` / 401 `UNAUTHENTICATED`.
+200 `{ "user": { "id": "...", "email": "...", "name": "홍 길동" | null } }` / 401 `UNAUTHENTICATED`. GET, PATCH(2.5) 외 메서드는 405 (`Allow: GET, PATCH`).
+
+### 2.5 PATCH /api/auth/me (v4 신규)
+
+이름 설정·수정. 인증 필요, Origin 필수(1.2), `Content-Type: application/json`.
+
+요청: `{ "name": "  홍   길동 " }` (이름 규칙은 2장 서두)
+- `name` 이 없거나 `null`/빈 문자열/공백뿐이면 400 (이름 비우기 불가).
+- `email` 등 다른 필드는 무시하며 바꾸지 않는다(오류 아님, 3A.4 관례).
+
+200 `{ "user": { "id": "...", "email": "user@example.com", "name": "홍 길동" } }` (정규화된 값)
+
+오류: 400 `VALIDATION_ERROR`(`fields.name`), 401 `UNAUTHENTICATED`, 403 `CSRF_REJECTED`, 415 / 413 / 400 `INVALID_JSON`(1.1 공통). 세션 사용자의 행만 갱신하며 다른 사용자에게는 영향이 없다.
 
 ## 3. 기본
 
@@ -495,7 +532,21 @@ npm run db:migrate:prod -- --yes
 | 확인 | `driver=pg`가 아니면 운영에 적용되지 않은 것 |
 | 멱등 | 같은 명령을 다시 실행해도 오류 없고 `생성 사용자=0` |
 
-실행 후 사용자가 확인할 쿼리(Neon SQL Editor, 숫자만 보고):
+### 8.5 사용자 이름 컬럼 (v4)
+
+`schema.sql` 의 users 정의 뒤에 추가한다. 추가 전용·멱등이며 기존 컬럼·인덱스·데이터는 건드리지 않는다(백필 없음).
+
+```sql
+alter table users add column if not exists name text
+  check (name is null or char_length(name) between 1 and 20);
+```
+- nullable: 기존 사용자는 `null`(헤더는 이메일로 폴백), name 을 모르는 구버전 INSERT 도 그대로 동작한다.
+- 재실행해도 아무것도 하지 않는다. `db:migrate`, `db:migrate:prod` 출력 형식은 변하지 않는다.
+- **운영 반영 순서(사용자 직접)**: (1) Neon 백업 브랜치 -> (2) `npm run db:migrate:prod -- --yes` (출력 `driver=pg` 확인) -> (3) 확인 쿼리 -> (4) 그 뒤에 코드 푸시(배포). 코드를 먼저 배포하면 로그인·me·가입이 500 이다. 프리뷰 배포도 같은 DB 를 쓰므로 프리뷰 확인 전에 (2)가 필요하다.
+- 확인 쿼리(숫자만): `select count(*) from information_schema.columns where table_name = 'users' and column_name = 'name';` = 1, `select count(*), count(name) from users;` = (기존 사용자 수, 0), `select count(*), sum(amount) from transactions;` 와 `select count(*) from categories;` 가 실행 전과 같음.
+- 롤백: 코드를 이전 커밋으로 되돌려도 컬럼이 남아 문제없다. 컬럼 DROP 은 하지 않는다.
+
+v3 마이그레이션 실행 후 확인 쿼리(Neon SQL Editor, 숫자만 보고):
 - `select count(*) from categories;` = 사용자 수 x 12 (방어용 비활성 행 0건 가정)
 - `select count(*) from users u where not exists (select 1 from categories c where c.user_id = u.id);` = 0
 - `select count(*), sum(amount) from transactions;` 이 실행 전 기록과 같음

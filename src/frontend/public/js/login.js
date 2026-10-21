@@ -1,6 +1,6 @@
 // 로그인/가입 화면
 import { api } from './api.js';
-import { validateEmail, validatePassword } from './lib/validate.js';
+import { validateEmail, validatePassword, validateName } from './lib/validate.js';
 import { authErrorMessage, EXPIRED_TEXT } from './lib/messages.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,6 +19,7 @@ function setMode(next) {
   title.textContent = signup ? '가계부 가입' : '가계부 로그인';
   submitBtn.textContent = signup ? '가입하기' : '로그인';
   $('password').setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+  $('name-field').hidden = !signup;
   document.title = `${signup ? '가입' : '로그인'} - 가계부`;
   clearErrors();
 }
@@ -26,7 +27,9 @@ function setMode(next) {
 function clearErrors() {
   $('email-error').textContent = '';
   $('password-error').textContent = '';
+  $('name-error').textContent = '';
   formError.textContent = '';
+  $('name').removeAttribute('aria-invalid');
   $('email').removeAttribute('aria-invalid');
   $('password').removeAttribute('aria-invalid');
 }
@@ -42,18 +45,22 @@ async function onSubmit(ev) {
   clearErrors();
   const e = validateEmail($('email').value);
   const p = validatePassword($('password').value);
+  const n = mode === 'signup' ? validateName($('name').value) : { ok: true };
+  if (!n.ok) fieldError('name', n.message);
   if (!e.ok) fieldError('email', e.message);
   if (!p.ok) fieldError('password', p.message);
+  if (!n.ok) { $('name').focus(); return; }
   if (!e.ok) { $('email').focus(); return; }
   if (!p.ok) { $('password').focus(); return; }
 
   busy = true;
   submitBtn.disabled = true;
   try {
-    if (mode === 'signup') await api.signup(e.value, p.value);
+    if (mode === 'signup') await api.signup(e.value, p.value, n.value);
     else await api.login(e.value, p.value);
     location.assign('/');
   } catch (err) {
+    if (err.fields && err.fields.name) fieldError('name', err.fields.name);
     if (err.fields && err.fields.email) fieldError('email', err.fields.email);
     if (err.fields && err.fields.password) fieldError('password', err.fields.password);
     formError.textContent = authErrorMessage(err);

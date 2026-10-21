@@ -43,7 +43,7 @@ async function openApp(browser, testInfo, { prepare, hash = '#record', accept = 
     document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
   });
   await page.goto(`/${hash}`);
-  await expect(page.locator('#user-email')).toHaveText(u.account.email);
+  await expect(page.locator('#user-name')).toHaveText(u.account.name);
   return { ...ui, ...u, ctl, consoleErrors };
 }
 const cspViolations = (page) => page.evaluate(() => window.__csp || []);

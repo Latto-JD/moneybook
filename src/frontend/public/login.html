@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>로그인 - 가계부</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <script src="js/theme-init.js"></script>
   <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/components.css">
@@ -20,6 +21,11 @@
         <button type="button" class="segmented__item" id="mode-signup" aria-pressed="false">가입</button>
       </div>
       <form id="auth-form" method="post" action="/login.html" novalidate aria-labelledby="auth-title">
+        <div class="field" id="name-field" hidden>
+          <label for="name">이름 (20자 이하)</label>
+          <input type="text" id="name" name="name" class="input" autocomplete="name" maxlength="40" aria-describedby="name-error">
+          <p class="error-text" id="name-error"></p>
+        </div>
         <div class="field">
           <label for="email">이메일</label>
           <input type="email" id="email" name="email" class="input" autocomplete="email" inputmode="email" required aria-describedby="email-error">
