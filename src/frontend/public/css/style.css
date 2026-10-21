@@ -70,6 +70,7 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 
 /* ── 세그먼트 / 칩 ───────────────────── */
 .segmented__item[aria-pressed="true"] { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
+.segmented__item[aria-pressed="true"]:focus-visible { box-shadow: var(--shadow-sm), var(--shadow-focus); } /* 선택 그림자가 포커스 링을 덮지 않게 */
 .segmented--sm { flex: none; }
 .segmented--sm .segmented__item { padding: 0 var(--space-4); }
 .seg-count { margin-left: var(--space-1); font-variant-numeric: tabular-nums; font-weight: var(--fw-regular); color: var(--color-text-muted); }
@@ -79,6 +80,7 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .chip-status { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
 .cat-edit-link { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--touch-min); padding: 0 var(--space-1); color: var(--color-text-muted); font-size: var(--fs-label); font-weight: var(--fw-medium); text-decoration: none; border-radius: var(--radius-sm); }
 .cat-edit-link .icon { width: 16px; height: 16px; }
+.chips--scroll { scroll-padding-inline: var(--space-5); }
 .chips--scroll > li { flex: none; }
 /* 무늬 없는 견본(1번, 고정 색 없음, 그 외)은 무늬 덮개를 끈다. mask 가 none 이면 덮개가 통째로 보인다 */
 .swatch[data-viz="1"]::after, .swatch[data-viz="none"]::after, .swatch[data-viz="other"]::after { display: none; }
@@ -175,7 +177,7 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .chart-body { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); }
 .chart-svg { display: block; width: 100%; height: auto; max-width: 420px; }
 .donut-body .chart-svg { max-width: 220px; }
-.chart-text { font-size: 12px; fill: var(--color-text); font-family: var(--font-sans); }
+.chart-text { font-size: 13px; fill: var(--color-text); font-family: var(--font-sans); }
 .chart-text-sub { fill: var(--color-text-muted); }
 .chart-text-strong { font-size: 14px; font-weight: var(--fw-bold); }
 .donut__value.chart-text { font-family: var(--font-figure); font-size: 18px; font-weight: var(--fw-regular); }

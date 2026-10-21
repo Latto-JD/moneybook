@@ -6,7 +6,9 @@ import { newUiPage, expectNoHorizontalScroll, expectNoBadNumbers, FIXED_TODAY } 
 import { SEED_EMAIL, SEED_PASSWORD } from '../helpers/env.js';
 
 const widthOf = (testInfo) => testInfo.project.use.viewport.width;
-const DANGER = 'rgb(179, 38, 30)';
+// 디자인 적용 후 오류 색 = --color-error (라이트 #AC3A31 / 다크 #F59387). 옛 --danger(#b3261e)는 없어졌다.
+const DANGER = 'rgb(172, 58, 49)';
+const DANGER_DARK = 'rgb(245, 147, 135)';
 const OK = 'rgb(11, 107, 58)';
 
 const listCats = async (api) => (await get(api, '/api/categories')).json();
@@ -50,25 +52,35 @@ const waitChips = async (page, n) => { if (n !== undefined) await expect(page.lo
 const rowByName = (page, name) => page.locator('#panel-categories .cat-row', { has: page.locator('.cat-name', { hasText: new RegExp(`^${name.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')}$`) }) });
 const activeNames = (page) => page.locator('#catm-active .cat-name').allTextContents();
 const goManager = async (page) => { await page.locator('a.cat-edit-link').click(); await expect(page.locator('#panel-categories')).toBeVisible(); await expect(page.locator('#catm-active .cat-row').first()).toBeVisible(); };
+// 도넛 조각의 (색, 무늬) 서명: fill="url(#패턴)" 이면 패턴 정의, 1번(단색)·묶음은 클래스(viz-fill-1 / viz-other)로 칠한다.
+const sliceSignatures = (page) => page.locator('#chart-donut svg.chart-svg > path').evaluateAll((ps) => ps.map((p) => {
+  const ref = p.getAttribute('fill');
+  const m = ref && /^url\(#(.+)\)$/.exec(ref);
+  if (m) return document.getElementById(m[1]).innerHTML.replace(/\s+/g, ' ');
+  return `class:${p.getAttribute('class')}`;
+}));
 const goRecord = async (page) => { await page.locator('#catm-back').click(); await expect(page.locator('#panel-record')).toBeVisible(); };
 
-// 브라우저 안에서 임의 요소 집합 색 전수 검사: 오류 문구(.error-text)·삭제 버튼(.btn-danger) 제외
-const scanColors = (page) => page.evaluate(({ DANGER, OK }) => {
+// 브라우저 안에서 임의 요소 집합 색 전수 검사: 오류 문구(.error-text/.field__error)·삭제 버튼(.btn-danger/.btn--danger)·
+// 오류 상태 입력(aria-invalid 와 그 금액 밑줄 래퍼) 제외. 라이트·다크 오류 색과 옛 초록(OK)이 다른 곳에 있으면 실패.
+const scanColors = (page) => page.evaluate(({ DANGER, DANGER_DARK, OK }) => {
   const bad = [];
+  const BAD = new Set([DANGER, DANGER_DARK, OK]);
   for (const e of document.querySelectorAll('body *')) {
-    if (e.closest('.error-text, .btn-danger')) continue;
+    if (e.closest('.error-text, .field__error, .btn-danger, .btn--danger, [aria-invalid="true"]')) continue;
+    if (e.matches('.amount-wrap') && e.querySelector('[aria-invalid="true"]')) continue;
     const cs = getComputedStyle(e);
     for (const prop of ['color', 'backgroundColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor', 'fill', 'stroke', 'outlineColor']) {
       const v = cs[prop];
-      if (v === DANGER || v === OK) bad.push(`${e.tagName.toLowerCase()}.${e.className && e.className.baseVal === undefined ? e.className : ''} ${prop}=${v}`);
+      if (BAD.has(v)) bad.push(`${e.tagName.toLowerCase()}.${e.className && e.className.baseVal === undefined ? e.className : ''} ${prop}=${v}`);
     }
     for (const a of ['fill', 'stroke']) {
       const v = e.getAttribute && e.getAttribute(a);
-      if (v && /#b3261e|#0b6b3a/i.test(v)) bad.push(`${e.tagName} attr ${a}=${v}`);
+      if (v && /#b3261e|#0b6b3a|#ac3a31|#f59387/i.test(v)) bad.push(`${e.tagName} attr ${a}=${v}`);
     }
   }
   return bad;
-}, { DANGER, OK });
+}, { DANGER, DANGER_DARK, OK });
 
 // ============================================================ C-C23 추가 -> 칩
 test.describe('C-C23 관리 화면에서 추가·사용 안 함 -> 기록 칩 반영', () => {
@@ -120,7 +132,7 @@ test.describe('관리 화면 건수(usedCount) 최신성', () => {
     await page.locator('#save-btn').click();
     await expect(page.locator('#flash')).toHaveText('저장했어요');
     await goManager(page);
-    await expect(rowByName(page, '교통').locator('.cat-used')).toHaveText('1건'); // 관리 화면 진입 시 서버 값으로 갱신되어야 한다
+    await expect(rowByName(page, '교통').locator('.cat-used')).toHaveText('기록 1건'); // 관리 화면 진입 시 서버 값으로 갱신되어야 한다
     await rowByName(page, '교통').getByRole('button', { name: '교통 이름 바꾸기' }).click();
     await expect(page.locator('.cat-rename ~ .hint')).toHaveText('지난 기록 1건도 새 이름으로 바뀌어요.');
     await page.keyboard.press('Escape');
@@ -512,7 +524,7 @@ test.describe('C-C28 레이아웃(360px: 가로 스크롤 없음, 터치 영역 
     // 30개 상태에서 추가 -> 한도 오류 문구도 폭 안에
     await page.locator('#catm-expense').click();
     await page.locator('#catm-name').fill('서른하나');
-    await page.locator('#catm-add-btn').click();
+    await page.locator('#catm-name').press('Enter'); // 30개면 추가 버튼이 aria-disabled(비활성 모양)라 Playwright click 이 멈춘다. 같은 제출 경로인 Enter 로 시험한다
     await expect(page.locator('#catm-add-error')).toContainText('30개까지');
     await expectNoHorizontalScroll(page, w);
     await ctx.close();
@@ -569,7 +581,7 @@ test.describe('C-C29 CSP·XSS', () => {
 
   test('C-C29 JS 소스에도 innerHTML / insertAdjacentHTML / eval / .style.cssText 사용 없음 (CSP 위반 소지)', async () => {
     const api = await newApi();
-    for (const f of ['categories.js', 'category-manager.js', 'record.js', 'dashboard.js', 'charts.js', 'lib/categories-data.js']) {
+    for (const f of ['categories.js', 'category-manager.js', 'record.js', 'dashboard.js', 'charts.js', 'lib/categories-data.js', 'lib/viz.js', 'dom.js', 'tabs.js']) {
       const src = await (await get(api, `/js/${f}`)).text();
       expect(src.replace(/\/\/.*$/gm, ''), f).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function\(/);
     }
@@ -683,17 +695,12 @@ test.describe('C-C30 도넛 "그 외 N개" 묶음', () => {
     const members = await page.locator('#chart-donut .legend-members').allTextContents();
     expect(members).toHaveLength(1);
     expect(members[0].split(',').map((s) => s.trim())).toEqual(['카페/간식', '반려동물', '구독', '보험', '세금']);
-    const fills = await page.locator('#chart-donut svg.chart-svg > path').evaluateAll((ps) => ps.map((p) => p.getAttribute('fill')));
-    expect(new Set(fills).size).toBe(8);
-    // (색, 무늬) 조합 중복 금지: fill 이 참조하는 pattern 의 정의(색 + 모양 자식)를 서명으로 비교
-    const sigs = await page.locator('#chart-donut svg.chart-svg > path').evaluateAll((ps) => ps.map((p) => {
-      const ref = p.getAttribute('fill');
-      const m = /^url\(#(.+)\)$/.exec(ref);
-      if (!m) return `solid:${ref}`;
-      const pat = document.getElementById(m[1]);
-      return pat.innerHTML.replace(/\s+/g, ' ');
-    }));
+    // (색, 무늬) 조합 중복 금지: 디자인 적용 후 색은 클래스/패턴 안의 viz-fill-N 이라 fill 속성만으로는 구분되지 않는다. 서명으로 비교
+    const sigs = await sliceSignatures(page);
     expect(new Set(sigs).size).toBe(8);
+    const vizNos = await page.locator('#chart-donut svg.chart-svg > path').evaluateAll((ps) => ps.map((p) => p.getAttribute('data-viz')));
+    expect(new Set(vizNos).size).toBe(8);
+    expect(vizNos.at(-1)).toBe('other'); // "그 외 N개" 는 중립 단색
     // 표: 묶지 않은 전체 12행 + 합계
     await page.locator('#chart-donut details summary').click();
     const rows = await page.locator('#chart-donut table tbody tr').count();
@@ -703,7 +710,7 @@ test.describe('C-C30 도넛 "그 외 N개" 묶음', () => {
     expect(body.reduce((a, [, amt]) => a + Number(amt.replace(/\D/g, '')), 0)).toBe(total);
     await expect(page.locator('#chart-donut table tfoot')).toContainText('합계');
     await expect(page.locator('#chart-donut table tfoot')).toContainText('780,000원');
-    await expect(page.locator('#chart-donut svg text.chart-text-strong')).toHaveText('780,000원');
+    await expect(page.locator('#chart-donut svg text.donut__value')).toHaveText('780,000원');
     // 묶음 조각 금액 = 하위 5개 합
     const other = page.locator('#chart-donut .legend li').last();
     await expect(other.locator('.legend-amount')).toHaveText('150,000원');
@@ -732,8 +739,7 @@ test.describe('C-C30 도넛 "그 외 N개" 묶음', () => {
     await expect(nine.page.locator('#chart-donut svg.chart-svg')).toBeVisible();
     expect(await nine.page.locator('#chart-donut svg.chart-svg > path').count()).toBe(8);
     expect((await nine.page.locator('#chart-donut .legend-label').allTextContents()).at(-1)).toBe('그 외 2개');
-    const fills = await nine.page.locator('#chart-donut svg.chart-svg > path').evaluateAll((ps) => ps.map((p) => p.getAttribute('fill')));
-    expect(new Set(fills).size).toBe(8);
+    expect(new Set(await sliceSignatures(nine.page)).size).toBe(8);
     await nine.ctx.close();
   });
 
@@ -875,7 +881,7 @@ test.describe('C-C33 대시보드 카테고리 보기 수입/지출', () => {
     expect(legend.map((l) => l.label)).toEqual(st.items.map((i) => i.category));
     expect(legend.map((l) => l.amount)).toEqual(st.items.map((i) => `${i.total.toLocaleString('en-US')}원`));
     expect(legend.map((l) => l.ratio)).toEqual(st.items.map((i) => `${((i.total / st.grandTotal) * 100).toFixed(1)}%`));
-    await expect(page.locator('#chart-donut svg text.chart-text-strong')).toHaveText(`${st.grandTotal.toLocaleString('en-US')}원`);
+    await expect(page.locator('#chart-donut svg text.donut__value')).toHaveText(`${st.grandTotal.toLocaleString('en-US')}원`);
     await expect(page.locator('#chart-donut svg[role="img"] desc')).toHaveText(/^2026년 10월 수입 [\d,]+원 중 급여 .+로 가장 큼$/);
     // D4: 수입 기준 칩/캡션
     const trendChips = await page.locator('#cat-trend-chips button').allTextContents();
@@ -997,17 +1003,19 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
     });
     await expect(page.locator('#kpi .kpi')).toHaveCount(3);
     const k = await kpiExtra(page);
-    expect(k.map((x) => x.label)).toEqual(['수입', '지출', '잔액']);
-    expect(k[0].extra).toBe('▲ 지난달보다 수입이 10.0% 늘었어요');
-    expect(k[1].extra).toBe('▼ 지난달보다 지출이 20.0% 줄었어요');
-    expect(k[2].extra).toBe('');
+    // 균형 카드(OQ-D12): DOM·화면 순서 = 남은 돈 -> 수입 -> 지출. 남은 돈 칸에는 전월 대비 문구가 없다.
+    expect(k.map((x) => x.label)).toEqual(['이번 달 남은 돈', '수입', '지출']);
+    expect(k[0].extra).toBe('');
+    expect(k[1].extra).toBe('▲ 지난달보다 수입이 10.0% 늘었어요');
+    expect(k[2].extra).toBe('▼ 지난달보다 지출이 20.0% 줄었어요');
     const fmt = /^[▲▼=] 지난달(보다 (수입|지출)이 \d+\.\d% (늘었어요|줄었어요)|과 같아요)$/;
-    expect(k[0].extra).toMatch(fmt);
     expect(k[1].extra).toMatch(fmt);
+    expect(k[2].extra).toMatch(fmt);
     // 색: 수입·지출 증감 모두 같은 computed color (가치 판단 색 아님)
     const colors = await page.locator('#kpi .kpi-extra').evaluateAll((els) => els.map((e) => getComputedStyle(e).color));
     expect(new Set(colors).size).toBe(1);
     expect(colors[0]).not.toBe(DANGER);
+    expect(colors[0]).not.toBe(DANGER_DARK);
     expect(colors[0]).not.toBe(OK);
     await ctx.close();
   });
@@ -1019,8 +1027,8 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
     });
     await expect(none.page.locator('#kpi .kpi')).toHaveCount(3);
     const k = await kpiExtra(none.page);
-    expect(k[0].extra).toBe('비교할 지난달 기록이 없어요');
-    expect(k[1].extra).toBe('비교할 지난달 기록이 없어요');
+    expect(k[1].extra).toBe('비교할 지난달 기록이 없어요'); // k[0] = 남은 돈 칸
+    expect(k[2].extra).toBe('비교할 지난달 기록이 없어요');
     await none.ctx.close();
     const mixed = await openApp(browser, testInfo, {
       hash: '#dashboard',
@@ -1032,8 +1040,8 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
     });
     await expect(mixed.page.locator('#kpi .kpi')).toHaveCount(3);
     const m = await kpiExtra(mixed.page);
-    expect(m[0].extra).toBe('비교할 지난달 기록이 없어요');
-    expect(m[1].extra).toBe('▲ 지난달보다 지출이 20.0% 늘었어요');
+    expect(m[1].extra).toBe('비교할 지난달 기록이 없어요');
+    expect(m[2].extra).toBe('▲ 지난달보다 지출이 20.0% 늘었어요');
     await mixed.ctx.close();
   });
 
@@ -1046,24 +1054,30 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
     });
     await expect(page.locator('#kpi .kpi')).toHaveCount(3);
     const k = await kpiExtra(page);
-    expect(k[0].extra).toBe('= 지난달과 같아요');
     expect(k[1].extra).toBe('= 지난달과 같아요');
+    expect(k[2].extra).toBe('= 지난달과 같아요');
     await ctx.close();
   });
 });
 
 // ============================================================ C-C36 가치 중립 색
 test.describe('C-C36 가치 중립 색 (빨강/초록 의존 없음)', () => {
-  test('C-C36 CSS/JS 정적: --danger 는 .error-text/.btn-danger 에만, --ok·#0b6b3a 없음, JS 에 두 색 상수 없음', async () => {
+  test('C-C36 CSS/JS 정적: --color-error 는 오류 문구·삭제 버튼·오류 입력에만, --ok·옛 색 없음, JS/style.css 에 hex 색 없음', async () => {
     const api = await newApi();
     const css = await (await get(api, '/css/style.css')).text();
-    const uses = [...css.matchAll(/([^{}]+)\{[^}]*var\(--danger\)[^}]*\}/g)].map((m) => m[1].trim());
-    expect(uses.sort(), `--danger 사용처: ${uses.join(' | ')}`).toEqual(['.btn-danger', '.error-text']);
-    expect(css).not.toMatch(/var\(--ok\)|--ok\s*:|#0b6b3a/i);
-    expect(css.match(/#b3261e/gi) || []).toHaveLength(1); // --danger 정의 한 번만
-    for (const f of ['app.js', 'dashboard.js', 'charts.js', 'record.js', 'category-manager.js', 'categories.js', 'lib/dashboard-data.js', 'lib/insight-text.js']) {
+    // style.css 의 --color-error 사용처 선택자 (components.css 는 원본 그대로: .btn--danger/.field__error/[aria-invalid] 만 쓰는지 따로 확인)
+    const usesOf = (text0) => { const text = text0.replace(/\/\*[\s\S]*?\*\//g, ''); return [...text.matchAll(/([^{}]+)\{[^}]*var\(--color-error\)[^}]*\}/g)].map((m) => m[1].trim().replace(/\s+/g, ' ')); };
+    const uses = usesOf(css);
+    expect(uses.sort(), `--color-error 사용처: ${uses.join(' | ')}`).toEqual(['.amount-wrap:has(.amount-input[aria-invalid="true"])', '.btn-danger', '.error-text']);
+    const comp = usesOf(await (await get(api, '/css/components.css')).text());
+    for (const sel of comp) expect(sel, `components.css 사용처: ${sel}`).toMatch(/btn--danger|field__error|aria-invalid/);
+    expect(css).not.toMatch(/var\(--ok\)|--ok\s*:|#0b6b3a|--danger/i);
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}|rgba?\(/); // 하드코딩 색 0 (tokens.css 만 색을 정의한다)
+    const tokens = await (await get(api, '/css/tokens.css')).text();
+    expect(tokens.match(/--color-error:\s*#AC3A31/gi) || []).toHaveLength(1); // 라이트 정의 한 번
+    for (const f of ['app.js', 'dashboard.js', 'charts.js', 'record.js', 'category-manager.js', 'categories.js', 'lib/dashboard-data.js', 'lib/insight-text.js', 'lib/viz.js', 'dom.js']) {
       const src = await (await get(api, `/js/${f}`)).text();
-      expect(src, f).not.toMatch(/#b3261e|#0b6b3a|rgb\(179, ?38, ?30\)|rgb\(11, ?107, ?58\)/i);
+      expect(src, f).not.toMatch(/#b3261e|#0b6b3a|#ac3a31|#f59387|rgb\(179, ?38, ?30\)|rgb\(172, ?58, ?49\)|rgb\(11, ?107, ?58\)/i);
     }
   });
 
@@ -1134,22 +1148,40 @@ test.describe('C-C37 D3 막대와 팔레트 대비', () => {
     await ctx.close();
   });
 
-  test('C-C37 팔레트 전 색(PALETTE + 묶음 색)이 흰 배경 대비 3:1 이상, 묶음 색은 4.5:1 이상이며 PALETTE 와 겹치지 않음 (수식 계산)', async () => {
+  test('C-C37 팔레트 전 색(tokens.css --viz-1..8 라이트·다크 + 묶음 색)이 카드 배경 대비 3:1 이상, 서로 겹치지 않음 (수식 계산)', async () => {
     const api = await newApi();
-    const src = await (await get(api, '/js/charts.js')).text();
-    const pal = /export const PALETTE = \[([^\]]+)\]/.exec(src)[1].match(/#[0-9a-fA-F]{6}/g);
-    const other = /export const OTHER_STYLE = \{ color: '(#[0-9a-fA-F]{6})'/.exec(src)[1];
-    expect(pal).toHaveLength(8);
+    const css = await (await get(api, '/css/tokens.css')).text();
+    // 라이트 = 최상위 :root 블록, 다크 = @media (prefers-color-scheme: dark) 안의 :root:not([data-theme="light"]) 블록
+    const darkStart = css.indexOf('@media (prefers-color-scheme: dark)');
+    const darkEnd = css.indexOf('}', css.indexOf('--viz-8', darkStart));
+    const light = css.slice(0, darkStart);
+    const dark = css.slice(darkStart, darkEnd);
+    const pick = (blk, name) => new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`).exec(blk)[1];
+    const pal = (blk) => [1, 2, 3, 4, 5, 6, 7, 8].map((n) => pick(blk, `--viz-${n}`));
     const lum = (hex) => {
       const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
       return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     };
-    const contrast = (hex) => 1.05 / (lum(hex) + 0.05);
-    const report = pal.map((h) => `${h}=${contrast(h).toFixed(2)}`);
-    for (const h of pal) expect(contrast(h), report.join(' ')).toBeGreaterThanOrEqual(3);
-    expect(contrast(other)).toBeGreaterThanOrEqual(4.5);
-    expect(pal.map((x) => x.toLowerCase())).not.toContain(other.toLowerCase());
-    expect(new Set(pal.map((x) => x.toLowerCase())).size).toBe(8);
+    const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+    const lightBg = pick(light, '--color-surface');
+    const darkBg = pick(dark, '--color-surface');
+    expect(lightBg.toLowerCase()).toBe('#ffffff');
+    expect(darkBg.toLowerCase()).toBe('#1f1e1b');
+    const lp = pal(light);
+    const dp = pal(dark);
+    const rl = lp.map((h) => `${h}=${contrast(h, lightBg).toFixed(2)}`);
+    const rd = dp.map((h) => `${h}=${contrast(h, darkBg).toFixed(2)}`);
+    for (const h of lp) expect(contrast(h, lightBg), rl.join(' ')).toBeGreaterThanOrEqual(3);
+    for (const h of dp) expect(contrast(h, darkBg), rd.join(' ')).toBeGreaterThanOrEqual(3);
+    expect(new Set(lp.map((x) => x.toLowerCase())).size).toBe(8);
+    expect(new Set(dp.map((x) => x.toLowerCase())).size).toBe(8);
+    // "그 외 N개" 묶음 색 = --color-text-muted (viz-other): 팔레트와 겹치지 않고 4.5:1 이상
+    const mutedL = pick(light, '--color-text-muted');
+    const mutedD = pick(dark, '--color-text-muted');
+    expect(contrast(mutedL, lightBg)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(mutedD, darkBg)).toBeGreaterThanOrEqual(4.5);
+    expect(lp.map((x) => x.toLowerCase())).not.toContain(mutedL.toLowerCase());
+    expect(dp.map((x) => x.toLowerCase())).not.toContain(mutedD.toLowerCase());
   });
 });
 
@@ -1201,7 +1233,7 @@ test.describe('이름 변경·R1/R2 연동 UI', () => {
     await expect(page.locator('#quick-chips button')).toHaveCount(1);
     await expect(page.locator('#quick-chips button')).toHaveAttribute('aria-label', /라떼 카페\/간식 4,500원 채우기/);
     await goManager(page);
-    await expect(rowByName(page, '카페/간식').locator('.cat-used')).toHaveText('4건');
+    await expect(rowByName(page, '카페/간식').locator('.cat-used')).toHaveText('기록 4건');
     await rowByName(page, '카페/간식').getByRole('button', { name: '카페/간식 이름 바꾸기' }).click();
     await expect(page.locator('.cat-rename ~ .hint')).toHaveText('지난 기록 4건도 새 이름으로 바뀌어요.');
     await page.locator('.cat-rename input').fill('커피');

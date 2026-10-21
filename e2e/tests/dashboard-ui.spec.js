@@ -109,10 +109,11 @@ test.describe('시드 사용자 대시보드 (C62~C65)', () => {
       label: e.querySelector('.kpi-label').textContent.trim(), value: e.querySelector('.kpi-value').textContent.trim(),
       extra: e.querySelector('.kpi-extra')?.textContent.trim() || '',
     })));
-    expect(kpis.map((k) => k.label)).toEqual(['수입', '지출', '잔액']);
-    expect(kpis[0].value).toBe(fmtWon(cur.incomeTotal));
-    expect(kpis[1].value).toBe(fmtWon(cur.expenseTotal));
-    expect(kpis[2].value).toBe(fmtWon(cur.balance));
+    // 균형 카드(OQ-D12): 남은 돈 -> 수입 -> 지출. 남은 돈이 음수면 ASCII - 대신 U+2212 를 쓴다.
+    expect(kpis.map((k) => k.label)).toEqual(['이번 달 남은 돈', '수입', '지출']);
+    expect(kpis[0].value).toBe(cur.balance < 0 ? `−${fmtWon(-cur.balance)}` : fmtWon(cur.balance));
+    expect(kpis[1].value).toBe(fmtWon(cur.incomeTotal));
+    expect(kpis[2].value).toBe(fmtWon(cur.expenseTotal));
     expect(cur.balance).toBe(cur.incomeTotal - cur.expenseTotal);
     // v3(C-C35): 수입·지출 모두 같은 문장 형식 "지난달보다 {수입|지출}이 N% 늘었어요/줄었어요"
     const expectExtra = (curV, prevV, noun) => {
@@ -122,9 +123,9 @@ test.describe('시드 사용자 대시보드 (C62~C65)', () => {
       const up = curV > prevV;
       return `${up ? '▲' : '▼'} 지난달보다 ${noun}이 ${p}% ${up ? '늘었어요' : '줄었어요'}`;
     };
-    expect(kpis[0].extra).toBe(expectExtra(cur.incomeTotal, prev.incomeTotal, '수입'));
-    expect(kpis[1].extra).toBe(expectExtra(cur.expenseTotal, prev.expenseTotal, '지출'));
-    expect(kpis[2].extra).toBe('');
+    expect(kpis[1].extra).toBe(expectExtra(cur.incomeTotal, prev.incomeTotal, '수입'));
+    expect(kpis[2].extra).toBe(expectExtra(cur.expenseTotal, prev.expenseTotal, '지출'));
+    expect(kpis[0].extra).toBe(''); // 남은 돈 칸에는 전월 대비 문구가 없다
     await expectNoBadNumbers(page);
     await ctx.close();
   });
@@ -300,7 +301,7 @@ test.describe('시드 사용자 대시보드 (C62~C65)', () => {
     await page.locator('#dash-prev').click();
     await expect(page.locator('#dash-month')).toHaveText('2026년 9월');
     const sep = (await stat(api, 'monthly?from=2026-09&to=2026-09')).months[0];
-    await expect(page.locator('#kpi .kpi-value').nth(1)).toHaveText(fmtWon(sep.expenseTotal));
+    await expect(page.locator('#kpi .kpi-value').nth(2)).toHaveText(fmtWon(sep.expenseTotal));
     expect(await kpiText()).not.toBe(k0);
     const cSep = await stat(api, 'categories?from=2026-09&to=2026-09&type=expense');
     expect((await tableRows(page.locator('#chart-donut'))).map((r) => r[0])).toEqual(cSep.items.map((i) => i.category));
@@ -352,7 +353,7 @@ test.describe('C67 탭 전환 재조회', () => {
     await addTx(api, { memo: '기존', amount: 5000, category: '식비', date: FIXED_TODAY });
     const { ctx, page } = await newUiPage(browser, testInfo, { api });
     await page.goto('/#dashboard');
-    await expect(page.locator('#kpi .kpi-value').nth(1)).toHaveText('5,000원');
+    await expect(page.locator('#kpi .kpi-value').nth(2)).toHaveText('5,000원');
     await page.locator('#tab-record').click();
     await expect(page.locator('#panel-record')).toBeVisible();
     await page.locator('#amount').fill('12500');
@@ -360,7 +361,7 @@ test.describe('C67 탭 전환 재조회', () => {
     await page.locator('#save-btn').click();
     await expect(page.locator('#flash')).toHaveText('저장했어요');
     await page.locator('#tab-dashboard').click();
-    await expect(page.locator('#kpi .kpi-value').nth(1)).toHaveText('17,500원');
+    await expect(page.locator('#kpi .kpi-value').nth(2)).toHaveText('17,500원');
     await expect(page.locator('#chart-donut .legend li')).toHaveCount(2);
     // 삭제 후에도 다시 반영
     await page.locator('#tab-record').click();
@@ -369,7 +370,7 @@ test.describe('C67 탭 전환 재조회', () => {
     await page.locator('.tx-row', { hasText: '12,500원' }).locator('.tx-del').click();
     await expect(page.locator('#flash')).toHaveText('삭제했어요');
     await page.locator('#tab-dashboard').click();
-    await expect(page.locator('#kpi .kpi-value').nth(1)).toHaveText('5,000원');
+    await expect(page.locator('#kpi .kpi-value').nth(2)).toHaveText('5,000원');
     await ctx.close();
   });
 });

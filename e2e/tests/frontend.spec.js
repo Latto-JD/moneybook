@@ -484,11 +484,14 @@ test.describe('C29 기록 입력', () => {
     const { ctx, page } = await openRecord(browser, testInfo);
     let posts = 0;
     await page.route('**/api/transactions', (r) => { if (r.request().method() === 'POST') posts += 1; return r.continue(); });
-    await page.locator('#save-btn').click();
+    // 금액이 비면 저장 버튼은 aria-disabled="true"(모양만 비활성, D-17). Playwright 는 aria-disabled 를 비활성으로 보므로 force 로 실제 사용자 클릭을 재현한다.
+    await expect(page.locator('#save-btn')).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#save-btn')).toHaveText('지출 저장');
+    await page.locator('#save-btn').click({ force: true });
     await expect(page.locator('#amount-error')).toHaveText('금액은 1원 이상 1억원 이하의 숫자로 입력해 주세요');
     await expect(page.locator('#category-error')).toHaveText('카테고리를 선택해 주세요');
     await page.locator('#amount').fill('0');
-    await page.locator('#save-btn').click();
+    await page.locator('#save-btn').click({ force: true });
     await expect(page.locator('#amount-error')).not.toHaveText('');
     expect(posts).toBe(0);
     await page.locator('#type-income').click();
@@ -522,12 +525,12 @@ test.describe('C29 기록 입력', () => {
     });
     await expect(page.locator('#tx-list .tx-row')).toHaveCount(1);
     await page.locator('.tx-edit').click();
-    await expect(page.locator('#save-btn')).toHaveText('수정 저장');
+    await expect(page.locator('#save-btn')).toHaveText('수정 저장 · 4,000원');
     await expect(page.locator('#cancel-edit-btn')).toBeVisible();
     await expect(page.locator('#amount')).toHaveValue('4,000');
     await expect(page.locator('#memo')).toHaveValue('수정대상');
     await page.locator('#cancel-edit-btn').click();
-    await expect(page.locator('#save-btn')).toHaveText('저장');
+    await expect(page.locator('#save-btn')).toHaveText('지출 저장'); // 수정 취소 후: 금액이 비었으므로 금액 없는 라벨
     await expect(page.locator('#cancel-edit-btn')).toBeHidden();
     await page.locator('.tx-edit').click();
     await page.locator('#amount').fill('4500');

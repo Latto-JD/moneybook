@@ -506,6 +506,17 @@ export function initRecord() {
   }
   $('today-caption').textContent = longDayLabel(today());
   // C29: 선택된 칩에서 Enter 를 다시 누르면 저장 (칩 클릭 직후 Enter). 선택 전 Enter/Space 는 기본 동작(선택).
+  // Tab 으로 칩에 가면 가로 스크롤 목록 안에서 칩 전체가 (양쪽 20px 여백 포함) 보이게 맞춘다. 넓은 화면에서 브라우저 기본 스크롤이 모자란다
+  $('category-chips').addEventListener('focusin', (ev) => {
+    const list = $('category-chips');
+    const chip = ev.target.closest('.chip');
+    if (!chip) return;
+    const inset = parseFloat(getComputedStyle(list).paddingLeft) || 0;
+    const l = list.getBoundingClientRect();
+    const c = chip.getBoundingClientRect();
+    if (c.right > l.right - inset) list.scrollLeft += c.right - (l.right - inset);
+    else if (c.left < l.left + inset) list.scrollLeft -= (l.left + inset) - c.left;
+  });
   $('category-chips').addEventListener('keydown', (ev) => {
     const btn = ev.target.closest && ev.target.closest('button');
     if (!btn) return;

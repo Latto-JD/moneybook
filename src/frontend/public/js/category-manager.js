@@ -86,7 +86,7 @@ function renameRow(li, item) {
   const noteId = `${inputId}-note`;
   const label = el('label', { for: inputId, class: 'visually-hidden' }, `${item.name} 새 이름`);
   const input = el('input', {
-    type: 'text', id: inputId, autocomplete: 'off', 'aria-describedby': `${noteId} ${inputId}-error`,
+    type: 'text', id: inputId, class: 'input', autocomplete: 'off', 'aria-describedby': `${noteId} ${inputId}-error`,
   });
   input.value = ui.draft;
   input.addEventListener('input', () => { ui.draft = input.value; });
