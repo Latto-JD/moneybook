@@ -25,9 +25,11 @@ export function validatePassword(input) {
   return { ok: true, value: v };
 }
 
+export const AMOUNT_RANGE_TEXT = '금액은 1원 이상 1억원 이하의 숫자로 입력해 주세요';
+
 export function validateAmount(input) {
   const n = parseAmount(input);
-  if (n === null) return { ok: false, message: '금액은 1원 이상 1억원 이하의 숫자로 입력해 주세요' };
+  if (n === null) return { ok: false, message: AMOUNT_RANGE_TEXT };
   return { ok: true, value: n };
 }
 

@@ -1,0 +1,159 @@
+/* Moneybook design tokens · v1
+   순서: 색 → 글자 → 간격 → 반경 → 그림자
+   다크: prefers-color-scheme 자동 + data-theme="dark|light" 수동 우선 */
+
+:root {
+  color-scheme: light;
+
+  /* ── 색: 표면 ───────────────────────── */
+  --color-bg:             #F7F5F0; /* 앱 배경 (종이) */
+  --color-surface:        #FFFFFF; /* 카드, 시트 */
+  --color-surface-sunken: #EFECE5; /* 탭바, 세그먼트 트랙, 키 */
+  --color-scrim:          rgba(20, 18, 14, .40);
+
+  /* ── 색: 글자 ─────────────────────────  대비(bg / surface) */
+  --color-text:           #1B1A17; /* 16.2 / 17.6 */
+  --color-text-muted:     #6B675E; /*  5.2 /  5.6  보조 텍스트, placeholder */
+  --color-text-disabled:  #8C877C; /*  3.3        비활성 전용 (WCAG 예외) */
+  --color-text-inverse:   #F7F5F0; /* 주 버튼 위 */
+
+  /* ── 색: 선 ──────────────────────────── */
+  --color-line:           #E6E2D9; /* 구분선 (장식) */
+  --color-border:         #8C877C; /* 입력/칩 테두리 3.3:1 이상 */
+  --color-border-strong:  #1B1A17; /* 선택된 칩 */
+
+  /* ── 색: 행동 ───────────────────────── */
+  --color-primary:        #1B1A17; /* 주 버튼 = 잉크 */
+  --color-primary-hover:  #34322C;
+  --color-focus:          #0658AB; /* 포커스 링 6.4:1 */
+
+  /* ── 색: 수입 · 지출 (같은 명도·채도, 색상만 다름) ── */
+  --color-income:         #406798; /* 남색  5.3 / 5.8 */
+  --color-income-tint:    #E7EDF5;
+  --color-expense:        #8C592D; /* 황토  5.4 / 5.9 */
+  --color-expense-tint:   #F4ECE3;
+
+  /* ── 색: 상태 ───────────────────────── */
+  --color-error:          #AC3A31; /* 5.7 */
+  --color-error-tint:     #F8E8E5;
+
+  /* ── 색: 데이터 시각화 (도넛 최대 8조각) ──
+     홀수=중명도, 짝수=저명도 교차 → 인접 조각 3.1:1 이상, 배경 대비 3.5:1 이상.
+     순서대로 배치할 것. 무늬는 patterns/viz-1..8.svg 와 1:1 대응 */
+  --viz-1: #3B85CB; /* 하늘   · 무늬 없음(단색) */
+  --viz-2: #5F1B00; /* 밤색   · 사선 */
+  --viz-3: #A97803; /* 겨자   · 점 */
+  --viz-4: #382272; /* 남보라 · 가로줄 */
+  --viz-5: #069090; /* 청록   · 격자 */
+  --viz-6: #6A0418; /* 와인   · 세로줄 */
+  --viz-7: #648D31; /* 올리브 · 체크 */
+  --viz-8: #591255; /* 자두   · 역사선 */
+  --viz-gap: var(--color-surface);       /* 조각 사이 2px 간격 */
+  --viz-pattern-ink: var(--color-surface); /* 무늬 선 색 */
+
+  /* ── 글자 ─────────────────────────── */
+  --font-sans: "Pretendard", -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --font-figure: "Newsreader", "Pretendard", Georgia, serif; /* 큰 금액 숫자 전용 (라틴만) */
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* 한글 기준: 본문 줄간격 1.6, 제목 1.35, 숫자 1.1 */
+  --fs-figure-xl: 44px;  --lh-figure-xl: 1.05;  /* 대시보드 잔액 */
+  --fs-figure-lg: 36px;  --lh-figure-lg: 1.1;   /* 기록 입력 금액 */
+  --fs-figure-md: 24px;  --lh-figure-md: 1.15;  /* 카드 내 금액 */
+  --fs-title-lg:  24px;  --lh-title-lg:  1.35;  /* 화면 제목 */
+  --fs-title:     19px;  --lh-title:     1.4;   /* 섹션/시트 제목 */
+  --fs-body-lg:   17px;  --lh-body-lg:   1.55;
+  --fs-body:      15px;  --lh-body:      1.6;   /* 기본 */
+  --fs-label:     14px;  --lh-label:     1.45;  /* 버튼, 칩, 입력 라벨 */
+  --fs-caption:   13px;  --lh-caption:   1.5;
+  --fs-micro:     12px;  --lh-micro:     1.45;  /* 최소 크기 */
+
+  --ls-title: -0.02em;
+  --ls-body: -0.005em;
+  --ls-figure: -0.02em;
+
+  /* ── 간격 (4px 기반) ───────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;  /* 화면 좌우 여백 */
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 56px;
+  --touch-min: 44px;
+  --tabbar-h: 64px;
+
+  /* ── 반경 ─────────────────────────── */
+  --radius-xs: 6px;
+  --radius-sm: 10px;   /* 키, 작은 칩 */
+  --radius-md: 14px;   /* 입력, 버튼 */
+  --radius-lg: 20px;   /* 카드 */
+  --radius-xl: 28px;   /* 바텀시트 상단 */
+  --radius-pill: 999px;
+
+  /* ── 그림자 ───────────────────────── */
+  --shadow-sm:    0 1px 2px rgba(27, 26, 23, .08);
+  --shadow-card:  0 1px 0 rgba(27, 26, 23, .04), 0 10px 28px -18px rgba(27, 26, 23, .35);
+  --shadow-sheet: 0 -8px 32px -12px rgba(27, 26, 23, .25);
+  --shadow-focus: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-focus);
+}
+
+/* 다크 값 — 시스템 설정 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-bg:             #141412;
+    --color-surface:        #1F1E1B;
+    --color-surface-sunken: #2A2925;
+    --color-scrim:          rgba(0, 0, 0, .60);
+    --color-text:           #EEEBE3; /* 15.6 / 14.1 */
+    --color-text-muted:     #A39E93; /*  6.9 /  6.2 */
+    --color-text-disabled:  #7A766D;
+    --color-text-inverse:   #141412;
+    --color-line:           #33312C;
+    --color-border:         #7A766D;
+    --color-border-strong:  #EEEBE3;
+    --color-primary:        #EEEBE3;
+    --color-primary-hover:  #FFFFFF;
+    --color-focus:          #7DB6FE;
+    --color-income:         #9EBEE8; /* 9.6 / 8.7 */
+    --color-income-tint:    #1F2733;
+    --color-expense:        #DFB390; /* 9.7 / 8.7 */
+    --color-expense-tint:   #2F271F;
+    --color-error:          #F59387;
+    --color-error-tint:     #35211E;
+    --viz-1: #A4D0FE;
+    --viz-2: #AD5739;
+    --viz-3: #F6C46C;
+    --viz-4: #7264B3;
+    --viz-5: #51DFDF;
+    --viz-6: #AF5356;
+    --viz-7: #AFD884;
+    --viz-8: #9A5895;
+    --shadow-sm:    0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-card:  0 1px 0 rgba(255, 255, 255, .03), 0 10px 28px -18px rgba(0, 0, 0, .9);
+    --shadow-sheet: 0 -8px 32px -12px rgba(0, 0, 0, .7);
+  }
+}
+
+/* 다크 값 — 앱 내 수동 전환 (위와 동일 값) */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #141412; --color-surface: #1F1E1B; --color-surface-sunken: #2A2925; --color-scrim: rgba(0,0,0,.60);
+  --color-text: #EEEBE3; --color-text-muted: #A39E93; --color-text-disabled: #7A766D; --color-text-inverse: #141412;
+  --color-line: #33312C; --color-border: #7A766D; --color-border-strong: #EEEBE3;
+  --color-primary: #EEEBE3; --color-primary-hover: #FFFFFF; --color-focus: #7DB6FE;
+  --color-income: #9EBEE8; --color-income-tint: #1F2733; --color-expense: #DFB390; --color-expense-tint: #2F271F;
+  --color-error: #F59387; --color-error-tint: #35211E;
+  --viz-1: #A4D0FE; --viz-2: #AD5739; --viz-3: #F6C46C; --viz-4: #7264B3;
+  --viz-5: #51DFDF; --viz-6: #AF5356; --viz-7: #AFD884; --viz-8: #9A5895;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-card: 0 1px 0 rgba(255,255,255,.03), 0 10px 28px -18px rgba(0,0,0,.9);
+  --shadow-sheet: 0 -8px 32px -12px rgba(0,0,0,.7);
+}

@@ -40,3 +40,11 @@ export function disableConfirmText(name, usedCount) {
   const used = usedCount > 0 ? `지금까지의 기록 ${usedCount}건과 통계는 그대로 남고, ` : '통계는 그대로 남고, ';
   return `'${name}' 카테고리를 사용 안 함으로 바꿀까요? ${used}새 기록에서만 고를 수 없어요.`;
 }
+
+/** 추가 폼 아래 한도 문구: "9/30 · 차트에는 금액이 큰 7개와 '그 외'로 보여요". 가득 차면 이유를 알린다. */
+export function limitText(activeCount) {
+  const base = `${activeCount}/${MAX_ACTIVE}`;
+  return activeCount >= MAX_ACTIVE
+    ? `${base} · 더 추가할 수 없어요. 안 쓰는 카테고리를 사용 안 함으로 바꿔 주세요.`
+    : `${base} · 차트에는 금액이 큰 7개와 '그 외'로 보여요`;
+}

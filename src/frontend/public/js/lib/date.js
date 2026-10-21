@@ -79,3 +79,10 @@ export function dayLabel(dateStr, today) {
   const wd = '일월화수목금토'[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
   return `${m}월 ${d}일 (${wd})`;
 }
+
+/** "2026-10-21" -> "10월 21일 수요일" (기록 화면 머리글). 잘못된 날짜면 ''. */
+export function longDayLabel(dateStr) {
+  if (!isValidDate(dateStr)) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return `${m}월 ${d}일 ${'일월화수목금토'[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}요일`;
+}

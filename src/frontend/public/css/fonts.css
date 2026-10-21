@@ -1,0 +1,8 @@
+/* 셀프 호스팅 폰트 — fonts/ 폴더를 css/ 와 같은 위치(public/fonts)에 두세요.
+   Pretendard: KS X 1001 2,350자 서브셋 (OFL)  ·  Newsreader: 라틴 숫자 전용 (OFL) */
+@font-face { font-family: "Pretendard"; font-weight: 400; font-style: normal; font-display: swap; src: url("../fonts/Pretendard-Regular.subset.woff2") format("woff2"); }
+@font-face { font-family: "Pretendard"; font-weight: 500; font-style: normal; font-display: swap; src: url("../fonts/Pretendard-Medium.subset.woff2") format("woff2"); }
+@font-face { font-family: "Pretendard"; font-weight: 600; font-style: normal; font-display: swap; src: url("../fonts/Pretendard-SemiBold.subset.woff2") format("woff2"); }
+@font-face { font-family: "Pretendard"; font-weight: 700; font-style: normal; font-display: swap; src: url("../fonts/Pretendard-Bold.subset.woff2") format("woff2"); }
+@font-face { font-family: "Newsreader"; font-weight: 400; font-style: normal; font-display: swap; src: url("../fonts/Newsreader-Regular.latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F, U+20A9; }
+@font-face { font-family: "Newsreader"; font-weight: 500; font-style: normal; font-display: swap; src: url("../fonts/Newsreader-Medium.latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F, U+20A9; }

@@ -91,3 +91,16 @@ export function seriesFor(trendResp, category) {
   if (index < 0) return null;
   return { seriesName: category, months: trendResp.months || [], totals: series[index].totals || [], colorIndex: index };
 }
+
+/**
+ * 균형 카드의 두 막대 비율(0~100, 소수 첫째 자리). 수입·지출이 같은 기준(둘 중 큰 값)을 쓴다.
+ * 둘 다 0 이면 0/0 (NaN 없음).
+ */
+export function balanceBars(income, expense) {
+  const inc = Number.isFinite(income) && income > 0 ? income : 0;
+  const exp = Number.isFinite(expense) && expense > 0 ? expense : 0;
+  const base = Math.max(inc, exp);
+  if (base <= 0) return { income: 0, expense: 0 };
+  const pct = (v) => Math.round((v / base) * 1000) / 10;
+  return { income: pct(inc), expense: pct(exp) };
+}

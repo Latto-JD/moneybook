@@ -1,11 +1,12 @@
 // 카테고리 관리 화면 (#categories). 지출/수입은 같은 컴포넌트·같은 컨트롤로 다룬다 (데이터만 다름).
 // 사용자 입력(이름)은 textContent 로만 출력한다.
 import { api } from './api.js';
-import { el, $ } from './dom.js';
+import { el, $, swatch } from './dom.js';
 import { currentFormType } from './record.js';
+import { stableVizMap, vizOf } from './lib/viz.js';
 import { loadCategories, categoryResponse, categoryStatus, categoryError } from './categories.js';
 import {
-  MAX_ACTIVE, TYPE_LABEL, splitItems, validateCategoryName, renameNote, disableConfirmText,
+  MAX_ACTIVE, TYPE_LABEL, splitItems, validateCategoryName, renameNote, disableConfirmText, limitText,
 } from './lib/categories-data.js';
 
 const ui = {
@@ -31,7 +32,7 @@ async function refresh(detail) {
 
 // ---------------- 렌더 ----------------
 function actionButton(label, name, onClick, extraClass = '') {
-  const b = el('button', { type: 'button', class: `btn ${extraClass}`.trim(), 'aria-label': `${name} ${label}` }, label);
+  const b = el('button', { type: 'button', class: `btn btn--ghost btn--sm ${extraClass}`.trim(), 'aria-label': `${name} ${label}` }, label);
   b.addEventListener('click', onClick);
   return b;
 }
@@ -42,12 +43,17 @@ function rowErrorEl(id) {
   return p;
 }
 
+let vizMap = new Map(); // 렌더마다 유형별 목록 순서(비활성 포함)로 다시 만든다
+
 function activeRow(item) {
   const li = el('li', { class: 'cat-row', 'data-id': item.id });
   if (ui.renamingId === item.id) return renameRow(li, item);
   const line = el('div', { class: 'cat-line' });
-  line.appendChild(el('span', { class: 'cat-name' }, item.name));
-  line.appendChild(el('span', { class: 'cat-used' }, `${item.usedCount || 0}건`));
+  line.appendChild(swatch(vizOf(vizMap, item.name), 'lg'));
+  const info = el('div', { class: 'cat-info' });
+  info.appendChild(el('span', { class: 'cat-name' }, item.name));
+  info.appendChild(el('span', { class: 'cat-used' }, `기록 ${item.usedCount || 0}건`));
+  line.appendChild(info);
   const actions = el('div', { class: 'cat-actions' });
   actions.appendChild(actionButton('이름 바꾸기', item.name, () => startRename(item)));
   actions.appendChild(actionButton('사용 안 함', item.name, () => disable(item)));
@@ -61,8 +67,11 @@ function inactiveRow(item) {
   const li = el('li', { class: 'cat-row', 'data-id': item.id });
   if (ui.renamingId === item.id) return renameRow(li, item);
   const line = el('div', { class: 'cat-line' });
-  line.appendChild(el('span', { class: 'cat-name' }, item.name));
-  line.appendChild(el('span', { class: 'cat-used' }, `${item.usedCount || 0}건`));
+  line.appendChild(swatch(vizOf(vizMap, item.name), 'lg'));
+  const info = el('div', { class: 'cat-info' });
+  info.appendChild(el('span', { class: 'cat-name' }, item.name));
+  info.appendChild(el('span', { class: 'cat-used' }, `기록 ${item.usedCount || 0}건`));
+  line.appendChild(info);
   const actions = el('div', { class: 'cat-actions' });
   actions.appendChild(actionButton('이름 바꾸기', item.name, () => startRename(item)));
   actions.appendChild(actionButton('다시 사용', item.name, () => enable(item)));
@@ -104,6 +113,12 @@ function renameRow(li, item) {
   return li;
 }
 
+/** 세그먼트 버튼에 활성 개수를 붙인다 (버튼 이름은 "지출 8" 처럼 읽힌다) */
+function setCount(id, label, n) {
+  const b = $(id);
+  b.replaceChildren(document.createTextNode(label), el('span', { class: 'seg-count' }, String(n)));
+}
+
 function render() {
   const resp = categoryResponse();
   const loadErr = $('catm-load-error');
@@ -120,6 +135,11 @@ function render() {
     return;
   }
   const { active, inactive } = splitItems(resp, ui.type);
+  vizMap = stableVizMap(resp.items, ui.type);
+  setCount('catm-expense', '지출', splitItems(resp, 'expense').active.length);
+  setCount('catm-income', '수입', splitItems(resp, 'income').active.length);
+  $('catm-limit').textContent = limitText(active.length);
+  $('catm-add-btn').setAttribute('aria-disabled', String(active.length >= MAX_ACTIVE));
   $('catm-list-title').textContent = `사용 중인 ${typeLabel} 카테고리 ${active.length}/${MAX_ACTIVE}`;
   $('catm-active').replaceChildren(...active.map(activeRow));
   $('catm-inactive-title').textContent = `사용 안 함 (${inactive.length})`;
@@ -295,6 +315,16 @@ export function initCategoryManager() {
   $('catm-retry').addEventListener('click', async () => { await loadCategories(); render(); });
   // 다른 화면에서 목록이 바뀌어도 (예: 로드 완료) 열려 있는 동안은 따라간다
   document.addEventListener('categorieschanged', () => { if (!$('panel-categories').hidden && !busy) render(); });
+  // ← : 앱 안에서 들어왔으면 온 화면으로, 주소로 바로 들어왔으면 대시보드로
+  let cameFrom = null;
+  $('catm-back').addEventListener('click', (ev) => {
+    ev.preventDefault();
+    location.hash = cameFrom || 'dashboard';
+  });
+  window.addEventListener('hashchange', (ev) => {
+    const old = new URL(ev.oldURL).hash.replace('#', '') || 'record'; // 해시가 없던 첫 화면은 기록
+    if (old === 'record' || old === 'dashboard') cameFrom = old;
+  });
   let wasOpen = false;
   const onTab = (open) => {
     if (open && !wasOpen) {

@@ -1,7 +1,7 @@
 // 카테고리 관리용 순수 함수 단위 테스트
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   normalizeCategoryName, validateCategoryName, activeNamesOf, splitItems, renameNote, disableConfirmText,
@@ -70,10 +70,23 @@ test('정적 HTML: 관리 패널/보기 전환 id 존재, 하단 탭은 2개, �
   assert.match(html, /id="catview-expense"[^>]*>지출<\/button>\s*<button[^>]*id="catview-income"[^>]*>수입/);
 });
 
-test('CSS: --ok 는 없고 --danger 는 오류 문구/삭제 버튼에만 (수입·지출 가치 중립)', () => {
+test('CSS: 오류 색(--color-error)은 오류 문구/삭제 버튼에만, 옛 변수 없음 (수입·지출 가치 중립)', () => {
   const css = read('../public/css/style.css');
-  assert.doesNotMatch(css, /--ok/);
-  const uses = css.split('\n').filter((l) => l.includes('var(--danger)'));
+  assert.doesNotMatch(css, /--ok|--danger/);
+  const uses = css.split('\n').filter((l) => l.includes('var(--color-error)'));
   assert.ok(uses.length >= 2);
-  for (const l of uses) assert.match(l, /^\.(error-text|btn-danger)\b/, l);
+  // 오류 문구, 삭제 버튼, 오류 입력 테두리(aria-invalid)만 허용
+  for (const l of uses) assert.match(l, /^\.(error-text|btn-danger|amount-wrap:has\(\.amount-input\[aria-invalid)/, l);
+});
+
+test('하드코딩 색 없음: style.css 와 js 에 hex/rgb 색 문자열이 없다 (토큰은 tokens.css 에만)', () => {
+  const files = ['../public/css/style.css'];
+  for (const dir of ['../public/js', '../public/js/lib']) {
+    for (const f of readdirSync(fileURLToPath(new URL(dir, import.meta.url)))) if (f.endsWith('.js')) files.push(`${dir}/${f}`);
+  }
+  for (const f of files) {
+    const src = read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(src, /#[0-9a-fA-F]{3,8}\b(?![\w-])/, `${f}: hex 색`);
+    assert.doesNotMatch(src, /\brgba?\(/, `${f}: rgb 색`);
+  }
 });

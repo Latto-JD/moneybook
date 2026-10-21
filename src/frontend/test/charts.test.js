@@ -45,10 +45,11 @@ test('도넛: figure/role=img/표/범례 순서/패턴', () => {
   assert.equal(byTag(table, 'caption').length, 1);
   assert.ok(byTag(table, 'th').every((th) => th.attrs.scope === 'col' || th.attrs.scope === 'row'));
   assert.equal(byTag(table, 'tr').length, 5); // head + 3 + 합계
-  // 조각마다 서로 다른 fill (패턴 포함)
-  const fills = svg.children.filter((p) => p.tag === 'path').map((p) => p.attrs.fill);
-  assert.equal(new Set(fills).size, 3);
-  assert.ok(fills.some((f) => f.startsWith('url(#')));
+  // 조각마다 서로 다른 (색,무늬) 번호: data-viz. 1번은 단색 클래스, 2..8 은 무늬 패턴 fill
+  const paths = svg.children.filter((p) => p.tag === 'path');
+  assert.equal(new Set(paths.map((p) => p.attrs['data-viz'])).size, 3);
+  assert.ok(paths.some((p) => p.attrs.fill && p.attrs.fill.startsWith('url(#')));
+  assert.ok(paths.every((p) => /\bdonut__slice\b/.test(p.attrs.class)));
   assert.match(fig.textContent, /2026년 10월 지출 800,000원 중 식비 50\.0%로 가장 큼/);
   assert.doesNotMatch(fig.textContent, BAD);
 });
@@ -138,7 +139,6 @@ test('정적 HTML: viewport, 인라인 스크립트/핸들러/style 없음, 외�
   }
 });
 
-const { PALETTE, OTHER_STYLE, PATTERN_KINDS } = await import('../public/js/charts.js');
 const { groupDonutItems } = await import('../public/js/lib/dashboard-data.js');
 
 const many = (n) => Array.from({ length: n }, (_, i) => ({ label: `카테고리${i + 1}`, value: 1000 * (n - i) }));
@@ -174,15 +174,13 @@ test('도넛 묶음 렌더: 조각 8개, 조각마다 (색,무늬) 다름, 범�
   const svg = byTag(fig, 'svg').find((e) => e.attrs.role === 'img');
   const paths = svg.children.filter((p) => p.tag === 'path');
   assert.equal(paths.length, 8);
-  assert.equal(new Set(paths.map((p) => p.attrs.fill)).size, 8);
-  // 묶음 조각의 패턴은 다른 조각이 쓰지 않는 색 + 무늬
-  const patterns = byTag(svg, 'pattern');
-  assert.equal(patterns.length, 7); // 첫 조각은 단색(solid)
-  const lastFill = paths[7].attrs.fill;
-  const lastPattern = patterns.find((p) => `url(#${p.attrs.id})` === lastFill);
-  assert.equal(lastPattern.children[0].attrs.fill, OTHER_STYLE.color);
-  assert.ok(!PALETTE.includes(OTHER_STYLE.color));
-  assert.ok(!PATTERN_KINDS.includes(OTHER_STYLE.kind));
+  assert.equal(new Set(paths.map((p) => p.attrs['data-viz'])).size, 8);
+  // 묶음 조각은 마지막, 무늬 없는 중립 단색 (다른 조각 번호 1..7 과 겹치지 않는다)
+  assert.equal(paths[7].attrs['data-viz'], 'other');
+  assert.match(paths[7].attrs.class, /\bviz-other\b/);
+  assert.equal(paths[7].attrs.fill, undefined);
+  assert.deepEqual(paths.slice(0, 7).map((p) => p.attrs['data-viz']), ['1', '2', '3', '4', '5', '6', '7']);
+  assert.equal(byTag(svg, 'pattern').length, 6); // 번호 2..7 만 무늬 (1번은 단색)
   // 범례
   const legend = byTag(fig, 'ol')[0];
   const rows = byTag(legend, 'li');
@@ -210,18 +208,26 @@ test('도넛: 수입 보기는 중심 라벨/문장이 수입', () => {
   assert.doesNotMatch(txt, /지출/);
 });
 
-// 흰 배경 대비 (WCAG 상대 휘도)
+// 새 토큰(tokens.css) 기준 대비: 라이트는 :root 블록, 다크는 prefers-color-scheme 블록을 읽는다
+const tokens = readFileSync(fileURLToPath(new URL('../public/css/tokens.css', import.meta.url)), 'utf8');
+const darkAt = tokens.indexOf('@media (prefers-color-scheme: dark)');
+const lightBlock = tokens.slice(0, darkAt);
+const darkBlock = tokens.slice(darkAt, tokens.indexOf(':root[data-theme="dark"]'));
+const tokenOf = (block, name) => block.match(new RegExp(`${name}:\\s*(#[0-9A-Fa-f]{6})`))[1];
 const lum = (hex) => {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
     .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 };
-const contrastOnWhite = (hex) => 1.05 / (lum(hex) + 0.05);
+const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
 
-test('팔레트 전 색(+ 묶음 색)이 흰 배경 대비 3:1 이상, 막대 색(수입/지출)도 동일', () => {
-  for (const c of [...PALETTE, OTHER_STYLE.color]) assert.ok(contrastOnWhite(c) >= 3, `${c} ${contrastOnWhite(c).toFixed(2)}`);
-  assert.ok(contrastOnWhite('#0072B2') >= 3 && contrastOnWhite('#C4500A') >= 3);
-  assert.ok(contrastOnWhite(OTHER_STYLE.color) >= 4.5);
-  // (색, 무늬) 조합은 8개 모두 다르다
-  assert.equal(new Set(PALETTE.map((c, i) => `${c}/${PATTERN_KINDS[i]}`)).size, 8);
+test('viz 1..8 과 수입/지출 색이 카드 배경 대비 3:1 이상, 중립(그 외) 색은 4.5:1 이상 (라이트·다크)', () => {
+  for (const [mode, block] of [['light', lightBlock], ['dark', darkBlock]]) {
+    const surface = tokenOf(block, '--color-surface');
+    const colors = Array.from({ length: 8 }, (_, i) => tokenOf(block, `--viz-${i + 1}`));
+    colors.forEach((c, i) => assert.ok(contrast(c, surface) >= 3, `${mode} viz-${i + 1} ${c} ${contrast(c, surface).toFixed(2)}`));
+    assert.equal(new Set(colors).size, 8, `${mode}: 8색이 모두 다르다`);
+    for (const t of ['--color-income', '--color-expense']) assert.ok(contrast(tokenOf(block, t), surface) >= 3, `${mode} ${t}`);
+    assert.ok(contrast(tokenOf(block, '--color-text-muted'), surface) >= 4.5, `${mode} 중립색`);
+  }
 });

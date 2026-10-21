@@ -1,9 +1,10 @@
 // 기록 탭: 입력 폼(F5), 빠른 입력 칩/자동완성(F7), 이번 달 영역(F6), 인사이트(F8)
 import { api } from './api.js';
-import { el, $, chipItem, keepFocus } from './dom.js';
-import { formatWon, formatAmountInput } from './lib/money.js';
-import { todayLocal, monthOf, shiftMonth, monthTitle, dayLabel } from './lib/date.js';
-import { validateTransaction } from './lib/validate.js';
+import { el, $, chipItem, keepFocus, swatch } from './dom.js';
+import { formatWon, formatAmountInput, parseAmount, addToAmount, formatSignedWon, formatBalanceWon } from './lib/money.js';
+import { todayLocal, monthOf, shiftMonth, monthTitle, dayLabel, longDayLabel } from './lib/date.js';
+import { validateTransaction, AMOUNT_RANGE_TEXT } from './lib/validate.js';
+import { stableVizMap, vizOf } from './lib/viz.js';
 import { loadCategories, activeCategories, categoryStatus, categoryError, categoryResponse } from './categories.js';
 import { inactiveChipLabel } from './lib/categories-data.js';
 import { formatPercent } from './lib/chart-geometry.js';
@@ -25,6 +26,9 @@ const state = {
 };
 
 const cats = () => activeCategories()[state.type];
+/** 유형별 카테고리 색·무늬 번호표 (목록 순서 기준, lib/viz.js) */
+const vizMap = (type) => stableVizMap(categoryResponse() && categoryResponse().items, type);
+const KIND_TEXT = { expense: '지출', income: '수입' };
 /** 폼의 현재 유형 (카테고리 관리 화면의 초기 탭) */
 export const currentFormType = () => state.type;
 const errMsg = (e) => (e && e.message) || '요청을 처리하지 못했어요.';
@@ -52,9 +56,21 @@ function showFieldErrors(errors) {
   }
 }
 
+/**
+ * 저장 버튼 라벨: "지출 저장 · 12,500원" / "수입 저장 · …" / "수정 저장 · …".
+ * 금액이 없으면 비활성 모양(aria-disabled)이지만 눌러도 막지 않는다: 금액 오류를 보여 주고 포커스를 금액칸으로 옮기기 위해서다.
+ */
+function updateSaveLabel() {
+  const n = parseAmount($('amount').value);
+  const base = state.editingId ? '수정 저장' : `${KIND_TEXT[state.type]} 저장`;
+  $('save-btn').textContent = n === null ? base : `${base} · ${formatWon(n)}`;
+  $('save-btn').setAttribute('aria-disabled', String(n === null));
+}
+
 function renderTypeButtons() {
   $('type-expense').setAttribute('aria-pressed', String(state.type === 'expense'));
   $('type-income').setAttribute('aria-pressed', String(state.type === 'income'));
+  updateSaveLabel();
 }
 function renderCategoryChips() {
   const ul = $('category-chips');
@@ -63,7 +79,7 @@ function renderCategoryChips() {
     if (categoryStatus() === 'error') {
       const li = el('li', { class: 'chip-status' });
       li.appendChild(el('span', { class: 'error-text' }, categoryError()));
-      const retry = el('button', { type: 'button', class: 'btn' }, '다시 시도');
+      const retry = el('button', { type: 'button', class: 'btn btn--ghost btn--sm' }, '다시 시도');
       retry.addEventListener('click', () => loadCategories());
       li.appendChild(retry);
       ul.replaceChildren(li);
@@ -72,13 +88,15 @@ function renderCategoryChips() {
     }
     return;
   }
+  const map = vizMap(state.type);
   const chips = cats().map((c) => chipItem(c, {
     pressed: state.category === c,
+    viz: vizOf(map, c),
     onClick: () => { state.category = c; $('category-error').textContent = ''; keepFocus(ul, renderCategoryChips); },
   }));
   if (state.legacy && state.legacy.type === state.type && state.legacy.category === state.category && !cats().includes(state.category)) {
     // 사용 안 함으로 바꾼 카테고리의 거래를 고칠 때: 선택된 상태로 보여 준다. 다른 칩을 고르면 사라진다.
-    chips.push(chipItem(inactiveChipLabel(state.category), { pressed: true, onClick: () => {} }));
+    chips.push(chipItem(inactiveChipLabel(state.category), { pressed: true, viz: vizOf(map, state.category), onClick: () => {} }));
   }
   ul.replaceChildren(...chips);
 }
@@ -103,9 +121,20 @@ function onCategoriesChanged(ev) {
   }
   renderCategoryChips();
   if (dataChanged) refreshAll(); // 이름이 바뀐 거래·집계·추천을 다시 받는다
+  else if (state.txs.length) renderTxList(state.txs); // 목록 행의 견본 번호만 다시
 }
 function renderDateSummary() {
   $('date-summary').textContent = state.date === today() ? '오늘' : (dayLabel(state.date, today()) || state.date);
+}
+
+/** 빠른 금액 칩: 눌렀을 때 입력 값에 더한다. 1억을 넘으면 1억에서 멈추고 오류 문구를 보인다. */
+function addAmount(delta) {
+  const { value, capped } = addToAmount($('amount').value, delta);
+  $('amount').value = formatAmountInput(String(value));
+  $('amount-error').textContent = capped ? AMOUNT_RANGE_TEXT : '';
+  if (capped) $('amount').setAttribute('aria-invalid', 'true');
+  else $('amount').removeAttribute('aria-invalid');
+  updateSaveLabel();
 }
 
 function setType(type) {
@@ -118,18 +147,18 @@ function setType(type) {
   loadQuick();
 }
 
-function resetForm({ keepFocus: focusAmount = true } = {}) {
+function resetForm({ keepFocus: focusAmount = true, keepCategory = false } = {}) {
   if (state.editingId) { state.date = today(); $('date').value = today(); renderDateSummary(); } // 수정하던 거래의 날짜가 다음 입력에 새지 않게
   state.editingId = null;
   state.orig = null;
   state.legacy = null;
-  state.category = '';
+  if (!keepCategory) state.category = ''; // 새 기록을 저장한 뒤에는 같은 카테고리를 이어서 입력하기 쉽게 유지한다
   $('amount').value = '';
   $('memo').value = '';
   clearFieldErrors();
   clearSuggestions();
   renderCategoryChips();
-  $('save-btn').textContent = '저장';
+  updateSaveLabel();
   $('cancel-edit-btn').hidden = true;
   if (focusAmount) $('amount').focus();
 }
@@ -161,7 +190,7 @@ async function onSubmit(ev) {
       : await api.createTransaction(v.value);
     const savedMonth = monthOf(saved && saved.date ? saved.date : v.value.date);
     state.month = savedMonth;
-    resetForm();
+    resetForm({ keepCategory: !editing });
     flash(editing ? '수정했어요' : '저장했어요');
     await refreshAll();
     notifyChanged();
@@ -171,6 +200,7 @@ async function onSubmit(ev) {
   } finally {
     submitting = false;
     btn.disabled = false;
+    updateSaveLabel();
   }
 }
 
@@ -189,7 +219,7 @@ function startEdit(tx) {
   renderDateSummary();
   clearFieldErrors();
   clearSuggestions();
-  $('save-btn').textContent = '수정 저장';
+  updateSaveLabel();
   $('cancel-edit-btn').hidden = false;
   $('tx-form').scrollIntoView({ block: 'start' });
   $('amount').focus();
@@ -223,7 +253,9 @@ function applySuggestion(it, focusSave) {
   $('amount').value = formatAmountInput(String(it.amount));
   $('category-error').textContent = '';
   $('amount-error').textContent = '';
+  $('amount').removeAttribute('aria-invalid');
   renderCategoryChips();
+  updateSaveLabel();
   clearSuggestions();
   if (focusSave) $('save-btn').focus();
   else $('amount').focus();
@@ -276,26 +308,37 @@ function renderCategoryBlock(title, list, kind) {
   return parts;
 }
 
-function renderMonthSummary(s, incomeItems) {
-  const box = $('month-summary');
-  const kpi = (label, value) => {
-    const d = el('div', { class: 'kpi' });
-    d.appendChild(el('div', { class: 'kpi-label' }, label));
-    d.appendChild(el('div', { class: 'kpi-value' }, value));
+/** 수입·지출 같은 크기의 두 칸 + 남은 돈 한 줄 */
+function renderMonthTotals(s) {
+  const box = $('month-totals');
+  const prefix = state.month === monthOf(today()) ? '이번 달' : monthTitle(state.month);
+  const cell = (kind, value) => {
+    const label = `${prefix} ${KIND_TEXT[kind]}`;
+    const d = el('div', { class: 'sum-cell' });
+    const head = el('div', { class: `sum-cell__label amt-${kind}` });
+    head.appendChild(el('span', { class: `icon icon--${kind}`, 'aria-hidden': 'true' }));
+    head.appendChild(document.createTextNode(label));
+    d.appendChild(head);
+    d.appendChild(el('div', { class: `sum-cell__value figure amt-${kind}`, 'aria-label': `${label} ${formatWon(value)}` }, formatWon(value)));
     return d;
   };
-  const grid = el('div', { class: 'kpi-grid kpi-grid-3' });
-  grid.appendChild(kpi('수입', formatWon(s.incomeTotal)));
-  grid.appendChild(kpi('지출', formatWon(s.expenseTotal)));
-  grid.appendChild(kpi('잔액', formatWon(s.balance)));
-  const parts = [grid];
+  const rest = formatBalanceWon(s.balance);
+  box.replaceChildren(
+    cell('income', s.incomeTotal),
+    cell('expense', s.expenseTotal),
+    el('p', { class: 'caption summary-note' }, `남은 돈 ${rest}`),
+  );
+}
 
+function renderMonthSummary(s, incomeItems) {
+  renderMonthTotals(s);
   // 수입 -> 지출 순 (요약·표와 같은 순서). 한쪽이 비어도 같은 형식의 빈 상태 문구를 보인다.
   const income = Array.isArray(incomeItems) ? incomeItems : [];
   const expense = Array.isArray(s.byCategory) ? s.byCategory : [];
-  parts.push(...renderCategoryBlock('카테고리별 수입', income, 'income'));
-  parts.push(...renderCategoryBlock('카테고리별 지출', expense, 'expense'));
-  box.replaceChildren(...parts);
+  $('month-summary').replaceChildren(
+    ...renderCategoryBlock('카테고리별 수입', income, 'income'),
+    ...renderCategoryBlock('카테고리별 지출', expense, 'expense'),
+  );
 }
 
 function renderTxList(txs) {
@@ -309,35 +352,52 @@ function renderTxList(txs) {
     if (!groups.has(t.date)) groups.set(t.date, []);
     groups.get(t.date).push(t);
   }
+  const maps = { expense: vizMap('expense'), income: vizMap('income') };
   const items = [];
   for (const [date, list] of groups) {
     const li = el('li', { class: 'tx-group' });
-    li.appendChild(el('h3', { class: 'tx-date' }, dayLabel(date, today()) || date));
+    const head = el('h3', { class: 'list-head tx-date' });
+    head.appendChild(el('span', {}, dayLabel(date, today()) || date));
+    head.appendChild(el('span', { class: 'tx-day-sum' }, daySum(list)));
+    li.appendChild(head);
     const inner = el('ul', { class: 'tx-rows' });
-    for (const t of list) inner.appendChild(txRow(t));
+    for (const t of list) inner.appendChild(txRow(t, maps[t.type]));
     li.appendChild(inner);
     items.push(li);
   }
   ul.replaceChildren(...items);
 }
 
-function txRow(t) {
-  const kind = t.type === 'income' ? '수입' : '지출';
-  const sign = t.type === 'income' ? '+' : '-';
-  const li = el('li', { class: 'tx-row' });
+/** 그날 합계 머리줄: "수입 +30,000원 · 지출 −12,500원" (0 인 쪽은 생략) */
+function daySum(list) {
+  const sum = (type) => list.filter((t) => t.type === type).reduce((a, t) => a + t.amount, 0);
+  const inc = sum('income');
+  const exp = sum('expense');
+  return [inc > 0 && `수입 ${formatSignedWon('income', inc)}`, exp > 0 && `지출 ${formatSignedWon('expense', exp)}`].filter(Boolean).join(' · ');
+}
+
+function txRow(t, map) {
+  const kind = KIND_TEXT[t.type];
+  const li = el('li', { class: 'tx-row row' });
   const edit = el('button', {
     type: 'button', class: 'tx-edit',
     'aria-label': `${kind} ${t.category} ${t.memo || ''} ${formatWon(t.amount)} 수정`.replace(/\s+/g, ' '),
   });
-  edit.appendChild(el('span', { class: 'tx-kind' }, kind));
+  edit.appendChild(swatch(vizOf(map, t.category), 'lg'));
   const mid = el('span', { class: 'tx-mid' });
   mid.appendChild(el('span', { class: 'tx-cat' }, t.category));
   if (t.memo) mid.appendChild(el('span', { class: 'tx-memo' }, t.memo));
   edit.appendChild(mid);
-  edit.appendChild(el('span', { class: `tx-amount ${t.type}` }, `${sign}${formatWon(t.amount)}`));
+  const side = el('span', { class: 'tx-side' });
+  side.appendChild(el('span', { class: `tx-amount ${t.type}`, 'aria-label': `${kind} ${formatWon(t.amount)}` }, formatSignedWon(t.type, t.amount)));
+  const badge = el('span', { class: `tx-kind badge badge--${t.type}` });
+  badge.appendChild(el('span', { class: `icon icon--${t.type}`, 'aria-hidden': 'true' }));
+  badge.appendChild(document.createTextNode(kind));
+  side.appendChild(badge);
+  edit.appendChild(side);
   edit.addEventListener('click', () => startEdit(t));
   const del = el('button', {
-    type: 'button', class: 'btn btn-danger tx-del',
+    type: 'button', class: 'btn btn-danger btn--danger btn--sm tx-del',
     'aria-label': `${t.category} ${t.memo || ''} ${formatWon(t.amount)} 삭제`.replace(/\s+/g, ' '),
   }, '삭제');
   del.addEventListener('click', () => onDelete(t));
@@ -438,7 +498,13 @@ export function initRecord() {
   $('amount').addEventListener('input', (ev) => {
     ev.target.value = formatAmountInput(ev.target.value);
     $('amount-error').textContent = '';
+    ev.target.removeAttribute('aria-invalid');
+    updateSaveLabel();
   });
+  for (const b of document.querySelectorAll('.quick-amounts [data-add]')) {
+    b.addEventListener('click', () => addAmount(Number(b.dataset.add)));
+  }
+  $('today-caption').textContent = longDayLabel(today());
   // C29: 선택된 칩에서 Enter 를 다시 누르면 저장 (칩 클릭 직후 Enter). 선택 전 Enter/Space 는 기본 동작(선택).
   $('category-chips').addEventListener('keydown', (ev) => {
     const btn = ev.target.closest && ev.target.closest('button');

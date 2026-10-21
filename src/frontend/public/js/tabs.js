@@ -1,6 +1,7 @@
 // 하단 탭: 해시(#record / #dashboard)로 화면 전환. 새로고침/뒤로가기 유지.
-// #categories 는 하단 탭 없이 기록/대시보드에서 링크로 들어가는 패널이다.
+// #categories 는 하단 탭 없이 기록/대시보드에서 링크로 들어가는 패널이다 (탭바에서는 대시보드가 활성).
 const TABS = ['record', 'dashboard', 'categories'];
+const TAB_LINK = { record: 'record', dashboard: 'dashboard', categories: 'dashboard' };
 
 function currentTab() {
   const name = location.hash.replace('#', '');
@@ -14,7 +15,7 @@ function apply() {
     const link = document.getElementById(`tab-${name}`);
     if (panel) panel.hidden = name !== active;
     if (link) {
-      if (name === active) link.setAttribute('aria-current', 'page');
+      if (name === TAB_LINK[active]) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     }
   }

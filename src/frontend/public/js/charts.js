@@ -1,24 +1,36 @@
 // SVG 차트 컴포넌트 3종 (도넛, 묶은 막대, 막대). 외부 라이브러리 없음.
 // 모든 문자열은 textContent / setAttribute 로만 넣는다 (innerHTML 미사용, 인라인 style 미사용: CSP).
+// 색은 전부 CSS 클래스(tokens.css 의 --viz-N, --color-income 등)로 입힌다: 다크 모드에서 같이 바뀐다.
 import { formatWon } from './lib/money.js';
 import { monthShort, monthTitle } from './lib/date.js';
 import {
   donutSegments, formatPercent, niceScale, barHeight, formatTick, labelStep, barLayout, ratioOf,
 } from './lib/chart-geometry.js';
+import { assignDonutViz, VIZ_COUNT } from './lib/viz.js';
+import { swatch } from './dom.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 export const EMPTY_TEXT = '아직 이 기간에 기록이 없어요';
 
-// 흰 배경 대비 3:1 이상, 색각이상 친화(파랑/주황/청록 계열 위주)
-export const PALETTE = ['#0072B2', '#C4500A', '#00875F', '#A8448F', '#7A6200', '#4A4A4A', '#3B6FB6', '#8E5B2E'];
-export const PATTERN_KINDS = ['solid', 'diag', 'dots', 'hstripe', 'cross', 'vstripe', 'backdiag', 'grid'];
-// "그 외 N개" 묶음 조각 전용 (PALETTE 의 어떤 색과도, 다른 조각의 무늬와도 겹치지 않는다). 흰 배경 대비 4.5:1 이상.
-export const OTHER_STYLE = { color: '#6B6B6B', kind: 'checker' };
-/** 조각 i 의 (색, 무늬). 묶음 조각이면 전용 조합 */
-export function pieceStyle(i, isOther) {
-  if (isOther) return OTHER_STYLE;
-  return { color: PALETTE[i % PALETTE.length], kind: PATTERN_KINDS[i % PATTERN_KINDS.length] };
-}
+// 도넛 규격 (핸드오프): 바깥 92, 안쪽 60, 조각 사이 2px 는 CSS(.donut__slice 의 stroke = --viz-gap)
+const DONUT_OUTER = 92;
+const DONUT_INNER = 60;
+
+// 번호 2..8 의 무늬 (patterns/viz-N.svg 와 같은 모양). 1번은 단색. 선 색은 --viz-pattern-ink.
+const VIZ_MARKS = {
+  2: [['path', { d: 'M-2 2l4-4M0 8l8-8M6 10l4-4', 'stroke-width': 1.6, class: 'viz-ink-stroke' }]],
+  3: [['circle', { cx: 2, cy: 2, r: 1.3, class: 'viz-ink' }], ['circle', { cx: 6, cy: 6, r: 1.3, class: 'viz-ink' }]],
+  4: [['path', { d: 'M0 2h8M0 6h8', 'stroke-width': 1.4, class: 'viz-ink-stroke' }]],
+  5: [['path', { d: 'M0 4h8M4 0v8', 'stroke-width': 1.3, class: 'viz-ink-stroke' }]],
+  6: [['path', { d: 'M2 0v8M6 0v8', 'stroke-width': 1.4, class: 'viz-ink-stroke' }]],
+  7: [['rect', { x: 0, y: 0, width: 4, height: 4, class: 'viz-ink' }], ['rect', { x: 4, y: 4, width: 4, height: 4, class: 'viz-ink' }]],
+  8: [['path', { d: 'M-2 6l4 4M0 0l8 8M6 -2l4 4', 'stroke-width': 1.6, class: 'viz-ink-stroke' }]],
+};
+// 월별 막대: 수입 = / 사선, 지출 = \ 사선. 선 개수(밀도)를 같게 한다.
+const BAR_MARKS = {
+  income: { base: 'chart-fill-income', d: 'M-2 2L2 -2M0 8L8 0M6 10L10 6' },
+  expense: { base: 'chart-fill-expense', d: 'M-2 6L2 10M0 0L8 8M6 -2L10 2' },
+};
 
 let uid = 0;
 const nextId = (p) => `${p}${++uid}`;
@@ -36,37 +48,29 @@ function s(tag, attrs, text) {
   return e;
 }
 
-/** <defs> 안에 색 + 무늬 패턴을 추가하고 fill 값을 반환. solid 는 단색 문자열. */
-function addPattern(defs, id, color, kind) {
-  if (kind === 'solid') return color;
+/** <defs> 에 번호 n(2..8) 의 색 + 무늬 패턴을 넣고 fill 값(url)을 반환 */
+function addVizPattern(defs, id, n) {
   const p = s('pattern', { id, width: 8, height: 8, patternUnits: 'userSpaceOnUse' });
-  p.appendChild(s('rect', { width: 8, height: 8, fill: color }));
-  const mark = { stroke: '#fff', 'stroke-width': 1.6, fill: 'none' };
-  switch (kind) {
-    case 'diag': p.appendChild(s('path', { ...mark, d: 'M-2 2L2 -2M0 8L8 0M6 10L10 6' })); break;
-    case 'backdiag': p.appendChild(s('path', { ...mark, d: 'M-2 6L2 10M0 0L8 8M6 -2L10 2' })); break;
-    case 'hstripe': p.appendChild(s('path', { ...mark, d: 'M0 2H8M0 6H8' })); break;
-    case 'vstripe': p.appendChild(s('path', { ...mark, d: 'M2 0V8M6 0V8' })); break;
-    case 'cross': p.appendChild(s('path', { ...mark, d: 'M0 0L8 8M8 0L0 8' })); break;
-    case 'grid': p.appendChild(s('path', { ...mark, d: 'M4 0V8M0 4H8' })); break;
-    case 'checker':
-      p.appendChild(s('rect', { x: 0, y: 0, width: 4, height: 4, fill: '#fff' }));
-      p.appendChild(s('rect', { x: 4, y: 4, width: 4, height: 4, fill: '#fff' }));
-      break;
-    case 'dots':
-      p.appendChild(s('circle', { cx: 2, cy: 2, r: 1.3, fill: '#fff' }));
-      p.appendChild(s('circle', { cx: 6, cy: 6, r: 1.3, fill: '#fff' }));
-      break;
-    default: break;
-  }
+  p.appendChild(s('rect', { width: 8, height: 8, class: `viz-fill-${n}` }));
+  for (const [tag, attrs] of VIZ_MARKS[n] || []) p.appendChild(s(tag, attrs));
   defs.appendChild(p);
   return `url(#${id})`;
 }
 
-function swatch(fill) {
-  // 범례 견본: 같은 문서의 패턴 id 를 참조한다
-  const svg = s('svg', { class: 'swatch', viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false' });
-  svg.appendChild(s('rect', { x: 0.5, y: 0.5, width: 15, height: 15, rx: 2, fill, stroke: '#333', 'stroke-width': 1 }));
+/** 수입/지출 막대 무늬 패턴 */
+function addBarPattern(defs, id, kind) {
+  const m = BAR_MARKS[kind];
+  const p = s('pattern', { id, width: 8, height: 8, patternUnits: 'userSpaceOnUse' });
+  p.appendChild(s('rect', { width: 8, height: 8, class: m.base }));
+  p.appendChild(s('path', { d: m.d, 'stroke-width': 1.6, class: 'viz-ink-stroke' }));
+  defs.appendChild(p);
+  return `url(#${id})`;
+}
+
+/** 막대 범례 견본: 같은 문서의 패턴 id 를 참조한다 */
+function patternSwatch(fill) {
+  const svg = s('svg', { class: 'swatch-svg', viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false' });
+  svg.appendChild(s('rect', { x: 0.5, y: 0.5, width: 15, height: 15, rx: 2, fill, class: 'chart-stroke' }));
   return svg;
 }
 
@@ -77,7 +81,10 @@ function emptyState(container) {
 /** 표 대체. columns: 열 이름 배열, rows: [{head, cells:[string]}], foot: {head, cells}|null */
 function buildTable(caption, headLabel, columns, rows, foot) {
   const details = h('details', { class: 'chart-table' });
-  details.appendChild(h('summary', {}, '표로 보기'));
+  const summary = h('summary', { class: 'btn btn--ghost btn--sm' });
+  summary.appendChild(h('span', { class: 'icon icon--table', 'aria-hidden': 'true' }));
+  summary.appendChild(h('span', {}, '표로 보기'));
+  details.appendChild(summary);
   const wrap = h('div', { class: 'table-wrap' });
   const table = h('table');
   table.appendChild(h('caption', {}, caption));
@@ -126,23 +133,24 @@ function svgShell(vbW, vbH, title, summary) {
   return { svg, defs };
 }
 
-function legendItem(fill, label, extra) {
+function legendItem(marker, label, extra) {
   const li = h('li');
-  li.appendChild(swatch(fill));
+  li.appendChild(marker);
   li.appendChild(h('span', { class: 'legend-label' }, label));
   if (extra) for (const [cls, text] of extra) li.appendChild(h('span', { class: cls }, text));
   return li;
 }
 
 /**
- * 도넛. opts: { title, periodLabel, items:[{label,value}], centerLabel='총 지출', noun='지출' }
+ * 도넛. opts: { title, periodLabel, items:[{label,value}], centerLabel='총 지출', noun='지출', vizMap }
  * 조각 순서 = 범례 순서 = 금액 내림차순 (12시 방향 시계방향).
- * items 에 { members:[{label,value}], pinLast:true } 인 "그 외 N개" 묶음이 있으면 마지막 조각으로 그리고,
+ * 색·무늬 번호는 vizMap(이름 -> 1..8, lib/viz.js)의 고정 번호를 우선 쓰고, 없거나 겹치면 남은 가장 작은 번호.
+ * items 에 { members:[{label,value}], pinLast:true } 인 "그 외 N개" 묶음이 있으면 마지막 조각(중립 단색)으로 그리고,
  * 범례에 묶인 이름을 나열하며, 표 대체에는 묶지 않은 전체 행을 싣는다.
  */
 export function renderDonut(container, opts) {
-  const { title, periodLabel = '', items, centerLabel = '총 지출', noun = '지출' } = opts;
-  const segs = donutSegments(items, { cx: 100, cy: 100, outerR: 92, innerR: 56 });
+  const { title, periodLabel = '', items, centerLabel = '총 지출', noun = '지출', vizMap = null } = opts;
+  const segs = donutSegments(items, { cx: 100, cy: 100, outerR: DONUT_OUTER, innerR: DONUT_INNER });
   if (segs.length === 0) return emptyState(container);
   const total = segs.reduce((a, x) => a + x.value, 0);
   const top = segs[0];
@@ -150,21 +158,23 @@ export function renderDonut(container, opts) {
 
   const figure = figureShell(title);
   const { svg, defs } = svgShell(200, 200, title, summary);
-  const fills = segs.map((seg, i) => {
-    const st = pieceStyle(i, Array.isArray(seg.members));
-    return addPattern(defs, nextId('pt'), st.color, st.kind);
-  });
+  const vizs = assignDonutViz(segs, vizMap);
   segs.forEach((seg, i) => {
-    svg.appendChild(s('path', { d: seg.path, fill: fills[i], stroke: '#fff', 'stroke-width': 1.5, 'fill-rule': 'evenodd' }));
+    const v = vizs[i];
+    const attrs = { d: seg.path, 'fill-rule': 'evenodd', 'data-viz': String(v) };
+    if (v === 'other') attrs.class = 'donut__slice viz-other';
+    else if (v === 1) attrs.class = 'donut__slice viz-fill-1';
+    else { attrs.class = 'donut__slice'; attrs.fill = addVizPattern(defs, nextId('pt'), v); }
+    svg.appendChild(s('path', attrs));
   });
-  svg.appendChild(s('text', { x: 100, y: 94, 'text-anchor': 'middle', class: 'chart-text chart-text-sub' }, centerLabel));
-  svg.appendChild(s('text', { x: 100, y: 114, 'text-anchor': 'middle', class: 'chart-text chart-text-strong' }, formatWon(total)));
+  svg.appendChild(s('text', { x: 100, y: 92, 'text-anchor': 'middle', class: 'chart-text chart-text-sub' }, centerLabel));
+  svg.appendChild(s('text', { x: 100, y: 114, 'text-anchor': 'middle', class: 'chart-text donut__value' }, formatWon(total)));
 
   const body = h('div', { class: 'chart-body donut-body' });
   body.appendChild(svg);
   const legend = h('ol', { class: 'legend legend-list' });
   segs.forEach((seg, i) => {
-    const li = legendItem(fills[i], seg.label, [['legend-amount', formatWon(seg.value)], ['legend-ratio', formatPercent(seg.ratio)]]);
+    const li = legendItem(swatch(vizs[i]), seg.label, [['legend-amount', formatWon(seg.value)], ['legend-ratio', formatPercent(seg.ratio)]]);
     if (Array.isArray(seg.members)) li.appendChild(h('span', { class: 'legend-members' }, seg.members.map((m) => m.label).join(', ')));
     legend.appendChild(li);
   });
@@ -191,7 +201,7 @@ function drawAxes(svg, labels, maxValue) {
   const yOf = (v) => M.top + PLOT_H - (sc.max > 0 ? (v / sc.max) * PLOT_H : 0);
   for (const t of sc.ticks) {
     const y = yOf(t);
-    svg.appendChild(s('line', { x1: M.left, x2: VB_W - M.right, y1: y, y2: y, stroke: t === 0 ? '#555' : '#d0d4da', 'stroke-width': 1 }));
+    svg.appendChild(s('line', { x1: M.left, x2: VB_W - M.right, y1: y, y2: y, class: t === 0 ? 'chart-axis' : 'chart-grid' }));
     svg.appendChild(s('text', { x: M.left - 4, y: y + 4, 'text-anchor': 'end', class: 'chart-text' }, formatTick(t)));
   }
   // 월 레이블은 겹치면 격월 (표에는 전체)
@@ -221,8 +231,8 @@ export function renderGroupedBars(container, opts) {
 
   const figure = figureShell(title);
   const { svg, defs } = svgShell(VB_W, VB_H, title, summary);
-  const incomeFill = addPattern(defs, nextId('pt'), PALETTE[0], 'diag'); // 수입 = / 무늬
-  const expenseFill = addPattern(defs, nextId('pt'), PALETTE[1], 'backdiag'); // 지출 = \ 무늬 (같은 밀도: 잉크 양을 맞춘다)
+  const incomeFill = addBarPattern(defs, nextId('pt'), 'income'); // 수입 = / 무늬
+  const expenseFill = addBarPattern(defs, nextId('pt'), 'expense'); // 지출 = \ 무늬 (같은 밀도: 잉크 양을 맞춘다)
   const sc = drawAxes(svg, rows.map((r) => r.month), max);
   const lay = barLayout(rows.length, 2, PLOT_W, { groupGap: 0.25, barGap: 1 });
   rows.forEach((r, g) => {
@@ -230,15 +240,15 @@ export function renderGroupedBars(container, opts) {
       const hgt = barHeight(v || 0, sc.max, PLOT_H);
       if (hgt <= 0) return;
       const b = lay.bars[g * 2 + si];
-      svg.appendChild(s('rect', { x: M.left + b.x, y: M.top + PLOT_H - hgt, width: b.width, height: hgt, fill, stroke: '#333', 'stroke-width': 0.8 }));
+      svg.appendChild(s('rect', { x: M.left + b.x, y: M.top + PLOT_H - hgt, width: b.width, height: hgt, fill, class: 'chart-stroke' }));
     });
   });
 
   const body = h('div', { class: 'chart-body' });
   body.appendChild(svg);
   const legend = h('ul', { class: 'legend legend-inline' });
-  legend.appendChild(legendItem(incomeFill, '수입 (/ 무늬)'));
-  legend.appendChild(legendItem(expenseFill, '지출 (\\ 무늬)'));
+  legend.appendChild(legendItem(patternSwatch(incomeFill), '수입 (/ 무늬)'));
+  legend.appendChild(legendItem(patternSwatch(expenseFill), '지출 (\\ 무늬)'));
   body.appendChild(legend);
   figure.appendChild(body);
   figure.appendChild(h('p', { class: 'chart-summary' }, summary));
@@ -252,10 +262,12 @@ export function renderGroupedBars(container, opts) {
 
 /**
  * 단일 막대: 카테고리별 월 추이.
- * opts: { title, seriesName, months:["YYYY-MM"], totals:[number], colorIndex=0 }  (api category-monthly 의 한 series)
+ * opts: { title, seriesName, months:["YYYY-MM"], totals:[number], viz?, colorIndex=0 }  (api category-monthly 의 한 series)
+ * viz: 그 카테고리의 색·무늬 번호(1..8). 없으면 colorIndex 순서로 정한다.
  */
 export function renderBars(container, opts) {
   const { title, seriesName, months, totals, colorIndex = 0 } = opts;
+  const vizNo = opts.viz >= 1 && opts.viz <= VIZ_COUNT ? opts.viz : (colorIndex % VIZ_COUNT) + 1;
   const labels = Array.isArray(months) ? months : [];
   const vals = labels.map((_, i) => (Number.isFinite(totals?.[i]) ? totals[i] : 0));
   const max = vals.reduce((m, v) => Math.max(m, v), 0);
@@ -267,20 +279,20 @@ export function renderBars(container, opts) {
 
   const figure = figureShell(title);
   const { svg, defs } = svgShell(VB_W, VB_H, title, summary);
-  const fill = addPattern(defs, nextId('pt'), PALETTE[colorIndex % PALETTE.length], 'solid');
+  const fillAttr = vizNo === 1 ? { class: 'viz-fill-1 chart-stroke' } : { fill: addVizPattern(defs, nextId('pt'), vizNo), class: 'chart-stroke' };
   const sc = drawAxes(svg, labels, max);
   const lay = barLayout(labels.length, 1, PLOT_W, { groupGap: 0.3 });
   vals.forEach((v, i) => {
     const hgt = barHeight(v, sc.max, PLOT_H);
     if (hgt <= 0) return;
     const b = lay.bars[i];
-    svg.appendChild(s('rect', { x: M.left + b.x, y: M.top + PLOT_H - hgt, width: b.width, height: hgt, fill, stroke: '#333', 'stroke-width': 0.8 }));
+    svg.appendChild(s('rect', { x: M.left + b.x, y: M.top + PLOT_H - hgt, width: b.width, height: hgt, ...fillAttr }));
   });
 
   const body = h('div', { class: 'chart-body' });
   body.appendChild(svg);
   const legend = h('ul', { class: 'legend legend-inline' });
-  legend.appendChild(legendItem(fill, seriesName));
+  legend.appendChild(legendItem(swatch(vizNo), seriesName));
   body.appendChild(legend);
   figure.appendChild(body);
   figure.appendChild(h('p', { class: 'chart-summary' }, summary));

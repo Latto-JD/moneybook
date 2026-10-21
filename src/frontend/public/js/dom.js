@@ -8,10 +8,21 @@ export function el(tag, attrs, text) {
 
 export const $ = (id) => document.getElementById(id);
 
-/** 칩 버튼이 든 li */
-export function chipItem(label, { pressed, onClick, ariaLabel } = {}) {
+/** 색·무늬 견본 (장식). viz: 1..8 | 'other' | 'none'. size: 'lg' 면 28px */
+export function swatch(viz, size) {
+  return el('span', { class: size === 'lg' ? 'swatch swatch--lg' : 'swatch', 'data-viz': String(viz), 'aria-hidden': 'true' });
+}
+
+/**
+ * 칩 버튼이 든 li. 버튼의 접근 이름·textContent 는 label 그대로 (견본·체크는 빈 장식 span).
+ * viz 가 있으면 앞에 색·무늬 견본, pressed 가 정의되어 있으면 선택 시 보이는 ✓ 아이콘.
+ */
+export function chipItem(label, { pressed, onClick, ariaLabel, viz } = {}) {
   const li = el('li');
-  const b = el('button', { type: 'button', class: 'chip' }, label);
+  const b = el('button', { type: 'button', class: 'chip' });
+  if (viz !== undefined) b.appendChild(swatch(viz));
+  if (pressed !== undefined) b.appendChild(el('span', { class: 'icon icon--check', 'aria-hidden': 'true' }));
+  b.appendChild(document.createTextNode(label));
   if (pressed !== undefined) b.setAttribute('aria-pressed', String(pressed));
   if (ariaLabel) b.setAttribute('aria-label', ariaLabel);
   if (onClick) b.addEventListener('click', onClick);

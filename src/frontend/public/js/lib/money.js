@@ -33,3 +33,23 @@ export function formatAmountInput(raw) {
   if (digits === '') return '';
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
+
+/**
+ * 빠른 금액 칩: 입력칸의 현재 값에 delta 를 더한다. 상한(MAX_AMOUNT)을 넘으면 상한에서 멈추고 capped=true.
+ * 입력이 비었거나 숫자가 없으면 0 에서 시작한다.
+ */
+export function addToAmount(input, delta) {
+  const cur = Number(String(input ?? '').replace(/\D/g, '')) || 0;
+  const sum = cur + delta;
+  return sum > MAX_AMOUNT ? { value: MAX_AMOUNT, capped: true } : { value: sum, capped: false };
+}
+
+/** 부호 붙은 금액: 수입 "+12,500원", 지출 "−12,500원" (U+2212). 기호 외에 색·배지·라벨로도 구분한다. */
+export function formatSignedWon(type, n) {
+  return (type === 'income' ? '+' : '−') + formatWon(Math.abs(n));
+}
+
+/** 남은 돈(잔액): 음수면 앞에 U+2212. "-" 대신 같은 폭의 마이너스 기호를 쓴다. */
+export function formatBalanceWon(n) {
+  return n < 0 ? `−${formatWon(Math.abs(n))}` : formatWon(n);
+}
