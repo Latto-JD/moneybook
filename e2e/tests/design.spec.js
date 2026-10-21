@@ -178,7 +178,12 @@ test.describe('11.1 자산 · CSP', () => {
     const fonts = readdirSync(join(HANDOFF, 'fonts'));
     expect(fonts.filter((f) => f.endsWith('.woff2'))).toHaveLength(6);
     expect(fonts.filter((f) => f.startsWith('OFL-'))).toHaveLength(2);
-    for (const f of fonts) same(join('fonts', f));
+    // OFL-Newsreader.txt 는 원본이 91바이트 안내 문구뿐이라 정식 OFL 본문으로 교체했다: 바이트 비교 대신 본문 내용을 확인한다
+    for (const f of fonts.filter((n) => n !== 'OFL-Newsreader.txt')) same(join('fonts', f));
+    const ofl = readFileSync(join(PUBLIC, 'fonts', 'OFL-Newsreader.txt'), 'utf8');
+    expect(ofl.length).toBeGreaterThanOrEqual(1000);
+    expect(ofl).toContain('SIL OPEN FONT LICENSE Version 1.1');
+    expect(ofl).toContain('Newsreader Project Authors');
     const icons = readdirSync(join(HANDOFF, 'icons')).filter((f) => f.endsWith('.svg'));
     expect(icons).toHaveLength(15);
     for (const f of icons) same(join('icons', f));

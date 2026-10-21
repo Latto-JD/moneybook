@@ -98,9 +98,9 @@ function renameRow(li, item) {
   const row = el('div', { class: 'cat-rename' });
   row.appendChild(label);
   row.appendChild(input);
-  const save = el('button', { type: 'button', class: 'btn btn-primary', 'aria-label': `${item.name} 이름 저장` }, '저장');
+  const save = el('button', { type: 'button', class: 'btn btn-primary btn--primary btn--sm', 'aria-label': `${item.name} 이름 저장` }, '저장');
   save.addEventListener('click', () => saveRename(item, input));
-  const cancel = el('button', { type: 'button', class: 'btn', 'aria-label': `${item.name} 이름 바꾸기 취소` }, '취소');
+  const cancel = el('button', { type: 'button', class: 'btn btn--ghost btn--sm', 'aria-label': `${item.name} 이름 바꾸기 취소` }, '취소');
   cancel.addEventListener('click', () => cancelRename(item.id));
   row.appendChild(save);
   row.appendChild(cancel);

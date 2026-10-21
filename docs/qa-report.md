@@ -545,3 +545,10 @@ frontend 가 예고한 `frontend.spec.js:61,63,497`(칩 비동기 로드)은 신
 - F4 통과: C-D24(30개 칩, Tab 으로 마지막 칩이 목록 안에 완전히 보임)가 mobile-360(360px)과 tablet-768(768px) 모두 통과.
 - 결과: C-D14, C-D24, C-D31, C-D38, C-D39 는 위 재검증 기준으로 통과로 바뀐다. 디자인 기준 40개 중 통과 40 / 실패 0 / 미검증 0 (P-D1~P-D3 제외). 단 C-D39 의 "e2e 전체 통과"는 C-C28 테스트 수정 후 해당 테스트만 재실행한 결과를 포함한다.
 - 테스트 변경: e2e/tests/categories-ui.spec.js C-C28 의 추가 제출을 Enter 로 변경.
+
+## 재검증 2 (reviewer 권장 R1~R3 반영 후, 커밋 전 작업 트리)
+
+- 테스트 변경: e2e/tests/design.spec.js 의 C-D1 에서 OFL-Newsreader.txt 만 원본 바이트 비교에서 제외하고, 정식 OFL 본문인지(1000자 이상, "SIL OPEN FONT LICENSE Version 1.1" 과 "Newsreader Project Authors" 포함) 검사하도록 바꿨다. 원본은 91바이트 안내 문구뿐이고 새 파일은 4394바이트 정식 본문이다. 다른 폰트·css·아이콘·무늬는 그대로 바이트 비교.
+- 실행: 포트 3000번대에 남은 서버 없음 확인, 새 임시 PGlite(마이그레이션, 시드), 포트 3500. 범위는 design.spec.js 전체(스크린샷 제외), categories-ui.spec.js·frontend.spec.js 중 C-C23~C-C29, C-C32, 이름 바꾸기·이름 변경, 칩, C29~C31 관련 케이스를 mobile-360 + tablet-768 에서 실행(전체 재실행 아님).
+- 결과: 188 통과 / 0 실패. C-D1(OFL 본문 검사 포함), C-D13/C-D14/C-D24, C-C28 모두 통과.
+- 미검증: 이번 범위 밖 e2e 는 다시 돌리지 않았다(직전 전체 재실행 결과 530 통과 / C-C28 테스트 수정 후 통과 유지).

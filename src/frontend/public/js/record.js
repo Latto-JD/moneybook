@@ -510,7 +510,7 @@ export function initRecord() {
   $('category-chips').addEventListener('focusin', (ev) => {
     const list = $('category-chips');
     const chip = ev.target.closest('.chip');
-    if (!chip) return;
+    if (!chip || !chip.matches(':focus-visible')) return; // 마우스·터치 포커스는 건드리지 않는다 (첫 클릭이 사라질 수 있다)
     const inset = parseFloat(getComputedStyle(list).paddingLeft) || 0;
     const l = list.getBoundingClientRect();
     const c = chip.getBoundingClientRect();
