@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | qa | 완료 기준 검증, 리포트 | 코드 수정 불가 |
 | reviewer | 최종 코드 리뷰 | 읽기 전용 |
 
-- 모델: planner·reviewer는 opus, frontend·backend·qa는 sonnet (각 에이전트 frontmatter에서 변경).
+- 모델: planner는 opus, frontend·backend·qa·reviewer는 sonnet (각 에이전트 frontmatter에서 변경).
 - 수정 영역: frontend는 `src/frontend/`, backend는 `src/backend/`. qa는 소스 대신 테스트 코드와 리포트만 추가할 수 있다.
 - 산출물 경로: `docs/plan.md`(planner), `docs/api.md`(backend가 구현 전에 먼저 작성), `docs/qa-report.md`(qa).
 
