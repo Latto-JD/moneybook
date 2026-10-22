@@ -1,5 +1,17 @@
 // 대시보드 API 응답 -> 화면용 값 어댑터 (순수 함수). 필드는 docs/api.md 5장 기준.
-import { shiftMonth } from './date.js';
+import { shiftMonth, monthTitle, monthShort } from './date.js';
+
+/**
+ * 보고 있는 달 이름: 이번 달 '이번 달', 같은 해 다른 달 '10월', 다른 해 '2025년 12월'.
+ * base, thisMonth: 'YYYY-MM'
+ */
+export function viewedMonthName(base, thisMonth) {
+  if (base === thisMonth) return '이번 달';
+  if (String(base).slice(0, 4) === String(thisMonth).slice(0, 4)) return monthShort(base);
+  return monthTitle(base);
+}
+export const balanceLabel = (base, thisMonth) => `${viewedMonthName(base, thisMonth)} 남은 돈`;
+export const summaryLabel = (base, thisMonth) => `${viewedMonthName(base, thisMonth)} 요약`;
 
 /**
  * KPI: stats/monthly 의 months 와 기준 월에서 수입/지출/잔액과 수입·지출 각각의 전월 대비를 계산.

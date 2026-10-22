@@ -7,7 +7,7 @@ import { stableVizMap } from './lib/viz.js';
 import { todayLocal, monthOf, shiftMonth, monthTitle, trailingRange } from './lib/date.js';
 import { renderDonut, renderGroupedBars, renderBars } from './charts.js';
 import {
-  buildKpi, balanceBars, NO_PREV_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
+  buildKpi, balanceBars, balanceLabel, summaryLabel, NO_PREV_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
 } from './lib/dashboard-data.js';
 
 // 카테고리 보기(도넛·추이) 유형별 문구. 지출과 수입은 같은 구조의 문장을 쓴다.
@@ -28,7 +28,9 @@ let seq = 0;
 const catVizMap = () => stableVizMap(categoryResponse() && categoryResponse().items, state.catType);
 
 /** 균형 카드: 남은 돈(크게) + 수입·지출 같은 크기 두 칸. 두 막대는 둘 중 큰 값을 100%로 하는 같은 기준 */
-function renderKpi(kpi) {
+function renderKpi(kpi, base) {
+  const thisMonth = monthOf(todayLocal());
+  $('kpi').setAttribute('aria-label', summaryLabel(base, thisMonth));
   const bars = balanceBars(kpi.income, kpi.expense);
   const pair = (kind, label, value, ratio, change) => {
     const d = el('div', { class: `kpi kpi--${kind}` });
@@ -48,7 +50,7 @@ function renderKpi(kpi) {
     return d;
   };
   const balance = el('div', { class: 'kpi kpi--balance' });
-  balance.appendChild(el('div', { class: 'kpi-label' }, '이번 달 남은 돈'));
+  balance.appendChild(el('div', { class: 'kpi-label' }, balanceLabel(base, thisMonth)));
   balance.appendChild(el('div', { class: 'kpi-value figure' }, formatBalanceWon(kpi.balance)));
   const row = el('div', { class: 'balance-pair' });
   row.appendChild(pair('income', '수입', kpi.income, bars.income, kpi.incomeChange));
@@ -90,7 +92,7 @@ async function load() {
   if (failed) $('dash-error').textContent = failed.reason?.message || '데이터를 불러오지 못했어요.';
 
   if (monthly.status === 'fulfilled') {
-    renderKpi(buildKpi(monthly.value.months, base));
+    renderKpi(buildKpi(monthly.value.months, base), base);
     renderGroupedBars($('chart-monthly'), { title: '월별 수입 대 지출', months: monthly.value.months });
   }
   if (cat.status === 'fulfilled') {

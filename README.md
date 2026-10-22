@@ -163,6 +163,14 @@ DB_DRIVER=pglite PGLITE_DIR=<같은 디렉터리> npm run qa:tools -- age-attemp
 7. **프로덕션 배포 (CP3)**: 프리뷰 결과 확인 후 main 프로덕션 배포(또는 프리뷰 승격).
 8. (선택) Vercel 로컬 재현: `vercel link` → `vercel env pull .env.local` → `vercel dev`.
 
+## 폰트 파일 규칙
+
+`/fonts/*` 는 `vercel.json` 에서 `Cache-Control: public, max-age=31536000, immutable`(1년)로 캐시됩니다. 파일 이름에 해시가 없으므로 **폰트 파일 내용을 바꿀 때는 파일 이름도 반드시 바꾸고**(예: `Pretendard-Regular.subset.v2.woff2`) `css/fonts.css` 의 경로를 함께 고치세요. 같은 이름으로 덮어쓰면 이미 방문한 사용자에게 옛 폰트가 최대 1년 남습니다. HTML(`/`, `/index.html`)은 계속 `no-store` 입니다.
+
+## 자산 출처
+
+`src/frontend/public/icons/`(기존 15개)와 `patterns/`(7개)는 디자인 핸드오프(`design_handoff_moneybook/`) 원본이며 Claude 로 생성된 파일입니다. 원본 SVG 에는 콘텐츠 출처 증명(C2PA) `<metadata>` 가 들어 있었고, 배포본에서는 용량(22개 합계 175,480 -> 4,452바이트)을 줄이기 위해 `<metadata>` 와 `xmlns:c2pa` 속성만 제거했습니다(경로·속성은 그대로). 원본은 저장소에 그대로 있습니다. `icons/theme-*.svg` 3개는 이 프로젝트에서 새로 만든 아이콘이며 메타데이터가 없습니다.
+
 ## 보안 메모
 
 - 비밀번호: Node 내장 scrypt(N=2^15, r=8, p=1, 솔트 16바이트, `timingSafeEqual` 비교). 없는 이메일 로그인에도 더미 해시 검증을 해 응답 시간 차이로 가입 여부가 드러나지 않게 합니다.

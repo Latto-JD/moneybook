@@ -168,33 +168,55 @@ const scanErrorScope = (page, errColor) => page.evaluate((ERR) => {
 
 // ================================================================== 11.1 자산 · CSP
 test.describe('11.1 자산 · CSP', () => {
-  test('C-D1 자산 파일이 원본(design_handoff_moneybook/handoff)과 바이트 동일, 개수 일치', async () => {
+  test('C-D1 / C-F11 / C-F12 자산: 원본(design_handoff_moneybook/handoff)과 같되 의도한 차이만 (fonts.css 의 Newsreader 500 한 줄, Medium 폰트 파일, SVG 메타데이터, 새 아이콘 3개)', async () => {
+    const read = (root, rel) => readFileSync(join(root, rel), 'utf8');
     const same = (rel, dstRel = rel) => {
       const a = readFileSync(join(HANDOFF, rel));
       const b = readFileSync(join(PUBLIC, dstRel));
       expect(Buffer.compare(a, b), `${rel} 다름`).toBe(0);
     };
-    for (const f of ['tokens.css', 'fonts.css', 'components.css']) same(f, join('css', f));
+    for (const f of ['tokens.css', 'components.css']) same(f, join('css', f));
+    // fonts.css: 원본에서 Newsreader 500 @font-face 한 줄만 뺀 것과 같다
+    const lines = read(HANDOFF, 'fonts.css').split(/\r?\n/);
+    const dropped = lines.filter((l) => /font-family: "Newsreader"; font-weight: 500/.test(l));
+    expect(dropped, '원본의 Newsreader 500 face').toHaveLength(1);
+    const expectedCss = lines.filter((l) => !dropped.includes(l)).join('\n').replace(/\s+$/, '');
+    expect(read(PUBLIC, join('css', 'fonts.css')).replace(/\r\n/g, '\n').replace(/\s+$/, '')).toBe(expectedCss.replace(/\r\n/g, '\n'));
     const fonts = readdirSync(join(HANDOFF, 'fonts'));
     expect(fonts.filter((f) => f.endsWith('.woff2'))).toHaveLength(6);
     expect(fonts.filter((f) => f.startsWith('OFL-'))).toHaveLength(2);
+    const pubFonts = readdirSync(join(PUBLIC, 'fonts'));
+    expect(pubFonts.filter((f) => f.endsWith('.woff2')).sort(), '배포 폰트는 원본에서 Newsreader-Medium 만 뺀 5개').toEqual(fonts.filter((f) => f.endsWith('.woff2') && f !== 'Newsreader-Medium.latin.woff2').sort());
+    expect(pubFonts).not.toContain('Newsreader-Medium.latin.woff2');
     // OFL-Newsreader.txt 는 원본이 91바이트 안내 문구뿐이라 정식 OFL 본문으로 교체했다: 바이트 비교 대신 본문 내용을 확인한다
-    for (const f of fonts.filter((n) => n !== 'OFL-Newsreader.txt')) same(join('fonts', f));
+    for (const f of fonts.filter((n) => n !== 'OFL-Newsreader.txt' && n !== 'Newsreader-Medium.latin.woff2')) same(join('fonts', f));
     const ofl = readFileSync(join(PUBLIC, 'fonts', 'OFL-Newsreader.txt'), 'utf8');
     expect(ofl.length).toBeGreaterThanOrEqual(1000);
     expect(ofl).toContain('SIL OPEN FONT LICENSE Version 1.1');
     expect(ofl).toContain('Newsreader Project Authors');
+    // SVG: 메타데이터(<metadata>, xmlns:c2pa)만 뺀 내용이 원본과 같고, 배포본에는 c2pa·<metadata 문자열이 없다
+    const strip = (t) => t.replace(/<metadata[\s\S]*?<\/metadata>/g, '').replace(/\sxmlns:c2pa="[^"]*"/g, '');
     const icons = readdirSync(join(HANDOFF, 'icons')).filter((f) => f.endsWith('.svg'));
     expect(icons).toHaveLength(15);
-    for (const f of icons) same(join('icons', f));
     const pats = readdirSync(join(HANDOFF, 'patterns')).filter((f) => f.endsWith('.svg'));
     expect(pats).toHaveLength(7);
-    for (const f of pats) same(join('patterns', f));
-    // public/ 에 있는 자산이 원본에 없는 것(여분)이 없는지
-    for (const [dir, ext] of [['fonts', null], ['icons', '.svg'], ['patterns', '.svg']]) {
-      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f));
+    for (const [dir, list] of [['icons', icons], ['patterns', pats]]) {
+      for (const f of list) {
+        const pub = read(PUBLIC, join(dir, f));
+        expect(pub, `${dir}/${f} 메타데이터 잔존`).not.toMatch(/c2pa|<metadata/i);
+        expect(pub, `${dir}/${f} 내용`).toBe(strip(read(HANDOFF, join(dir, f))));
+      }
+    }
+    const pubIcons = readdirSync(join(PUBLIC, 'icons')).filter((f) => f.endsWith('.svg'));
+    expect(pubIcons, '배포 아이콘 18개 = 원본 15 + theme 3').toHaveLength(18);
+    expect(pubIcons.filter((f) => !icons.includes(f)).sort()).toEqual(['theme-auto.svg', 'theme-dark.svg', 'theme-light.svg']);
+    expect(readdirSync(join(PUBLIC, 'patterns')).filter((f) => f.endsWith('.svg'))).toHaveLength(7);
+    // 배포 svg 22개 + 새 3개: 메타데이터 문자열 없음
+    for (const dir of ['icons', 'patterns']) for (const f of readdirSync(join(PUBLIC, dir)).filter((n) => n.endsWith('.svg'))) expect(read(PUBLIC, join(dir, f)), `${dir}/${f}`).not.toMatch(/c2pa|<metadata/i);
+    // public/ 에 있는 자산 중 원본에 없는 것은 theme 아이콘 3개뿐
+    for (const dir of ['fonts', 'icons', 'patterns']) {
+      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f) && !(dir === 'icons' && /^theme-(auto|light|dark)\.svg$/.test(f)));
       expect(extra, `${dir} 여분 파일`).toEqual([]);
-      void ext;
     }
   });
 

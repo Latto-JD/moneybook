@@ -177,7 +177,7 @@ function cancelRename(id) {
 
 async function saveRename(item, input) {
   if (busy) return;
-  const v = validateCategoryName(input.value);
+  const v = validateCategoryName(input.value, item.name);
   if (!v.ok) { ui.rowError = { id: item.id, text: v.message }; render(); $(`catm-rename-${item.id}`)?.focus(); return; }
   if (v.value === item.name) { cancelRename(item.id); return; }
   busy = true;

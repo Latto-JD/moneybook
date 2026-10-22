@@ -7,10 +7,12 @@ import {
   ensureDefaults,
   loadUserCategories,
   normalizeCategoryName,
+  RESERVED_NAME_ERROR,
   toCategory,
   usedCounts,
   usedKey,
 } from '../lib/categories.js';
+import { isReservedCategoryName } from '../lib/text.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROW = 'id, type, name, name_key, active, sort_order';
@@ -44,6 +46,7 @@ async function create({ db, user, body }) {
   if (!TYPES.includes(body.type)) fields.type = 'type 은 expense 또는 income 이어야 해요.';
   const n = normalizeCategoryName(body.name);
   if (n.error) fields.name = n.error;
+  else if (isReservedCategoryName(n.name)) fields.name = RESERVED_NAME_ERROR;
   if (Object.keys(fields).length) {
     throw new ApiError(400, 'VALIDATION_ERROR', Object.values(fields)[0], { fields });
   }
@@ -118,6 +121,8 @@ async function patch({ db, user, params, body }) {
     if (!cur) throw notFound();
 
     if (hasName && n.name !== cur.name) {
+      // 이미 저장된 "그 외 N개" 이름은 그대로 두고, 새로 바꿔 쓰는 경우만 막는다
+      if (isReservedCategoryName(n.name)) throw validation('name', RESERVED_NAME_ERROR);
       const { rows: clash } = await tx.query(
         'select 1 from categories where user_id = $1 and type = $2 and name_key = $3 and id <> $4',
         [user.id, cur.type, n.key, cur.id],

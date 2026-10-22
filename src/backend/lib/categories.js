@@ -1,5 +1,6 @@
 // 카테고리: 기본 세트, 이름 규칙, 사용자별 조회 헬퍼. 거래는 카테고리를 이름 문자열로 저장한다.
 import { koCompare } from '../rules/common.js';
+import { cleanText } from './text.js';
 
 // 가입(또는 마이그레이션) 시 사용자 행으로 복사되는 기본 세트. 배열 순서가 sort_order 이다.
 // schema.sql 의 기본 세트 INSERT 와 같아야 한다.
@@ -20,19 +21,19 @@ export function categoryOrder(type, category) {
   return i < 0 ? 999 : i;
 }
 
-// 이름 정규화: NFC, 앞뒤 공백 제거, 연속 공백(탭·줄바꿈 포함) 1칸. 문제가 있으면 { error } 를 돌려준다.
+// 이름 정규화: 공통 정리(lib/text.js) 후 길이 검사. 문제가 있으면 { error } 를 돌려준다.
+// "그 외 N개" 모양은 정규화에서 막지 않고(기존 이름은 유지), 새로 쓰는 쪽이 RESERVED_NAME_ERROR 로 막는다.
 export function normalizeCategoryName(raw) {
   const lengthMsg = `카테고리 이름은 1자 이상 ${CATEGORY_LIMITS.nameMax}자 이하여야 해요.`;
   if (typeof raw !== 'string') return { error: '카테고리 이름을 입력해 주세요.' };
-  // 제어문자는 공백 정규화 전에 검사한다 (탭·줄바꿈은 공백으로 취급하므로 제외)
-  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(raw)) {
-    return { error: '카테고리 이름에 쓸 수 없는 문자가 있어요.' };
-  }
-  const name = raw.normalize('NFC').trim().replace(/\s+/g, ' ');
-  const len = [...name].length;
+  const c = cleanText(raw);
+  if (c.forbidden) return { error: '카테고리 이름에 쓸 수 없는 문자가 있어요.' };
+  const len = [...c.text].length;
   if (len < 1 || len > CATEGORY_LIMITS.nameMax) return { error: lengthMsg };
-  return { name, key: name.toLowerCase() };
+  return { name: c.text, key: c.text.toLowerCase() };
 }
+
+export const RESERVED_NAME_ERROR = "'그 외 N개'는 차트 묶음 이름이라 쓸 수 없어요.";
 
 export function toCategory(row, usedCount = 0) {
   return {

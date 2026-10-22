@@ -628,3 +628,77 @@ frontend 가 예고한 `frontend.spec.js:61,63,497`(칩 비동기 로드)은 신
 - 실측(360px): 긴 이메일(이름 없음) 텍스트 폭 993px, 이름 박스 폭 147px(헤더 360px) -> 잘림. 20자 W 이름은 텍스트 폭 236px 대비 박스 147px. 768px: 박스 267px, 긴 이메일은 잘림, 20자 W(236px)는 박스에 들어가 말줄임 없음(정상).
 - 스크린샷 확인(직접 열어 봄): 360px 에서 긴 이메일은 "verylongaddressverylo..." , 20자 이름은 "WWWWWWWWWWWWW..." 로 말줄임표가 실제로 그려지고, 모드 선택과 로그아웃 버튼은 잘리거나 겹치지 않는다. 파일: scratchpad/shots/ellipsis-{long-email,name20}-{360,768}.png.
 - 결과: C-T9 통과(렌더 기준 확인됨). 다른 항목 결과 변화 없음.
+
+---
+
+# 후속 1단계 QA (docs/plan-followup.md C-F1~C-F15, 커밋 전 작업 트리)
+
+## 요약
+
+- 완료 기준 C-F1~C-F15 **15개 중 통과 15 / 실패 0 / 검증 불가 0**. 앱 결함은 발견하지 못했다. 단 아래 "한계"의 제약이 있다.
+- 실행: `npm test` 258/258 통과. e2e 전체(mobile-360 + tablet-768, 테스트 갱신·신규 작성 후 한 번에): **604 통과 / 0 실패 / 25 skip**(18.5분). skip 은 새 spec 의 API·정적·마이그레이션 테스트가 tablet-768 에서 스스로 건너뛰는 것과 기존 skip(C64 등)이며 항목별로 세지는 않았다.
+- 환경: 포트 3000 에 남은 서버 없음 확인, 임시 PGlite 에 마이그레이션·시드(today=2026-10-19) 후 `TRUST_PROXY=true QA_TOOLS=true COOKIE_SECURE=false` 서버, 끝난 뒤 종료·정리.
+- 계획 밖으로 눈에 띈 것(결함 아님): 작업 트리에 `CLAUDE.md`(모델 표기 reviewer opus->sonnet)와 `.claude/agents/reviewer.md` 변경이 있다. C-F14 의 허용 경로 밖이지만 이 단계 구현과 무관한 팀 설정이므로 메인 세션이 커밋 범위를 정할 때 분리해야 한다.
+
+## 항목별 결과
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| C-F1 토글 표시 | 통과 | 화면에 `select` 0개, `#theme-toggle` 버튼에 아이콘과 글자, 저장값 없음이면 data-mode=auto·"자동"·`icon--theme-auto` (라이트·다크 OS, 360·768) |
+| C-F2 순환 | 통과 | 자동->라이트->다크->자동으로 누를 때마다 즉시 색 변경(주소 이동 0), `localStorage['mb-theme']` 가 없음->light->dark->없음, 새로고침·새 탭에서 유지 |
+| C-F3 접근성 | 통과 | `getByRole('button', {name:/화면 모드/})` 로 검색, 접근 이름에 보이는 글자 포함, 이름 링크에서 Tab 한 번에 도달·`:focus-visible`·포커스 링 색, Enter·Space 로 순환, `#theme-status`(role=status)에 "라이트 모드/다크 모드/자동 모드", 포커스 유지, 높이 44px 이상(토글·이름 링크·로그아웃), `aria-pressed` 없음 |
+| C-F4 기존 C-T 재실행 | 통과 | C-T1·T2·T3·T4·T5·T6·T7·T10 을 버튼 기준으로 다시 써서 통과. C-T6 은 다른 탭에서 눌러도 열린 탭의 버튼 글자·data-mode·색이 따라 바뀜. C-T7 동치성 비교(수동 모드 = OS 모드, 4화면 모든 요소 계산 색)도 통과: 토글 아이콘 클래스(`icon--theme-*`)는 모드 표시라 비교에서 정규화했다 |
+| C-F5 헤더 한 줄 | 통과 | 360·768 x 짧은 이름/20자 한글/20자 W/긴 이메일 x 자동·라이트·다크: 세로 중심 차 6px 미만, 헤더 높이 80px 미만, 겹침·화면 밖 없음, 이름 칸 40px 초과, 가로 스크롤 없음. 이름 글자가 `--fs-label` 로 커진 상태. 말줄임 렌더는 아래 스크린샷 |
+| 요청: 이름 글자 = 로그아웃 글자 | 통과 | `#user-name` computed font-size 가 `#logout-btn` 과 같고 `--fs-label` 값과 같다(라이트·다크). 이름 박스 폭 360px 에서 155px |
+| C-F6 새 아이콘 | 통과 | theme-auto/light/dark.svg: 24 viewBox, `<metadata`·c2pa·외부 URL·data:·script 없음, 서버가 `image/svg+xml` 로 제공, 토글 아이콘은 CSS mask(`theme-auto.svg` 등), 아이콘 색 대 배경 3:1 이상(라이트·다크) |
+| C-F7 균형 카드 라벨 | 통과 | 오늘 2026-10-19 고정: 이번 달 "이번 달 남은 돈"(aria-label "이번 달 요약"), 9월 "9월 남은 돈"/"9월 요약", 1월 "1월 남은 돈", 2025-12 "2025년 12월 남은 돈"/"2025년 12월 요약", 다음 달 "11월 남은 돈", 되돌아와 이번 달 복귀. 기존 C-D27 통과 |
+| C-F8 미사용 CSS | 통과 | `style.css` 에 `.dash-tools`·`.balance-note`·`.chart-text-strong` 없음, public 의 html·js 에서도 참조 없음, 전체 e2e 회귀 없음 |
+| C-F9 보이지 않는 문자 | 통과 | 경계표 25행(U+202A/B/E, U+2066/2069, U+200E/F 거부, U+200B/2060/FEFF 제거, 제거 후 공백 정리, 제로폭만·공백만·빈 값은 "1자 이상" 오류, ZWJ 가족 이모지와 ZWNJ 유지, NUL/BEL/SOH/DEL 거부, 탭·줄바꿈 공백화, NFD->NFC). (a) 서버 `normalizeName`·`normalizeCategoryName` 과 프론트 `validateName`·`validateCategoryName`, 공통 `cleanText` 모듈의 서버/프론트 결과가 25행 모두 같음(실제 모듈을 import 해 비교). (b) API: PATCH me, 카테고리 이름 바꾸기, 카테고리 추가, 가입에서 거부 400 + `fields.name`(문구 구분), 제거값 저장 확인. 카테고리 추가에서 앞 케이스와 같은 정규화 결과면 409 `CATEGORY_INACTIVE` 가 나오며 이는 정규화가 같다는 뜻으로 허용. (c) UI: 내 정보·카테고리 추가·이름 바꾸기·가입에서 필드 오류, 제로폭만이면 오류, 요청 0, 제로폭 섞인 이름은 제거되어 저장(헤더 "가나"). 길이는 코드포인트 기준 유지(가족 이모지 5개 x 4 = 20 통과, 21 거부, 카테고리 15/16 경계) |
+| C-F10 "그 외 N개" | 통과 | API: "그 외 2개", " 그 외  12개 ", "그 외 0개", 탭·줄바꿈·제로폭이 섞인 같은 형태는 추가·이름 바꾸기 모두 400 + 안내 문구, 실패 후 이름 유지. 허용: "그 외", "그 외 것", "그외 2개", "그 외 2개월", "그 외 개", "그 외 2". UI: 필드 오류 + aria-invalid + 요청 0. 도넛 범례의 묶음 행(`li[data-viz=other]`)에만 `aria-describedby` 가 있고 가리키는 visually-hidden 텍스트가 "여러 카테고리를 합친 항목". 기존 C-C30·C-D29 통과. **관찰**: "표로 보기"는 묶음 없이 카테고리 11행을 그대로 보여 주므로 표에는 "그 외" 묶음 행이 없다. 계획서의 "표의 묶음 행"은 해당 없음이고 접근 설명은 범례에만 있다 |
+| C-F11 SVG | 통과 | 배포 svg 22개(icons 15 + patterns 7)와 새 3개 모두 `c2pa`·`<metadata` 없음. 원본에서 `<metadata>` 와 `xmlns:c2pa` 만 뺀 내용이 22개 모두 배포본과 완전히 같음. 배포 아이콘 18개 = 원본 15 + theme 3. README "자산 출처" 절 있음(합계 175,480 -> 4,452바이트라고 적혀 있음; 이 합계는 다시 계산하지 않았고, 파일당 약 7.9KB -> 0.2KB 로 줄어든 것만 확인) |
+| C-F12 폰트·캐시 | 통과(제약 있음) | 아래 측정 표. `vercel.json` 에 `/fonts/(.*)` -> `public, max-age=31536000, immutable`, `/`·`/index.html` 은 `no-store` 유지, README 에 "폰트 파일 내용을 바꿀 때는 파일 이름도 바꾼다" 규칙. 지운 face(Newsreader 500)를 쓰는 곳 없음(computed font 전수: Newsreader 는 400 만). **제약**: 로컬 개발 서버는 vercel.json 헤더를 적용하지 않아 응답 헤더는 실측하지 못했고 설정 파일만 검사했다. 실제 Vercel 응답 헤더는 배포 후 확인 필요 |
+| C-F13 회귀 | 통과 | npm test 258/258, e2e 604 통과 / 0 실패, 콘솔 CSP 위반 0(C-T10 은 새 토글·내 정보 화면 포함 모든 모드 조합에서 통과) |
+| C-F14 변경 범위 | 통과(주의 1건) | `schema.sql`·`tokens.css`·`components.css`·`src/frontend/office/` diff 0, `design_handoff_moneybook/` 는 untracked 그대로(읽기 비교만). 변경은 `src/frontend/public/`, `src/frontend/test/`, `src/backend/`, `e2e/`, `docs/`, `README.md`, `vercel.json` 안. 예외: `CLAUDE.md`, `.claude/agents/reviewer.md`(위 요약 참고) |
+| C-F15 API 응답 형식 불변·마이그레이션 없음 | 통과 | 사용자 객체 키 `{id,email,name}`, 오류 응답 키 `error`, 카테고리 목록 키 `expense,income,items`, 생성 응답 `id,name,type` 불변. `schema.sql` 무변경이라 운영 마이그레이션 없이 배포 가능 |
+
+## 폰트 측정 (QA 가 직접 측정)
+
+frontend 가 만든 폰트 표는 전달받지 못해(메시지에 파일 위치가 없음) 같은 항목을 Playwright 로 직접 측정해 기록한다. 방식: 캐시 없는 새 컨텍스트로 화면을 열고 `.woff2` 응답 본문 크기를 합산, 로드가 끝날 때까지 대기. "전"은 HEAD 의 `fonts.css` 와 `Newsreader-Medium.latin.woff2` 를 라우트로 끼워 재현.
+
+파일 크기(바이트): Pretendard Regular 267,096 / Medium 268,324 / SemiBold 268,752 / Bold 270,784, Newsreader Regular 22,480, **Newsreader Medium 23,624(삭제됨)**.
+
+| 화면 | 첫 방문 다운로드 후(바이트) | 받은 파일 | 전(Medium face 포함) |
+|---|---|---|---|
+| 로그인 | 1,074,956 | Pretendard 4개 | 1,074,956 |
+| 기록 | 1,097,436 | Pretendard 4개 + Newsreader Regular | 1,097,436 |
+| 대시보드 | 1,097,436 | 위와 같음 | 1,097,436 |
+| 카테고리 관리 | 804,172 | Pretendard Regular/Medium/SemiBold | 측정마다 1,097,436 또는 804,172 |
+| 내 정보 | 804,172 | Pretendard Regular/Medium/SemiBold | 804,172 |
+
+- 결론: **Newsreader Medium 은 전·후 어느 화면에서도 내려받지 않았다**(미사용이라 요청 자체가 없음). 따라서 첫 방문 다운로드 합계는 전과 후가 같고, 줄어든 것은 배포 파일 용량(23,624바이트)과 `fonts.css` 한 줄뿐이다. 계획서의 "미사용이면 지운다"에는 맞지만 사용자가 체감하는 속도 개선은 없다.
+- 화면 사이 편차: 카테고리 관리·내 정보의 합계가 804,172 / 1,097,436 으로 실행마다 갈린다. Pretendard Bold 와 Newsreader 는 그 화면의 첫 페인트에 보이는 글자(h1, 숫자)가 있어야 받는데, 숨김 패널과 hash 라우팅 타이밍에 따라 받기도 하고 안 받기도 한다. 한 번 측정한 전/후 차이로 해석하지 않았다.
+- 굵기별 사용처(computed 전수): Pretendard 700(제목 h1, 로그인 제목, 월 제목, 표 머리), 600(로그아웃·화면 모드 글자, 세그먼트, 저장 버튼), 500(라벨, 칩, 요약), 400(이름 링크, 보조 글자). Newsreader 는 400 만(월 요약 숫자, 균형 카드 숫자, 도넛 중앙 텍스트). Newsreader 500 이상 사용처 0.
+- 운영 DB 에 방향 제어·제로폭 문자나 "그 외 N개" 이름이 이미 있는지 선택적으로 확인하는 쿼리(사용자가 Neon SQL Editor 에서 숫자만 확인, 0 이면 새 규칙에 걸리는 기존 데이터 없음). 운영 DB 는 건드리지 않았다.
+  - `select count(*) from users where name ~ '[​⁠﻿‎‏‪-‮⁦-⁩]';`
+  - `select count(*) from categories where name ~ '[​⁠﻿‎‏‪-‮⁦-⁩]' or name ~ '^그 외 [0-9]+개$';`
+  - 위 쿼리의 `\u` 이스케이프가 Postgres 정규식에서 그대로 동작하는지는 실행해 확인하지 못했다(로컬 PGlite 로 시험하지 않음). 안 되면 `U&'...'` 문법으로 바꿔야 할 수 있다.
+
+## 헤더 말줄임 렌더 확인 (토글 + 이름 글자 확대 상태)
+
+- 360px 스크린샷을 직접 열어 확인했다: 긴 이메일은 "verylongaddressverylo...", 20자 W 이름은 "WWWWWWWWWWWWW..." 로 말줄임표가 그려지고, 오른쪽의 "자동" 토글과 "로그아웃" 버튼은 잘리거나 겹치지 않는다. 이름 박스 폭 155px 대비 텍스트 폭은 긴 이메일 1,071px, 20자 W 255px.
+- 768px: 박스 275px, 긴 이메일은 잘리고 20자 W(255px)는 들어가 말줄임이 없다(정상).
+- 스크린샷: scratchpad/shots2/ellipsis-{long-email,name20}-{360,768}.png
+
+## 테스트 코드 변경 (소스 수정 없음)
+
+- `e2e/tests/theme-name.spec.js`: `#theme-select` 약 20곳을 `#theme-toggle` 버튼 기준으로 갱신(클릭 순환, data-mode·글자·아이콘 클래스 확인 헬퍼). C-T8 은 C-F1/C-F3 으로 다시 씀(버튼 이름, Enter/Space, `#theme-status`, 포커스 유지, 아이콘 대비·mask). C-F6 아이콘 정적 검사 추가. C-T7 동치성 비교에서 토글 아이콘 클래스를 정규화.
+- `e2e/tests/frontend.spec.js:60`: `select:not(#theme-select)` 를 `select` 로 복원.
+- `e2e/tests/design.spec.js` C-D1: 원본과의 의도된 차이만 허용하도록 재작성(fonts.css 는 Newsreader 500 한 줄 제외, woff2 5개 = 원본 6개 - Medium, SVG 는 메타데이터만 제외한 내용 일치와 c2pa 문자열 없음, 아이콘 18개 = 15 + theme 3, 새 3개 외 여분 없음).
+- `e2e/tests/followup-1.spec.js`(신규, 11개): C-F9 서버·프론트 경계표 동일, API·UI 거부·제거, C-F10 API·UI·범례 접근 설명, C-F7 월 라벨, C-F8 정적, 이름 글자 크기 = 로그아웃, C-F12 vercel.json·README 정적 검사와 폰트 측정(전/후).
+- `e2e/playwright.config.js`: tablet-768 testMatch 에 `followup-1` 추가.
+
+## 한계
+
+- 미검증: 실제 휴대폰, Vercel 배포본의 응답 헤더(폰트 캐시 포함)와 폰트 로딩 체감, 스크린리더 실음성, axe.
+- C-F12 폰트 합계는 화면 로드 타이밍에 따라 한두 파일씩 편차가 있다(위 설명).
+- 새 테스트는 구현을 읽고 작성해 안내 문구("차트 묶음", "여러 카테고리를 합친 항목")를 구현 쪽에 맞춘 부분이 있다. 계획서 문구가 더 구체적이면 reviewer 가 대조해 주길 바란다.

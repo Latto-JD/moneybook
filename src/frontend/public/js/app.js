@@ -4,11 +4,11 @@ import { $ } from './dom.js';
 import { initRecord } from './record.js';
 import { initDashboard } from './dashboard.js';
 import { initCategoryManager } from './category-manager.js';
-import { initThemeSelect } from './lib/theme.js';
+import { initThemeToggle } from './lib/theme.js';
 import { userLabel } from './lib/user-label.js';
 import { initAccount } from './account.js';
 
-initThemeSelect($('theme-select'));
+initThemeToggle($('theme-toggle'), { status: $('theme-status') });
 
 // 헤더: 이름(없으면 이메일). textContent 만 사용. title 은 로그인 ID(이메일) 확인용.
 function showUser(user) {

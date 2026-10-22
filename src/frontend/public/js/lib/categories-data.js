@@ -1,19 +1,25 @@
 // 카테고리 관리용 순수 함수. 필드와 한도는 docs/api.md 3A 기준.
+import { cleanText, isReservedCategoryName, RESERVED_NAME_ERROR } from './text.js';
 export const MAX_ACTIVE = 30;
 export const MAX_NAME_LENGTH = 15;
 export const TYPE_LABEL = { expense: '지출', income: '수입' };
 
-/** 서버와 같은 정규화: NFC, 앞뒤 공백 제거, 연속 공백(탭·줄바꿈 포함) 1칸. */
+/** 서버와 같은 정규화(js/lib/text.js). 거부할 문자가 있으면 forbidden. */
 export function normalizeCategoryName(input) {
-  return String(input ?? '').normalize('NFC').trim().replace(/\s+/g, ' ');
+  return cleanText(String(input ?? '')).text ?? '';
 }
 
-export function validateCategoryName(input) {
-  const v = normalizeCategoryName(input);
+/**
+ * current: 이름 바꾸기 중인 카테고리의 지금 이름. 이미 저장된 "그 외 N개" 이름을 그대로 두는 것은 막지 않는다(서버와 같음).
+ */
+export function validateCategoryName(input, current = null) {
+  const c = cleanText(String(input ?? ''));
+  if (c.forbidden) return { ok: false, message: '카테고리 이름에 쓸 수 없는 문자가 있어요.' };
+  const v = c.text;
   const len = [...v].length; // 서버와 같이 코드포인트 기준
   if (len === 0) return { ok: false, message: '카테고리 이름을 입력해 주세요.' };
   if (len > MAX_NAME_LENGTH) return { ok: false, message: `카테고리 이름은 ${MAX_NAME_LENGTH}자까지 쓸 수 있어요.` };
-  if (/[\u0000-\u001f\u007f]/.test(v)) return { ok: false, message: '이름에 쓸 수 없는 문자가 있어요.' };
+  if (isReservedCategoryName(v) && v !== current) return { ok: false, message: RESERVED_NAME_ERROR };
   return { ok: true, value: v };
 }
 

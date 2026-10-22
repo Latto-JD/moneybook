@@ -16,12 +16,10 @@
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
   <header class="app-header">
     <a class="user" id="user-name" href="#account"></a>
-    <label class="visually-hidden" for="theme-select">화면 모드</label>
-    <select class="theme-select" id="theme-select">
-      <option value="auto">자동</option>
-      <option value="light">라이트</option>
-      <option value="dark">다크</option>
-    </select>
+    <button type="button" class="btn btn--ghost btn--sm theme-toggle" id="theme-toggle" data-mode="auto">
+      <span class="icon icon--theme-auto" aria-hidden="true"></span><span class="theme-toggle__text">자동</span>
+    </button>
+    <p class="visually-hidden" id="theme-status" role="status"></p>
     <button type="button" class="btn btn--ghost btn--sm" id="logout-btn">로그아웃</button>
   </header>
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { parseTheme, readTheme, saveTheme, applyTheme, initThemeSelect, THEME_KEY } from '../public/js/lib/theme.js';
+import { parseTheme, readTheme, saveTheme, applyTheme, initThemeToggle, nextTheme, toggleLabel, THEME_KEY } from '../public/js/lib/theme.js';
 
 function memStorage(init = {}) {
   const m = new Map(Object.entries(init));
@@ -12,9 +12,20 @@ function fakeRoot() {
   const a = {};
   return { a, setAttribute: (k, v) => { a[k] = v; }, removeAttribute: (k) => { delete a[k]; } };
 }
-function fakeEl() {
+function fakeBtn() {
   const h = {};
-  return { value: '', addEventListener: (t, f) => { h[t] = f; }, h };
+  const text = { textContent: '' };
+  const icon = { className: '' };
+  return {
+    h, text, icon, dataset: {}, attrs: {},
+    querySelector: (q) => (q === '.theme-toggle__text' ? text : icon),
+    setAttribute(k, v) { this.attrs[k] = v; },
+    addEventListener: (t, f) => { h[t] = f; },
+  };
+}
+function fakeWin() {
+  const h = {};
+  return { h, addEventListener: (t, f) => { h[t] = f; } };
 }
 
 test('parseTheme: light/dark 외는 auto', () => {
@@ -45,28 +56,60 @@ test('applyTheme: 속성 설정/제거', () => {
   assert.equal('data-theme' in r.a, false);
 });
 
-test('initThemeSelect: 변경 시 저장·적용, storage 이벤트 반영', () => {
-  const s = memStorage({ [THEME_KEY]: 'light' });
+test('nextTheme: 자동 -> 라이트 -> 다크 -> 자동', () => {
+  assert.equal(nextTheme('auto'), 'light');
+  assert.equal(nextTheme('light'), 'dark');
+  assert.equal(nextTheme('dark'), 'auto');
+  assert.equal(nextTheme('blue'), 'light');
+});
+
+test('toggleLabel: 현재 모드 글자를 포함하고 다음 모드를 알림', () => {
+  assert.equal(toggleLabel('light'), '화면 모드: 라이트. 누르면 다크(으)로 바뀌어요');
+  assert.match(toggleLabel('auto'), /^화면 모드: 자동/);
+});
+
+test('initThemeToggle: 클릭마다 순환·저장·적용·알림, storage 이벤트 반영', () => {
+  const s = memStorage();
   const root = fakeRoot();
-  const sel = fakeEl();
-  const win = fakeEl();
-  initThemeSelect(sel, { storage: s, root, win });
-  assert.equal(sel.value, 'light');
-  sel.value = 'dark';
-  sel.h.change();
+  const btn = fakeBtn();
+  const win = fakeWin();
+  const status = { textContent: '' };
+  initThemeToggle(btn, { status, storage: s, root, win });
+  assert.equal(btn.dataset.mode, 'auto');
+  assert.equal(btn.text.textContent, '자동');
+  assert.equal(btn.icon.className, 'icon icon--theme-auto');
+
+  btn.h.click();
+  assert.equal(btn.dataset.mode, 'light');
+  assert.equal(s.m.get(THEME_KEY), 'light');
+  assert.equal(root.a['data-theme'], 'light');
+  assert.equal(btn.text.textContent, '라이트');
+  assert.equal(btn.icon.className, 'icon icon--theme-light');
+  assert.equal(status.textContent, '라이트 모드');
+  assert.match(btn.attrs['aria-label'], /라이트/);
+
+  btn.h.click();
   assert.equal(s.m.get(THEME_KEY), 'dark');
   assert.equal(root.a['data-theme'], 'dark');
-  sel.value = 'auto';
-  sel.h.change();
+  btn.h.click();
   assert.equal(s.m.has(THEME_KEY), false);
   assert.equal('data-theme' in root.a, false);
-  s.setItem(THEME_KEY, 'light');
-  win.h.storage({ key: THEME_KEY });
-  assert.equal(sel.value, 'light');
-  assert.equal(root.a['data-theme'], 'light');
+  assert.equal(btn.dataset.mode, 'auto');
+
   s.setItem(THEME_KEY, 'dark');
+  win.h.storage({ key: THEME_KEY });
+  assert.equal(btn.dataset.mode, 'dark');
+  assert.equal(btn.text.textContent, '다크');
+  assert.equal(root.a['data-theme'], 'dark');
+  s.setItem(THEME_KEY, 'light');
   win.h.storage({ key: 'other' });
-  assert.equal(sel.value, 'light');
+  assert.equal(btn.dataset.mode, 'dark');
+});
+
+test('initThemeToggle: 저장값으로 시작', () => {
+  const btn = fakeBtn();
+  initThemeToggle(btn, { storage: memStorage({ [THEME_KEY]: 'dark' }), root: fakeRoot(), win: fakeWin() });
+  assert.equal(btn.dataset.mode, 'dark');
 });
 
 function runInit(storage) {
@@ -81,6 +124,22 @@ test('theme-init.js: 저장값 적용, 잘못된 값·예외는 무시', () => {
   assert.equal(runInit(memStorage({ [THEME_KEY]: 'light' }))['data-theme'], 'light');
   assert.deepEqual(runInit(memStorage({ [THEME_KEY]: 'blue' })), {});
   assert.deepEqual(runInit({ getItem() { throw new Error('denied'); } }), {});
+});
+
+test('HTML: 헤더는 #theme-toggle 버튼(select 없음), 상태 영역 role=status', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<button[^>]*id="theme-toggle"/);
+  assert.doesNotMatch(html, /<select/i);
+  assert.doesNotMatch(html.match(/<button[^>]*id="theme-toggle"[^>]*>/)[0], /aria-pressed/);
+  assert.match(html, /id="theme-status" role="status"/);
+});
+
+test('아이콘 3개: svg, metadata·외부 URL 없음', () => {
+  for (const n of ['auto', 'light', 'dark']) {
+    const svg = readFileSync(new URL(`../public/icons/theme-${n}.svg`, import.meta.url), 'utf8');
+    assert.match(svg, /^<svg /);
+    assert.doesNotMatch(svg, /metadata|c2pa|data:|https?:\/\/(?!www\.w3\.org)/);
+  }
 });
 
 test('HTML: theme-init.js 는 첫 stylesheet 보다 앞, classic 동기', () => {

@@ -57,7 +57,7 @@ test.describe('C27 정적 접근성', () => {
     const { page, ctx } = await openRecord(browser, testInfo);
     await expect(page.locator('#amount')).toHaveAttribute('inputmode', 'numeric');
     expect(await unlabeledInputs(page)).toEqual([]);
-    expect(await page.locator('select:not(#theme-select)').count()).toBe(0); // 헤더 화면 모드 select(#theme-select)는 계획서 6.1 로 추가됨
+    expect(await page.locator('select').count()).toBe(0);
     expect(await page.locator('#category-chips button').count()).toBe(8);
     await page.locator('#type-income').click();
     expect(await page.locator('#category-chips button').count()).toBe(4);

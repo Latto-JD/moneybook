@@ -47,6 +47,20 @@ const bodyColor = (page) => page.evaluate(() => getComputedStyle(document.body).
 const dataTheme = (page) => page.evaluate(() => document.documentElement.getAttribute('data-theme'));
 const stored = (page) => page.evaluate(() => localStorage.getItem('mb-theme'));
 const settle = (page) => page.waitForTimeout(400);
+const TOGGLE = '#theme-toggle';
+const modeOf = (page) => page.locator(TOGGLE).getAttribute('data-mode');
+const MODE_TEXT = { auto: '자동', light: '라이트', dark: '다크' };
+/** 토글 상태 확인: data-mode, 보이는 글자, 아이콘 클래스 */
+async function expectMode(page, mode) {
+  await expect(page.locator(TOGGLE)).toHaveAttribute('data-mode', mode);
+  await expect(page.locator(`${TOGGLE} .theme-toggle__text`)).toHaveText(MODE_TEXT[mode]);
+  await expect(page.locator(`${TOGGLE} .icon`)).toHaveClass(new RegExp(`icon--theme-${mode}`));
+}
+/** 버튼을 눌러 목표 모드가 될 때까지(최대 3번) 순환 */
+async function cycleTo(page, mode) {
+  for (let i = 0; i < 3 && (await modeOf(page)) !== mode; i++) await page.locator(TOGGLE).click();
+  await expectMode(page, mode);
+}
 
 /** 로그인된 api 로 열릴 때까지 기다린다 (이름 또는 이메일이 헤더에 표시됨) */
 async function ready(page, text) {
@@ -80,7 +94,7 @@ test.describe('C-T 화면 모드', () => {
       await settle(ui.page);
       expect(await bodyBg(ui.page), scheme).toBe(PAL[scheme].bg);
       expect(await dataTheme(ui.page)).toBeNull();
-      await expect(ui.page.locator('#theme-select')).toHaveValue('auto');
+      await expectMode(ui.page, 'auto');
       expect(ui.problems).toEqual([]);
       await ui.ctx.close();
     }
@@ -95,7 +109,7 @@ test.describe('C-T 화면 모드', () => {
       expect(await dataTheme(ui.page)).toBe(st);
       expect(await bodyBg(ui.page), `main ${st}/${scheme}`).toBe(PAL[st].bg);
       expect(await bodyColor(ui.page), `main text ${st}/${scheme}`).toBe(PAL[st].text);
-      await expect(ui.page.locator('#theme-select')).toHaveValue(st);
+      await expectMode(ui.page, st);
       await ui.ctx.close();
       // 로그인 화면 (비로그인)
       const lg = await open(browser, testInfo, { scheme, stored: st, path: '/login.html' });
@@ -114,31 +128,30 @@ test.describe('C-T 화면 모드', () => {
     const ui = await open(browser, testInfo, { api: u.api, scheme: 'dark' }); // OS 다크에서 시작
     const { page } = ui;
     await ready(page, u.account.name);
-    const sel = page.locator('#theme-select');
     let navs = 0;
     page.on('framenavigated', (f) => { if (f === page.mainFrame()) navs += 1; });
-    await sel.selectOption('light'); await settle(page);
+    await page.locator(TOGGLE).click(); await settle(page); await expectMode(page, 'light');
     expect(await bodyBg(page)).toBe(LIGHT.bg);
     expect(await stored(page)).toBe('light');
     expect(await dataTheme(page)).toBe('light');
-    await sel.selectOption('dark'); await settle(page);
+    await page.locator(TOGGLE).click(); await settle(page); await expectMode(page, 'dark');
     expect(await bodyBg(page)).toBe(DARK.bg);
     expect(await stored(page)).toBe('dark');
-    await sel.selectOption('auto'); await settle(page);
+    await page.locator(TOGGLE).click(); await settle(page); await expectMode(page, 'auto');
     expect(await stored(page)).toBeNull();
     expect(await dataTheme(page)).toBeNull();
     expect(await bodyBg(page)).toBe(DARK.bg); // OS 다크 따름
     expect(navs).toBe(0); // 새로고침 없이 전환
     // 라이트 선택 후 새로고침, 재방문(새 페이지, 같은 컨텍스트)
-    await sel.selectOption('light'); await settle(page);
+    await page.locator(TOGGLE).click(); await settle(page);
     await page.reload(); await ready(page, u.account.name); await settle(page);
     expect(await bodyBg(page)).toBe(LIGHT.bg);
-    await expect(page.locator('#theme-select')).toHaveValue('light');
+    await expectMode(page, 'light');
     const page2 = await ui.ctx.newPage();
     await page2.emulateMedia({ colorScheme: 'dark' });
     await page2.goto('/#dashboard'); await settle(page2);
     expect(await bodyBg(page2)).toBe(LIGHT.bg);
-    await expect(page2.locator('#theme-select')).toHaveValue('light');
+    await expectMode(page2, 'light');
     expect(ui.problems).toEqual([]);
     await ui.ctx.close();
   });
@@ -190,7 +203,7 @@ test.describe('C-T 화면 모드', () => {
     await ready(bad.page, u.account.name); await settle(bad.page);
     expect(await dataTheme(bad.page)).toBeNull();
     expect(await bodyBg(bad.page)).toBe(DARK.bg);
-    await expect(bad.page.locator('#theme-select')).toHaveValue('auto');
+    await expectMode(bad.page, 'auto');
     expect(bad.problems).toEqual([]);
     await bad.ctx.close();
 
@@ -211,7 +224,7 @@ test.describe('C-T 화면 모드', () => {
       expect(await dataTheme(page)).toBeNull();
       if (path === '/#record') {
         await ready(page, u.account.name);
-        await page.locator('#theme-select').selectOption('light'); // 저장 실패해도 화면에는 적용
+        await page.locator(TOGGLE).click(); // 자동 -> 라이트, 저장 실패해도 화면에는 적용
         await settle(page);
         expect(await bodyBg(page)).toBe(LIGHT.bg);
       }
@@ -228,12 +241,12 @@ test.describe('C-T 화면 모드', () => {
     const b = await ui.ctx.newPage();
     await b.emulateMedia({ colorScheme: 'light' });
     await b.goto('/#record'); await ready(b, u.account.name);
-    await b.locator('#theme-select').selectOption('dark');
+    await b.locator(TOGGLE).click(); await b.locator(TOGGLE).click(); // 자동 -> 라이트 -> 다크
     await expect.poll(() => bodyBg(a)).toBe(DARK.bg);
-    await expect(a.locator('#theme-select')).toHaveValue('dark');
-    await b.locator('#theme-select').selectOption('auto');
+    await expectMode(a, 'dark');
+    await b.locator(TOGGLE).click(); // 다크 -> 자동
     await expect.poll(() => dataTheme(a)).toBeNull();
-    await expect(a.locator('#theme-select')).toHaveValue('auto');
+    await expectMode(a, 'auto');
     await expect.poll(() => bodyBg(a)).toBe(LIGHT.bg);
     expect(ui.problems).toEqual([]);
     await ui.ctx.close();
@@ -273,10 +286,10 @@ test.describe('C-T 화면 모드', () => {
     };
     await settle(page);
     await check(lightTok, '라이트');
-    await page.locator('#theme-select').selectOption('dark'); await settle(page);
+    await cycleTo(page, 'dark'); await settle(page);
     await check(darkTok, '수동 다크(OS 라이트)');
     expect(await page.evaluate(() => [...document.querySelectorAll('svg.chart-svg')].map((s) => s.dataset.qaMark)), '다시 그리지 않음').toEqual(['m0', 'm1', 'm2']);
-    await page.locator('#theme-select').selectOption('auto'); await settle(page);
+    await cycleTo(page, 'auto'); await settle(page);
     await check(lightTok, '자동 복귀');
     expect(ui.problems).toEqual([]);
     expect(await csp(page)).toEqual([]);
@@ -297,7 +310,8 @@ test.describe('C-T 화면 모드', () => {
       document.querySelectorAll('body *').forEach((e) => {
         if (!e.getClientRects().length) return;
         const cs = getComputedStyle(e);
-        out.push(`${e.tagName}.${(e.getAttribute('class') || '').toString()}#${e.id}|${props.map((p) => cs[p]).join('|')}`);
+        // 토글 아이콘 클래스(icon--theme-auto/light/dark)는 모드 표시라서 모드마다 다른 것이 정상이다
+        out.push(`${e.tagName}.${(e.getAttribute('class') || '').toString().replace(/icon--theme-\w+/, 'icon--theme-X')}#${e.id}|${props.map((p) => cs[p]).join('|')}`);
       });
       return { rows: out, scheme: getComputedStyle(document.documentElement).colorScheme };
     });
@@ -339,39 +353,73 @@ test.describe('C-T 화면 모드', () => {
     }
   });
 
-  test('C-T8 접근성: 이름 "화면 모드", Tab 도달·포커스 링, 키보드로 변경, 높이 44px 이상', async ({ browser }, testInfo) => {
+  test('C-F1/C-F3 접근성·표시: select 없음, 버튼 이름 "화면 모드", 아이콘+글자, Tab 도달·포커스 링, Enter/Space 순환, 상태 알림, 포커스 유지, 44px, aria-pressed 없음, 아이콘 대비', async ({ browser }, testInfo) => {
     const u = await user();
     for (const scheme of ['light', 'dark']) {
       const ui = await open(browser, testInfo, { api: u.api, scheme });
       const { page } = ui;
       await ready(page, u.account.name);
-      const combo = page.getByRole('combobox', { name: '화면 모드' });
-      await expect(combo).toBeVisible();
-      expect(await combo.evaluate((e) => e.id)).toBe('theme-select');
-      expect((await combo.boundingBox()).height).toBeGreaterThanOrEqual(44);
+      expect(await page.locator('select').count(), '화면 전체에 select 없음').toBe(0);
+      const btn = page.getByRole('button', { name: /화면 모드/ });
+      await expect(btn).toBeVisible();
+      expect(await btn.evaluate((e) => e.id)).toBe('theme-toggle');
+      await expectMode(page, 'auto'); // 저장값 없음 -> 자동, 아이콘과 글자 보임
+      const visibleText = (await page.locator(`${TOGGLE} .theme-toggle__text`).innerText()).trim();
+      expect(await btn.getAttribute('aria-label'), 'WCAG 2.5.3 보이는 글자 포함').toContain(visibleText);
+      expect(await btn.getAttribute('aria-pressed')).toBeNull();
+      expect((await page.locator(`${TOGGLE} .icon`).boundingBox()).width).toBeGreaterThan(10);
+      expect((await btn.boundingBox()).height).toBeGreaterThanOrEqual(44);
       expect((await page.locator('#user-name').boundingBox()).height).toBeGreaterThanOrEqual(44);
       expect((await page.locator('#logout-btn').boundingBox()).height).toBeGreaterThanOrEqual(44);
+      // 아이콘 대비(배경 대비 3:1) + CSS mask
+      const contrast = await page.evaluate(() => {
+        const parse = (c) => c.match(/[\d.]+/g).slice(0, 3).map(Number);
+        const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+        const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        const ic = document.querySelector('#theme-toggle .icon');
+        const cs = getComputedStyle(ic);
+        const fg = parse(cs.backgroundColor);
+        const bg = parse(getComputedStyle(document.body).backgroundColor);
+        const [x, y] = [lum(fg), lum(bg)].sort((m, n) => n - m);
+        return { ratio: (x + 0.05) / (y + 0.05), fg, bg, mask: cs.maskImage || cs.webkitMaskImage };
+      });
+      expect(contrast.ratio, `${scheme} 아이콘 대비 ${JSON.stringify(contrast)}`).toBeGreaterThanOrEqual(3);
+      expect(contrast.mask, 'CSS mask 사용').toMatch(/theme-auto\.svg/);
       // 로드 직후 금액칸에 포커스가 있어 Tab 시작점을 헤더 이름 링크로 옮긴 뒤 Tab 순서(이름 -> 모드 -> 로그아웃)를 확인
       await page.locator('#user-name').focus();
       await page.keyboard.press('Tab');
-      expect(await page.evaluate(() => document.activeElement?.id), 'Tab 으로 도달').toBe('theme-select');
+      expect(await page.evaluate(() => document.activeElement?.id), 'Tab 으로 도달').toBe('theme-toggle');
       await page.waitForTimeout(300);
-      expect(await combo.evaluate((e) => getComputedStyle(e).boxShadow)).toContain(PAL[scheme].focus);
-      expect(await combo.evaluate((e) => e.matches(':focus-visible'))).toBe(true);
-      // 키보드로 값 변경: 자동 -> (아래) 라이트
-      await page.keyboard.press('ArrowDown');
-      await expect(combo).toHaveValue('light');
-      await settle(page);
+      expect(await btn.evaluate((e) => getComputedStyle(e).boxShadow)).toContain(PAL[scheme].focus);
+      expect(await btn.evaluate((e) => e.matches(':focus-visible'))).toBe(true);
+      await page.keyboard.press('Enter'); // 자동 -> 라이트
+      await expectMode(page, 'light'); await settle(page);
       expect(await bodyBg(page)).toBe(LIGHT.bg);
-      await page.keyboard.press('ArrowDown');
-      await expect(combo).toHaveValue('dark');
+      await expect(page.locator('#theme-status')).toHaveText('라이트 모드');
+      expect(await page.locator('#theme-status').getAttribute('role')).toBe('status');
+      await page.keyboard.press('Space'); // 라이트 -> 다크
+      await expectMode(page, 'dark');
+      await expect(page.locator('#theme-status')).toHaveText('다크 모드');
       expect(await stored(page)).toBe('dark');
-      expect(await page.evaluate(() => document.activeElement?.id)).toBe('theme-select'); // 포커스 유지
-      // 라벨이 화면에 보이지 않는 텍스트
-      expect(await page.locator('label[for="theme-select"]').evaluate((e) => e.className)).toMatch(/visually-hidden/);
-      // 헤더 이름 링크 접근 이름
+      expect(await btn.getAttribute('aria-label')).toContain('다크');
+      expect(await page.evaluate(() => document.activeElement?.id)).toBe('theme-toggle'); // 포커스 유지
+      await page.keyboard.press('Enter'); // 다크 -> 자동
+      await expectMode(page, 'auto');
+      await expect(page.locator('#theme-status')).toHaveText('자동 모드');
       expect(await page.locator('#user-name').getAttribute('aria-label')).toBe(`내 정보: ${u.account.name}`);
       await ui.ctx.close();
+    }
+  });
+
+  test('C-F6 새 아이콘 3개: 같은 출처 svg, metadata·외부 URL·data: 없음, 서버가 svg 로 제공', async ({}, testInfo) => {
+    onlyMobile(testInfo);
+    for (const n of ['auto', 'light', 'dark']) {
+      const text = readFileSync(join(PUBLIC, 'icons', `theme-${n}.svg`), 'utf8');
+      expect(text, n).not.toMatch(/<metadata|c2pa|https?:\/\/(?!www\.w3\.org\/2000\/svg)|data:|<script|<image/i);
+      expect(text, n).toMatch(/viewBox="0 0 24 24"/);
+      const res = await get(await newApi(), `/icons/theme-${n}.svg`);
+      expect(res.status()).toBe(200);
+      expect(res.headers()['content-type']).toMatch(/image\/svg\+xml/);
     }
   });
 
@@ -400,7 +448,7 @@ test.describe('C-T 화면 모드', () => {
           const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom, h: b.height }; };
           const hd = document.querySelector('.app-header').getBoundingClientRect();
           const n = document.querySelector('#user-name');
-          return { hd: { t: hd.top, b: hd.bottom, h: hd.height, l: hd.left, r: hd.right }, name: r('#user-name'), sel: r('#theme-select'), out: r('#logout-btn'), vw: document.documentElement.clientWidth,
+          return { hd: { t: hd.top, b: hd.bottom, h: hd.height, l: hd.left, r: hd.right }, name: r('#user-name'), sel: r('#theme-toggle'), out: r('#logout-btn'), vw: document.documentElement.clientWidth,
             ellipsis: getComputedStyle(n).textOverflow, truncated: n.scrollWidth > n.clientWidth, nameScroll: n.scrollWidth, nameClient: n.clientWidth };
         });
         const tag = `${c.label}/${mode}/${w}`;

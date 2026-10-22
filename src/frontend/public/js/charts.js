@@ -175,7 +175,14 @@ export function renderDonut(container, opts) {
   const legend = h('ol', { class: 'legend legend-list' });
   segs.forEach((seg, i) => {
     const li = legendItem(swatch(vizs[i]), seg.label, [['legend-amount', formatWon(seg.value)], ['legend-ratio', formatPercent(seg.ratio)]]);
-    if (Array.isArray(seg.members)) li.appendChild(h('span', { class: 'legend-members' }, seg.members.map((m) => m.label).join(', ')));
+    if (Array.isArray(seg.members)) {
+      // 묶음 행: 같은 이름의 실제 카테고리와 글자만으로 구분되지 않으므로 보이지 않는 설명을 붙인다
+      const descId = nextId('lg');
+      li.setAttribute('aria-describedby', descId);
+      li.setAttribute('data-viz', 'other');
+      li.appendChild(h('span', { class: 'visually-hidden', id: descId }, '여러 카테고리를 합친 항목'));
+      li.appendChild(h('span', { class: 'legend-members' }, seg.members.map((m) => m.label).join(', ')));
+    }
     legend.appendChild(li);
   });
   // 표는 묶지 않은 전체 카테고리 행 + 합계

@@ -23,18 +23,45 @@ export function applyTheme(root, mode) {
   else root.removeAttribute('data-theme');
 }
 
-// 헤더 select 연결. 다른 탭에서 바꾼 값(storage 이벤트)도 반영한다.
-export function initThemeSelect(select, { storage = window.localStorage, root = document.documentElement, win = window } = {}) {
-  select.value = readTheme(storage);
-  select.addEventListener('change', () => {
-    const mode = parseTheme(select.value);
+export const MODES = ['auto', 'light', 'dark'];
+export const MODE_LABEL = { auto: '자동', light: '라이트', dark: '다크' };
+
+// 순환 순서: 자동 -> 라이트 -> 다크 -> 자동
+export function nextTheme(mode) {
+  return MODES[(MODES.indexOf(parseTheme(mode)) + 1) % MODES.length];
+}
+
+// 접근 이름: 보이는 글자(현재 모드)를 포함하고 다음 모드를 알려 준다.
+export function toggleLabel(mode) {
+  return `화면 모드: ${MODE_LABEL[mode]}. 누르면 ${MODE_LABEL[nextTheme(mode)]}(으)로 바뀌어요`;
+}
+
+// 헤더 순환 버튼 연결. 다른 탭에서 바꾼 값(storage 이벤트)도 반영한다.
+// 버튼 안에는 .icon 과 .theme-toggle__text 가 있어야 한다. status 는 role="status" 영역(변경 알림).
+export function initThemeToggle(button, { status = null, storage = window.localStorage, root = document.documentElement, win = window } = {}) {
+  const text = button.querySelector('.theme-toggle__text');
+  const icon = button.querySelector('.icon');
+  let mode = readTheme(storage);
+
+  function show() {
+    button.dataset.mode = mode;
+    button.setAttribute('aria-label', toggleLabel(mode));
+    if (text) text.textContent = MODE_LABEL[mode];
+    if (icon) icon.className = `icon icon--theme-${mode}`;
+  }
+  show();
+
+  button.addEventListener('click', () => {
+    mode = nextTheme(mode);
     saveTheme(storage, mode);
     applyTheme(root, mode);
+    show();
+    if (status) status.textContent = `${MODE_LABEL[mode]} 모드`;
   });
   win.addEventListener('storage', (e) => {
     if (e.key !== null && e.key !== THEME_KEY) return;
-    const mode = readTheme(storage);
+    mode = readTheme(storage);
     applyTheme(root, mode);
-    select.value = mode;
+    show();
   });
 }

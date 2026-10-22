@@ -122,7 +122,7 @@ test('막대: 카테고리 월 추이 + 표 + 0/NaN 안전', () => {
   assert.equal(empty.children[0].textContent, EMPTY_TEXT);
 });
 
-test('정적 HTML: viewport, 인라인 스크립트/핸들러/style 없음, 외부 URL 없음, select 는 화면 모드만', () => {
+test('정적 HTML: viewport, 인라인 스크립트/핸들러/style 없음, 외부 URL 없음, select 없음', () => {
   for (const f of ['index.html', 'login.html']) {
     const html = readFileSync(fileURLToPath(new URL(`../public/${f}`, import.meta.url)), 'utf8');
     assert.match(html, /<meta name="viewport"/, f);
@@ -130,8 +130,7 @@ test('정적 HTML: viewport, 인라인 스크립트/핸들러/style 없음, 외�
     assert.doesNotMatch(html, /\son[a-z]+\s*=/i, `${f}: inline handler`);
     assert.doesNotMatch(html, /\sstyle\s*=/i, `${f}: inline style`);
     assert.doesNotMatch(html, /(src|href)="(https?:)?\/\//i, `${f}: external url`);
-    // select 는 헤더의 화면 모드 선택(#theme-select)만 허용
-    for (const m of html.matchAll(/<select\b[^>]*>/gi)) assert.match(m[0], /id="theme-select"/, `${f}: select`);
+    assert.doesNotMatch(html, /<select/i, f);
     // 모든 input 은 label[for] 로 연결
     for (const m of html.matchAll(/<input\b[^>]*\bid="([^"]+)"[^>]*>/g)) {
       if (/type="(checkbox)"/.test(m[0])) continue;

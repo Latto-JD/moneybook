@@ -31,17 +31,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal;
 }
 .app-header .btn { flex-shrink: 0; white-space: nowrap; }
-.app-header a.user { display: block; line-height: var(--touch-min); text-decoration: none; } /* flex 면 text-overflow 말줄임이 안 그려짐 */
+.app-header a.user { display: block; font-size: var(--fs-label); line-height: var(--touch-min); text-decoration: none; } /* flex 면 text-overflow 말줄임이 안 그려짐 */
 .app-header a.user:hover { text-decoration: underline; }
 .app-header a.user:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: var(--radius-sm); }
 #account-email { overflow-wrap: anywhere; margin-bottom: var(--space-4); }
-.theme-select {
-  flex: 0 0 auto; min-height: var(--touch-min); padding: 0 var(--space-2);
-  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
-  background: var(--color-surface); color: var(--color-text); font-size: var(--fs-label); cursor: pointer;
-}
-.theme-select:hover { border-color: var(--color-text-muted); }
-.theme-select:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.theme-toggle { gap: var(--space-1); padding: 0 var(--space-2); }
+.theme-toggle .icon { width: 20px; height: 20px; }
+.icon--theme-auto  { --icon: url("../icons/theme-auto.svg"); }
+.icon--theme-light { --icon: url("../icons/theme-light.svg"); }
+.icon--theme-dark  { --icon: url("../icons/theme-dark.svg"); }
 .page-head { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) 0; }
 .card { margin-bottom: var(--space-4); }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
@@ -166,8 +164,6 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .dash-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-4) 0 var(--space-3); }
 .dash-head .month-nav { flex: 1; margin: 0; min-width: 0; }
 .dash-head .month-title { font-size: var(--fs-title-lg); line-height: var(--lh-title-lg); font-weight: var(--fw-bold); letter-spacing: var(--ls-title); }
-.dash-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-4); }
-.dash-tools .segmented { flex: none; }
 .balance-card { display: flex; flex-direction: column; gap: var(--space-5); }
 .kpi-label { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-semibold); color: var(--color-text-muted); }
 .kpi-value { font-size: var(--fs-figure-md); line-height: var(--lh-figure-md); font-variant-numeric: tabular-nums; }
@@ -179,7 +175,6 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .kpi--income .kpi-label { color: var(--color-income); }
 .kpi--expense .kpi-label { color: var(--color-expense); }
 .kpi-extra { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--color-text-muted); }
-.balance-note { color: var(--color-text-muted); font-size: var(--fs-caption); }
 
 /* ── 차트 ────────────────────────────── */
 .chart { margin: 0; }
@@ -190,7 +185,6 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .donut-body .chart-svg { max-width: 220px; }
 .chart-text { font-size: 13px; fill: var(--color-text); font-family: var(--font-sans); }
 .chart-text-sub { fill: var(--color-text-muted); }
-.chart-text-strong { font-size: 14px; font-weight: var(--fw-bold); }
 .donut__value.chart-text { font-family: var(--font-figure); font-size: 18px; font-weight: var(--fw-regular); }
 .donut__slice { stroke: var(--viz-gap); stroke-width: 2; }
 .viz-other { fill: var(--color-text-muted); }

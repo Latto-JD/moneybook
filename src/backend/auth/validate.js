@@ -1,3 +1,5 @@
+import { cleanText } from '../lib/text.js';
+
 export function normalizeEmail(value) {
   return String(value).trim().toLowerCase();
 }
@@ -16,15 +18,14 @@ export function isValidEmail(email) {
 
 export const NAME_MAX = 20;
 
-// 이름 정규화: NFC, 앞뒤 공백 제거, 연속 공백(탭·줄바꿈 포함) 1칸. 문제가 있으면 { error } 를 돌려준다.
+// 이름 정규화: 공통 정리(lib/text.js) 후 길이 검사. 문제가 있으면 { error } 를 돌려준다.
 export function normalizeName(raw) {
   if (typeof raw !== 'string') return { error: '이름을 입력해 주세요.' };
-  // 제어문자는 공백 정규화 전에 검사한다 (탭·줄바꿈은 공백으로 취급하므로 제외)
-  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(raw)) return { error: '이름에 쓸 수 없는 문자가 있어요.' };
-  const name = raw.normalize('NFC').trim().replace(/\s+/g, ' ');
-  const len = [...name].length;
+  const c = cleanText(raw);
+  if (c.forbidden) return { error: '이름에 쓸 수 없는 문자가 있어요.' };
+  const len = [...c.text].length;
   if (len < 1 || len > NAME_MAX) return { error: `이름은 1자 이상 ${NAME_MAX}자 이하여야 해요.` };
-  return { name };
+  return { name: c.text };
 }
 
 export function isValidPassword(password) {
