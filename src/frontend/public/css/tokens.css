@@ -26,6 +26,8 @@
   --color-primary:        #1B1A17; /* 주 버튼 = 잉크 */
   --color-primary-hover:  #34322C;
   --color-focus:          #0658AB; /* 포커스 링 6.4:1 */
+  --color-field-line:        var(--color-line);  /* 금액 입력 밑줄 */
+  --color-field-line-active: var(--color-focus); /* 입력 중 밑줄 */
 
   /* ── 색: 수입 · 지출 (같은 명도·채도, 색상만 다름) ── */
   --color-income:         #406798; /* 남색  5.3 / 5.8 */
@@ -116,8 +118,10 @@
     --color-text-muted:     #A39E93; /*  6.9 /  6.2 */
     --color-text-disabled:  #7A766D;
     --color-text-inverse:   #141412;
-    --color-line:           #33312C;
-    --color-border:         #7A766D;
+    --color-line:           #4B4231; /* 금색 계열 구분선 (장식) */
+    --color-border:         #9A7E4A; /* 금색 테두리: 카드 4.4 / 눌린 면 3.8 */
+    --color-field-line:        #9A7E4A;
+    --color-field-line-active: var(--color-focus); /* 포커스 표시는 라이트와 같이 파랑 */
     --color-border-strong:  #EEEBE3;
     --color-primary:        #EEEBE3;
     --color-primary-hover:  #FFFFFF;
@@ -147,7 +151,8 @@
   color-scheme: dark;
   --color-bg: #141412; --color-surface: #1F1E1B; --color-surface-sunken: #2A2925; --color-scrim: rgba(0,0,0,.60);
   --color-text: #EEEBE3; --color-text-muted: #A39E93; --color-text-disabled: #7A766D; --color-text-inverse: #141412;
-  --color-line: #33312C; --color-border: #7A766D; --color-border-strong: #EEEBE3;
+  --color-line: #4B4231; --color-border: #9A7E4A; --color-border-strong: #EEEBE3;
+  --color-field-line: #9A7E4A; --color-field-line-active: var(--color-focus);
   --color-primary: #EEEBE3; --color-primary-hover: #FFFFFF; --color-focus: #7DB6FE;
   --color-income: #9EBEE8; --color-income-tint: #1F2733; --color-expense: #DFB390; --color-expense-tint: #2F271F;
   --color-error: #F59387; --color-error-tint: #35211E;

@@ -66,3 +66,33 @@ test('HTML: #flash 는 글자 전용, 버튼은 형제 #flash-undo (live 영역 
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.match(html, /<div class="toast" id="toast">\s*<p id="flash" role="status" aria-live="polite"><\/p>\s*<button type="button"[^>]*id="flash-undo" hidden>되돌리기<\/button>/);
 });
+
+test('입력 초기화: 버튼 마크업(접근 이름, 기본 숨김)과 SVG(메타데이터 없음)', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<button type="button" class="reset-btn" id="reset-btn" aria-label="입력 초기화" hidden>/);
+  const svg = readFileSync(new URL('../public/icons/reset.svg', import.meta.url), 'utf8');
+  assert.match(svg, /^<svg /);
+  assert.match(svg, /stroke-width="1.8"/);
+  assert.doesNotMatch(svg, /metadata|c2pa|data:|https?:\/\/(?!www\.w3\.org)/);
+});
+
+test('다크 토큰: 선 토큰이 금색 계열이고 두 다크 블록이 같은 값, 포커스 색은 그대로', () => {
+  const css = readFileSync(new URL('../public/css/tokens.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /#C9A55C/);
+  assert.equal(css.split('--color-field-line-active: var(--color-focus)').length - 1, 3); // 라이트 + 다크 2곳
+  for (const v of ['#4B4231', '#9A7E4A']) assert.equal(css.split(v).length - 1 >= 2, true, v);
+  assert.equal(css.split('--color-focus:          #7DB6FE').length - 1, 1);
+  assert.match(css, /--color-focus: *#0658AB/);
+  assert.doesNotMatch(css, /#33312C/);
+});
+
+test('shouldShowReset: 금액·메모·종류·날짜 변경 때만, 카테고리·수정 모드는 제외', async () => {
+  const { shouldShowReset } = await import('../public/js/lib/reset.js');
+  const base = { editing: false, amount: '', memo: '', type: 'expense', date: '2026-10-23', today: '2026-10-23' };
+  assert.equal(shouldShowReset(base), false); // 저장 직후(카테고리만 유지)
+  assert.equal(shouldShowReset({ ...base, amount: '1,000' }), true);
+  assert.equal(shouldShowReset({ ...base, memo: '점심' }), true);
+  assert.equal(shouldShowReset({ ...base, type: 'income' }), true);
+  assert.equal(shouldShowReset({ ...base, date: '2026-10-01' }), true);
+  assert.equal(shouldShowReset({ ...base, amount: '1', editing: true }), false);
+});

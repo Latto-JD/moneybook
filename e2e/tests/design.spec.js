@@ -175,7 +175,17 @@ test.describe('11.1 자산 · CSP', () => {
       const b = readFileSync(join(PUBLIC, dstRel));
       expect(Buffer.compare(a, b), `${rel} 다름`).toBe(0);
     };
-    for (const f of ['tokens.css', 'components.css']) same(f, join('css', f));
+    // 재검증 4(사용자 요청): 원본에서 의도한 차이만 허용한다 - 다크 금색 선 토큰(--color-line/--color-border 값 교체, field-line 2개 추가), 초기화 아이콘 클래스 1줄
+    const fileLines = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n').split('\n').map((l) => l.trim());
+    for (const [name, removed, added] of [
+      ['tokens.css', ['--color-line:           #33312C;', '--color-border:         #7A766D;', '--color-line: #33312C; --color-border: #7A766D; --color-border-strong: #EEEBE3;'],
+        ['--color-field-line:        var(--color-line);  /* 금액 입력 밑줄 */', '--color-field-line-active: var(--color-focus); /* 입력 중 밑줄 */', '--color-line:           #4B4231; /* 금색 계열 구분선 (장식) */', '--color-border:         #9A7E4A; /* 금색 테두리: 카드 4.4 / 눌린 면 3.8 */', '--color-field-line:        #9A7E4A;', '--color-field-line-active: var(--color-focus); /* 포커스 표시는 라이트와 같이 파랑 */', '--color-line: #4B4231; --color-border: #9A7E4A; --color-border-strong: #EEEBE3;', '--color-field-line: #9A7E4A; --color-field-line-active: var(--color-focus);']],
+      ['components.css', [], ['.icon--reset    { --icon: url("../icons/reset.svg"); }']],
+    ]) {
+      const a = fileLines(join(HANDOFF, name)); const b = fileLines(join(PUBLIC, 'css', name));
+      expect(a.filter((l) => !b.includes(l)), `${name} 원본에서 사라진 줄`).toEqual(removed);
+      expect(b.filter((l) => !a.includes(l)), `${name} 새로 생긴 줄`).toEqual(added);
+    }
     // fonts.css: 원본에서 Newsreader 500 @font-face 한 줄만 뺀 것과 같다
     const lines = read(HANDOFF, 'fonts.css').split(/\r?\n/);
     const dropped = lines.filter((l) => /font-family: "Newsreader"; font-weight: 500/.test(l));
@@ -208,14 +218,14 @@ test.describe('11.1 자산 · CSP', () => {
       }
     }
     const pubIcons = readdirSync(join(PUBLIC, 'icons')).filter((f) => f.endsWith('.svg'));
-    expect(pubIcons, '배포 아이콘 17개 = 원본 15 + theme 2').toHaveLength(17);
-    expect(pubIcons.filter((f) => !icons.includes(f)).sort()).toEqual(['theme-dark.svg', 'theme-light.svg']);
+    expect(pubIcons, '배포 아이콘 18개 = 원본 15 + theme 2 + reset 1').toHaveLength(18);
+    expect(pubIcons.filter((f) => !icons.includes(f)).sort()).toEqual(['reset.svg', 'theme-dark.svg', 'theme-light.svg']);
     expect(readdirSync(join(PUBLIC, 'patterns')).filter((f) => f.endsWith('.svg'))).toHaveLength(7);
     // 배포 svg 22개 + 새 3개: 메타데이터 문자열 없음
     for (const dir of ['icons', 'patterns']) for (const f of readdirSync(join(PUBLIC, dir)).filter((n) => n.endsWith('.svg'))) expect(read(PUBLIC, join(dir, f)), `${dir}/${f}`).not.toMatch(/c2pa|<metadata/i);
     // public/ 에 있는 자산 중 원본에 없는 것은 theme 아이콘 3개뿐
     for (const dir of ['fonts', 'icons', 'patterns']) {
-      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f) && !(dir === 'icons' && /^theme-(light|dark)\.svg$/.test(f)));
+      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f) && !(dir === 'icons' && /^(theme-(light|dark)|reset)\.svg$/.test(f)));
       expect(extra, `${dir} 여분 파일`).toEqual([]);
     }
   });

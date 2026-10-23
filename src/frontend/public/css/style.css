@@ -47,7 +47,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card-head h2 { min-width: 0; }
 .card-title { margin-bottom: var(--space-3); }
 .stack { display: flex; flex-direction: column; gap: var(--space-5); }
-.field > label, .field__label { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); }
+.field > label, .field-head > label, .field__label { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-medium); }
 .field-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: var(--touch-min); }
 
 /* ── 토스트 (#flash) ─────────────────── */
@@ -118,8 +118,11 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .summary-note { grid-column: 1 / -1; }
 
 /* ── 기록: 입력 ──────────────────────── */
-.amount-wrap { display: flex; align-items: flex-end; gap: var(--space-2); border-bottom: 2px solid var(--color-line); }
-.amount-wrap:focus-within { border-bottom-color: var(--color-focus); }
+.amount-wrap { display: flex; align-items: flex-end; gap: var(--space-2); border-bottom: 2px solid var(--color-field-line); }
+.amount-wrap:focus-within { border-bottom-color: var(--color-field-line-active); }
+/* 입력 초기화: 보이는 아이콘은 20px, 누르는 영역은 44px */
+.reset-btn { display: inline-flex; align-items: center; justify-content: center; width: var(--touch-min); height: var(--touch-min); margin-right: calc(var(--space-3) * -1); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-text-muted); cursor: pointer; }
+.reset-btn:hover { color: var(--color-text); }
 .amount-wrap:has(.amount-input[aria-invalid="true"]) { border-bottom-color: var(--color-error); }
 .amount-wrap .amount-input { flex: 1; min-width: 0; border-bottom: 0; }
 .amount-wrap .amount-input:focus-visible { box-shadow: none; }

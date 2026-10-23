@@ -11,6 +11,7 @@ import { formatPercent } from './lib/chart-geometry.js';
 import { shouldSubmitOnChipEnter } from './lib/chip-keys.js';
 import { debounce }from './lib/debounce.js';
 import { buildInsightSections, INSIGHT_EMPTY_TEXT } from './lib/insight-text.js';
+import { shouldShowReset } from './lib/reset.js';
 import { txBody, undoPlan, undoFailText } from './lib/undo.js';
 
 const today = () => todayLocal();
@@ -120,11 +121,20 @@ function showFieldErrors(errors) {
  * 저장 버튼 라벨: "지출 저장 · 12,500원" / "수입 저장 · …" / "수정 저장 · …".
  * 금액이 없으면 비활성 모양(aria-disabled)이지만 눌러도 막지 않는다: 금액 오류를 보여 주고 포커스를 금액칸으로 옮기기 위해서다.
  */
+/** 입력 초기화 아이콘: 새 기록 입력 중이고 금액·메모 입력 또는 종류·날짜 변경이 있을 때만 보인다 */
+function updateResetBtn() {
+  const b = $('reset-btn');
+  const hide = !shouldShowReset({ editing: Boolean(state.editingId), amount: $('amount').value, memo: $('memo').value, type: state.type, date: state.date, today: today() });
+  if (hide && !b.hidden && document.activeElement === b) $('amount').focus();
+  b.hidden = hide;
+}
+
 function updateSaveLabel() {
   const n = parseAmount($('amount').value);
   const base = state.editingId ? '수정 저장' : `${KIND_TEXT[state.type]} 저장`;
   $('save-btn').textContent = n === null ? base : `${base} · ${formatWon(n)}`;
   $('save-btn').setAttribute('aria-disabled', String(n === null));
+  updateResetBtn();
 }
 
 function renderTypeButtons() {
@@ -148,6 +158,7 @@ function renderCategoryChips() {
     }
     return;
   }
+  updateResetBtn();
   const map = vizMap(state.type);
   const chips = cats().map((c) => chipItem(c, {
     pressed: state.category === c,
@@ -205,6 +216,16 @@ function setType(type) {
   renderCategoryChips();
   clearSuggestions();
   loadQuick();
+}
+
+/** 입력 초기화 버튼: 금액·메모를 비우고 종류·카테고리·날짜를 기본값으로. 토스트 없음, 포커스는 금액칸 */
+function onResetInput() {
+  if (state.editingId) return;
+  if (state.type !== 'expense') setType('expense');
+  state.date = today();
+  $('date').value = today();
+  renderDateSummary();
+  resetForm();
 }
 
 function resetForm({ keepFocus: focusAmount = true, keepCategory = false } = {}) {
@@ -598,12 +619,14 @@ export function initRecord() {
   });
   $('type-expense').addEventListener('click', () => setType('expense'));
   $('type-income').addEventListener('click', () => setType('income'));
-  $('memo').addEventListener('input', () => { $('memo-error').textContent = ''; autocomplete(); });
+  $('memo').addEventListener('input', () => { $('memo-error').textContent = ''; autocomplete(); updateResetBtn(); });
+  $('reset-btn').addEventListener('click', onResetInput);
   $('memo').addEventListener('keydown', (ev) => { if (ev.key === 'Escape') clearSuggestions(); });
   $('date').value = state.date;
   $('date').addEventListener('change', (ev) => {
     if (ev.target.value) state.date = ev.target.value;
     renderDateSummary();
+    updateResetBtn();
   });
   $('tx-form').addEventListener('submit', onSubmit);
   const toast = $('toast');

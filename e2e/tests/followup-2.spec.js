@@ -768,7 +768,8 @@ test.describe('정적 검사', () => {
   test('C-S22 변경 범위: 금지 파일(schema.sql, tokens.css, components.css, theme-init.js, office, plan.md)은 git 변경 없음, 변경 파일은 허용 폴더 안', async ({}, testInfo) => {
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-    const forbidden = ['src/backend/db/schema.sql', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/public/js/theme-init.js', 'src/frontend/office', 'docs/plan.md'];
+    // tokens.css·components.css 는 재검증 4(사용자 요청: 다크 금색 선, 초기화 아이콘)에서 의도적으로 바뀜 - design.spec C-D1 이 허용 차이를 줄 단위로 검사한다
+    const forbidden = ['src/backend/db/schema.sql', 'src/frontend/public/js/theme-init.js', 'src/frontend/office', 'docs/plan.md'];
     const existing = forbidden.filter((p) => existsSync(join(ROOT, p)));
     expect(git('status', '--porcelain', '--', ...existing).trim(), `금지 파일 변경: ${existing}`).toBe('');
     expect(git('diff', '--name-only', '5a0689d', '--', ...existing).trim(), `1단계 커밋 이후 금지 파일 변경: ${existing}`).toBe('');

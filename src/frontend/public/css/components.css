@@ -25,6 +25,7 @@ body {
 /* ── 아이콘: SVG 파일을 마스크로 (currentColor 상속) ── */
 .icon { display: inline-block; width: 20px; height: 20px; flex: none; background-color: currentColor;
   -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.icon--reset    { --icon: url("../icons/reset.svg"); }
 .icon--plus     { --icon: url("../icons/plus.svg"); }
 .icon--record   { --icon: url("../icons/record.svg"); }
 .icon--dashboard{ --icon: url("../icons/dashboard.svg"); }

@@ -44,7 +44,10 @@
           <button type="button" class="segmented__item" id="type-income" aria-pressed="false">수입</button>
         </div>
         <div class="field">
-          <label for="amount">금액</label>
+          <div class="field-head">
+            <label for="amount">금액</label>
+            <button type="button" class="reset-btn" id="reset-btn" aria-label="입력 초기화" hidden><span class="icon icon--reset" aria-hidden="true"></span></button>
+          </div>
           <div class="amount-wrap">
             <input type="text" id="amount" name="amount" class="amount-input" inputmode="numeric" autocomplete="off" placeholder="0" aria-describedby="amount-error">
             <span class="amount-unit" aria-hidden="true">원</span>
