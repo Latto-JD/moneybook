@@ -34,6 +34,8 @@ export function buildKpi(months, baseMonth) {
 }
 
 export const NO_PREV_TEXT = '비교할 지난달 기록이 없어요';
+/** 수입·지출 둘 다 비교값이 없을 때 카드 아래 한 줄 */
+export const NO_PREV_ALL_TEXT = '지난달 기록이 없어 비교하지 않아요';
 
 /** 수입·지출에 같은 문장 형식을 쓴다: "지난달보다 수입이 5.0% 늘었어요" (좋고 나쁨을 가르지 않는다). noun: '수입' | '지출' */
 export function amountChange(value, prevValue, noun) {

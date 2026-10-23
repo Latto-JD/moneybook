@@ -8,7 +8,7 @@ import { autocomplete, AUTOCOMPLETE } from './autocomplete.js';
 import { detectRecurringGroups, RECURRING } from './recurring.js';
 import { detectOverspending, OVERSPENDING } from './overspending.js';
 import { detectLargeExpenses, LARGE } from './large.js';
-import { detectIncomeDrops, detectMissingIncome } from './income.js';
+import { detectIncomeDrops, detectMissingIncome, INCOME_DROP } from './income.js';
 import { memoKey } from './common.js';
 import { loadActiveNames, loadOrderFn } from '../lib/categories.js';
 
@@ -48,15 +48,20 @@ async function autocompleteRoute({ db, user, query, now }) {
   return { status: 200, body: { items: autocomplete(txs, q, type, today, active) } };
 }
 
-async function insights({ db, user, query, now }) {
-  const month = requireMonth(query.month);
-  const today = parseToday(query.today, now);
-  // 세 규칙이 필요로 하는 가장 이른 날짜부터 월말/오늘 중 늦은 날짜까지 한 번에 읽는다
-  const from = [
+// insights 가 읽는 가장 이른 날짜: 규칙별 필요 구간 중 가장 이른 날
+export function insightsFrom(month, today) {
+  return [
     addDays(today, -(RECURRING.windowDays - 1)),
     addDays(monthStart(month), -LARGE.windowDays),
     monthStart(addMonths(month, -OVERSPENDING.baselineMonths)),
+    monthStart(addMonths(month, -INCOME_DROP.baselineMonths)),
   ].sort()[0];
+}
+
+async function insights({ db, user, query, now }) {
+  const month = requireMonth(query.month);
+  const today = parseToday(query.today, now);
+  const from = insightsFrom(month, today); // 각 규칙이 필요로 하는 가장 이른 날짜부터
   const monthEnd = addDays(nextMonthStart(month), -1);
   const to = monthEnd > today ? monthEnd : today;
   const txs = await loadTransactions(db, user.id, from, to);

@@ -169,8 +169,8 @@ test('반복 키 Set 을 명시로 넘기든 생략하든 결과가 같다', () 
   assert.deepEqual(detectOverspending(txs, SEP.month, SEP.today, keys), run(txs));
 });
 
-test('R4-Q4: 오늘 이후 날짜의 이번 달 거래도 currentTotal 과 pace 대상에 포함된다', () => {
+test('R4-Q4 (B4, v4.3): 오늘 이후 날짜의 이번 달 거래는 currentTotal 과 pace 대상에서 빠진다', () => {
   const txs = [...base('식비'), t('2026-09-02', 20000, '식비', '점심'), t('2026-09-05', 24000, '식비', '저녁'), t('2026-09-25', 50000, '식비', '미리 입력')];
   const r = run(txs);
-  assert.deepEqual(pick(r[0]), { level: 'pace', currentTotal: 94000, projectedTotal: 282000, ratio: 2.82 });
+  assert.deepEqual(pick(r[0]), { level: 'pace', currentTotal: 44000, projectedTotal: 132000, ratio: 1.32 });
 });

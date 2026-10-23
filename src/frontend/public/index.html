@@ -79,7 +79,9 @@
           <p class="error-text" id="date-error"></p>
         </details>
         <p class="error-text" id="tx-error" role="alert"></p>
-        <button type="submit" class="btn btn-primary btn--primary btn--block" id="save-btn" aria-disabled="true">지출 저장</button>
+        <div class="save-dock" id="save-dock">
+          <button type="submit" class="btn btn-primary btn--primary btn--block" id="save-btn" aria-disabled="true">지출 저장</button>
+        </div>
         <button type="button" class="btn btn--ghost btn--block cancel-edit" id="cancel-edit-btn" hidden>수정 취소</button>
       </form>
 
@@ -113,7 +115,7 @@
       </div>
       <p class="error-text" id="dash-error" role="alert"></p>
       <section class="card balance-card sum-card" id="kpi" aria-label="이번 달 요약" aria-live="polite"></section>
-      <div class="card donut-card">
+      <div class="card chart-card donut-card">
         <div class="card-head catview-head">
           <h2 id="donut-title">카테고리별 지출</h2>
           <div class="segmented segmented--sm" role="group" aria-label="카테고리 보기">
@@ -128,8 +130,8 @@
         <h2 id="insight-title" class="card-title">인사이트</h2>
         <div id="insights"></div>
       </section>
-      <div class="card">
-        <div class="card-head">
+      <div class="card chart-card">
+        <div class="card-head chart-head">
           <h2>월별 추이</h2>
           <div class="segmented segmented--sm" role="group" aria-label="추이 기간">
             <button type="button" class="segmented__item" id="range-6" aria-pressed="true">6개월</button>
@@ -138,7 +140,10 @@
         </div>
         <section id="chart-monthly" aria-label="월별 수입 대 지출"></section>
       </div>
-      <section class="card" aria-label="카테고리별 월 추이">
+      <section class="card chart-card" aria-labelledby="trend-title">
+        <div class="card-head chart-head">
+          <h2 id="trend-title">카테고리별 추이</h2>
+        </div>
         <ul class="chips chips--wrap" id="cat-trend-chips" aria-label="카테고리 선택"></ul>
         <div id="chart-cat-trend"></div>
       </section>

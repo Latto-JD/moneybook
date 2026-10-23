@@ -7,10 +7,11 @@ import { amountAria } from './lib/summary-data.js';
 /**
  * container 안을 다시 그린다.
  * opts: { balanceLabel, income, expense, balance, prefix(aria 앞말, 예 '이번 달'), rate?: {text}, notes?: { income, expense } }
- * notes.income / notes.expense: { text, cls } 열 아래 보조 글자(대시보드 전월 대비)
+ * notes.income / notes.expense: { text, cls, srText? } 열 아래 보조 글자(대시보드 전월 대비). srText 가 있으면 text 는 장식(aria-hidden)
+ * footnote: 카드 맨 아래 한 줄 보조 글자(두 열 모두 비교값이 없을 때)
  */
 export function renderSummaryCard(container, opts) {
-  const { balanceLabel, income, expense, balance, prefix = '', rate = null, notes = null } = opts;
+  const { balanceLabel, income, expense, balance, prefix = '', rate = null, notes = null, footnote = '' } = opts;
   const nodes = [];
   const bal = el('div', { class: 'sum-balance' });
   bal.appendChild(el('span', { class: 'sum-balance__label' }, balanceLabel));
@@ -29,12 +30,20 @@ export function renderSummaryCard(container, opts) {
       class: `sum-amount figure amt-${kind}`, 'aria-label': amountAria(prefix, label, formatWon(value)),
     }, formatWon(value)));
     c.appendChild(line);
-    if (note) c.appendChild(el('div', { class: `kpi-extra ${note.cls || 'muted'}` }, note.text));
+    if (note) {
+      const d = el('div', { class: `kpi-extra ${note.cls || 'muted'}` });
+      if (note.srText) {
+        d.appendChild(el('span', { 'aria-hidden': 'true' }, note.text));
+        d.appendChild(el('span', { class: 'visually-hidden' }, note.srText));
+      } else d.textContent = note.text;
+      c.appendChild(d);
+    }
     return c;
   };
   const pair = el('div', { class: 'sum-pair' });
   pair.appendChild(col('income', '수입', income, notes && notes.income));
   pair.appendChild(col('expense', '지출', expense, notes && notes.expense));
   nodes.push(pair);
+  if (footnote) nodes.push(el('p', { class: 'kpi-extra sum-footnote' }, footnote));
   container.replaceChildren(...nodes);
 }

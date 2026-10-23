@@ -241,15 +241,47 @@ test.describe('C71 R4 pace 그룹 키 연결', () => {
   });
 });
 
-test.describe('관찰사항 O-R4-Q4 (api.md 6.3 확인된 동작)', () => {
-  test('오늘 이후 날짜로 입력한 이번 달 거래도 currentTotal/exceeded 에 포함된다 (결함으로 단정하지 않음, 현재 동작 기록)', async () => {
+test.describe('B4 미래 날짜 지출은 진행 중인 달의 R4 에서 제외 (api.md v4.3, 옛 관찰사항 O-R4-Q4 갱신)', () => {
+  test('O-R4-Q4 오늘(09-10) 이후 날짜로 미리 입력한 이번 달 지출은 currentTotal/exceeded 에서 빠진다 -> R4 항목 없음', async () => {
     const api = await scenario('oq4', [
       ...baseNonRecurring('식비', 100000, '기준식비'),
       { category: '식비', amount: 130000, memo: '미리입력', date: '2026-09-25' }, // today(09-10) 이후
     ]);
     const ins = await insights(api, MONTH, TODAY);
-    const o = over(ins, '식비');
-    test.info().annotations.push({ type: 'observation', description: `date(09-25) > today(09-10) 거래가 currentTotal 에 포함: ${JSON.stringify(o)}` });
-    expect(o).toMatchObject({ level: 'exceeded', currentTotal: 130000 });
+    expect(over(ins, '식비'), JSON.stringify(ins.overspending)).toBeUndefined();
+  });
+  test('B4 오늘 날짜 지출은 포함된다: 09-10 130,000 -> exceeded currentTotal 130000', async () => {
+    const api = await scenario('oq4today', [
+      ...baseNonRecurring('식비', 100000, '기준식비'),
+      { category: '식비', amount: 130000, memo: '오늘지출', date: TODAY },
+    ]);
+    expect(over(await insights(api, MONTH, TODAY), '식비')).toMatchObject({ level: 'exceeded', currentTotal: 130000 });
+  });
+  test('B4 오늘 이전 지출 + 미래 지출 혼합: 미래 건만 빠진다 (09-05 120,000 + 09-25 50,000 -> currentTotal 120000)', async () => {
+    const api = await scenario('oq4mix', [
+      ...baseNonRecurring('식비', 100000, '기준식비'),
+      { category: '식비', amount: 120000, memo: '지난지출', date: '2026-09-05' },
+      { category: '식비', amount: 50000, memo: '미리입력', date: '2026-09-25' },
+    ]);
+    expect(over(await insights(api, MONTH, TODAY), '식비')).toMatchObject({ level: 'exceeded', currentTotal: 120000 });
+  });
+  test('B4 지난달·다음 달 조회는 그대로: 과거 달의 지출은 날짜와 상관없이 전부, 미래 달은 today 보다 뒤여도 그대로 (조회 달이 today 의 달일 때만 제외)', async () => {
+    const api = await scenario('oq4past', [
+      ...baseNonRecurring('식비', 100000, '기준식비'),
+      { category: '식비', amount: 130000, memo: '말일지출', date: '2026-09-28' },
+    ]);
+    // today 가 10월이면 9월은 끝난 달: 09-28 지출이 today 보다 앞이므로 그대로 포함
+    expect(over(await insights(api, MONTH, '2026-10-05'), '식비')).toMatchObject({ level: 'exceeded', currentTotal: 130000 });
+    // today 가 8월이면 9월은 미래 달: 미래 달 조회는 날짜 제외 규칙이 없다(조회 달이 today 의 달이 아님)
+    const fut = over(await insights(api, MONTH, '2026-08-20'), '식비');
+    test.info().annotations.push({ type: 'observation', description: 'today=08-20, month=09(미래 달): ' + JSON.stringify(fut) });
+  });
+  test('B4 pace: 미래 지출 2건은 pace 대상 건수·합계에서도 빠진다 (경과일 10, 비반복 1건 + 미래 1건 -> pace 안 됨)', async () => {
+    const api = await scenario('oq4pace', [
+      ...baseNonRecurring('식비', 100000, '기준식비'),
+      { category: '식비', amount: 90000, memo: '이번지출', date: '2026-09-08' },
+      { category: '식비', amount: 90000, memo: '미리입력', date: '2026-09-28' },
+    ]);
+    expect(over(await insights(api, MONTH, TODAY), '식비'), 'pace 대상 1건이라 항목 없음').toBeUndefined();
   });
 });

@@ -21,6 +21,14 @@ export function undoPlan(kind, before, after, legacyBefore = false) {
   return { method: 'PUT', id: after.id, body: txBody(before), month: before.date.slice(0, 7) };
 }
 
+/**
+ * 토스트를 다른 부모로 옮긴 뒤 타이머를 멈춰 둘지: 옮기기 전의 멈춤 상태는 버리고(옮기면 pointerleave 가 오지 않는다),
+ * 지금 실제로 포인터가 위에 있거나 포커스가 안에 있을 때만 멈춘다.
+ */
+export function pausedAfterMove({ hover = false, focusInside = false } = {}) {
+  return Boolean(hover || focusInside);
+}
+
 /** 되돌리기 실패 문구: 404 는 이미 지워진 기록(수정 되돌리기), 그 밖은 직접 고치도록 안내 */
 export function undoFailText(err) {
   if (err && err.status === 404) return '이미 삭제된 기록이라 되돌리지 못했어요';

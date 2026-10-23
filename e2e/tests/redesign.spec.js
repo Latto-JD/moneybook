@@ -414,7 +414,7 @@ test.describe('C-R8~C-R14 기록', () => {
       const { page } = a;
       await expect(page.locator('#category-chips button').first()).toBeVisible();
       const m = await page.evaluate(() => {
-        const s = document.querySelector('#save-btn'); const c = getComputedStyle(s);
+        const s = document.querySelector('#save-btn'); const c = getComputedStyle(document.querySelector('#save-dock')); // 개선 A2: 고정·후광은 저장 도크로 옮겨졌다
         const probe = (v) => { const i = document.createElement('i'); i.style.color = `var(${v})`; document.body.appendChild(i); const x = getComputedStyle(i).color; i.remove(); return x; };
         const r = s.getBoundingClientRect(); const t = document.querySelector('.tabbar').getBoundingClientRect();
         return { pos: c.position, shadow: c.boxShadow, bg: probe('--color-bg'), surface: probe('--color-surface'), bottom: r.bottom, tabTop: t.top };
@@ -804,11 +804,11 @@ test.describe('C-R24~C-R26 회귀·범위·스크린샷', () => {
   test('C-R25 변경 범위: src/backend·schema.sql·docs/api.md·tokens.css·components.css 변경 없음, 변경 파일은 허용 폴더 안', async ({}, testInfo) => {
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-    const tracked = git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend', 'docs/api.md', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office', 'src/frontend/public/js/theme-init.js').trim();
+    const tracked = git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend/db', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office', 'src/frontend/public/js/theme-init.js').trim();
     expect(tracked, `금지 파일 변경: ${tracked}`).toBe('');
-    expect(git('ls-files', '--others', '--exclude-standard', '--', 'src/backend', 'src/frontend/office').trim(), '금지 폴더의 새 파일').toBe('');
+    expect(git('ls-files', '--others', '--exclude-standard', '--', 'src/backend/db', 'src/frontend/office').trim(), '금지 폴더의 새 파일').toBe('');
     const changed = git('status', '--porcelain').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));
-    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|e2e\/|docs\/|design_handoff_moneybook\/)/;
+    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(rules|test)\/|e2e\/|docs\/|design_handoff_moneybook\/)/; // 개선 작업(B4, A11)으로 backend rules 가 의도적으로 바뀜
     const outside = changed.filter((f) => !allowed.test(f));
     expect(outside, `허용 폴더 밖 변경: ${outside}`).toEqual([]);
   });

@@ -8,7 +8,7 @@ import { stableVizMap } from './lib/viz.js';
 import { todayLocal, monthOf, shiftMonth, monthTitle, trailingRange } from './lib/date.js';
 import { renderDonut, renderGroupedBars, renderBars } from './charts.js';
 import {
-  buildKpi, balanceRate, balanceLabel, summaryLabel, NO_PREV_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
+  buildKpi, balanceRate, balanceLabel, summaryLabel, NO_PREV_TEXT, NO_PREV_ALL_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
 } from './lib/dashboard-data.js';
 
 // 카테고리 보기(도넛·추이) 유형별 문구. 지출과 수입은 같은 구조의 문장을 쓴다.
@@ -22,9 +22,9 @@ const state = {
   range: 6,
   catType: 'expense', // 카테고리 보기. 탭을 오가도 유지되고, 새로고침하면 지출로 돌아간다
   trend: null, // category-monthly 응답 캐시
+  catResp: null, // stats/categories 응답 캐시 (추이 기본 선택용)
   selected: null,
 };
-let seq = 0;
 
 const catVizMap = () => stableVizMap(categoryResponse() && categoryResponse().items, state.catType);
 
@@ -35,12 +35,15 @@ function renderKpi(kpi, base) {
   // ▲/▼ 는 방향만 알려 준다. 색은 보조 글자색 (늘고 줄어드는 것에 좋고 나쁨을 매기지 않는다)
   const note = (change) => (change
     ? { cls: change.direction, text: { up: '▲ ', down: '▼ ', same: '= ' }[change.direction] + change.text }
-    : { cls: 'muted', text: NO_PREV_TEXT });
+    : { cls: 'muted', text: '—', srText: NO_PREV_TEXT }); // 한쪽만 없으면 짧게
+  const noneAtAll = !kpi.incomeChange && !kpi.expenseChange;
   renderSummaryCard($('kpi'), {
     balanceLabel: balanceLabel(base, thisMonth),
     income: kpi.income, expense: kpi.expense, balance: kpi.balance,
     rate: balanceRate(kpi.income, kpi.balance),
-    notes: { income: note(kpi.incomeChange), expense: note(kpi.expenseChange) },
+    // 둘 다 비교값이 없으면 칸마다 반복하지 않고 카드 아래 한 줄만
+    notes: noneAtAll ? null : { income: note(kpi.incomeChange), expense: note(kpi.expenseChange) },
+    footnote: noneAtAll ? NO_PREV_ALL_TEXT : '',
   });
 }
 
@@ -61,39 +64,66 @@ function renderTrend() {
   renderBars(box, { title: `${state.selected} 월별 ${VIEW[state.catType].noun} 추이`, ...s, viz: catVizMap().get(state.selected) });
 }
 
-async function load() {
-  const my = ++seq;
-  const base = state.base;
-  const r = trailingRange(base, state.range);
-  $('dash-month').textContent = monthTitle(base);
-  loadInsights(base);
-  $('dash-error').textContent = '';
-  const [monthly, cat, trend] = await Promise.allSettled([
-    api.statsMonthly(r.from, r.to),
-    api.statsCategories(base, base, state.catType),
-    api.statsCategoryMonthly(r.from, r.to, state.catType),
-  ]);
-  if (my !== seq) return; // 더 최근 요청이 있으면 버림
-  const failed = [monthly, cat, trend].find((x) => x.status === 'rejected');
-  if (failed) $('dash-error').textContent = failed.reason?.message || '데이터를 불러오지 못했어요.';
+// 요청 종류별 순서 번호: 더 최근 요청이 있으면 오래된 응답을 버린다.
+// 달 변경·탭 진입은 전부(loadAll), 기간(6/12개월) 변경은 월별·추이만, 보기(지출/수입) 변경은 카테고리·추이만 다시 받는다.
+const seqs = { monthly: 0, cat: 0, trend: 0 };
+const showError = (e) => { $('dash-error').textContent = (e && e.message) || '데이터를 불러오지 못했어요.'; };
 
-  if (monthly.status === 'fulfilled') {
-    renderKpi(buildKpi(monthly.value.months, base), base);
-    renderGroupedBars($('chart-monthly'), { title: '월별 수입 대 지출', months: monthly.value.months });
+async function loadMonthly() {
+  const my = ++seqs.monthly;
+  const r = trailingRange(state.base, state.range);
+  const base = state.base;
+  try {
+    const monthly = await api.statsMonthly(r.from, r.to);
+    if (my !== seqs.monthly) return;
+    renderKpi(buildKpi(monthly.months, base), base);
+    renderGroupedBars($('chart-monthly'), { title: '월별 수입 대 지출', months: monthly.months });
+  } catch (e) {
+    if (my === seqs.monthly) showError(e);
   }
-  if (cat.status === 'fulfilled') {
+}
+
+/** 카테고리 응답을 돌려준다(추이의 기본 선택에 쓴다). 실패하면 null */
+async function loadCat() {
+  const my = ++seqs.cat;
+  const base = state.base;
+  try {
+    const cat = await api.statsCategories(base, base, state.catType);
+    if (my !== seqs.cat) return null;
     const v = VIEW[state.catType];
+    state.catResp = cat;
     renderDonut($('chart-donut'), {
-      title: v.donutTitle, periodLabel: monthTitle(base), items: groupDonutItems(donutItemsFrom(cat.value)),
+      title: v.donutTitle, periodLabel: monthTitle(base), items: groupDonutItems(donutItemsFrom(cat)),
       centerLabel: v.centerLabel, noun: v.noun, vizMap: catVizMap(),
     });
+    return cat;
+  } catch (e) {
+    if (my === seqs.cat) showError(e);
+    return null;
   }
-  if (trend.status === 'fulfilled') {
-    state.trend = trend.value;
-    const keep = trendCategories(trend.value).some((c) => c.category === state.selected);
-    if (!keep) state.selected = defaultTrendCategory(cat.status === 'fulfilled' ? cat.value : null, trend.value);
+}
+
+async function loadTrend(catPromise = Promise.resolve(state.catResp)) {
+  const my = ++seqs.trend;
+  const r = trailingRange(state.base, state.range);
+  try {
+    const [trend, cat] = await Promise.all([api.statsCategoryMonthly(r.from, r.to, state.catType), catPromise]);
+    if (my !== seqs.trend) return;
+    state.trend = trend;
+    const keep = trendCategories(trend).some((c) => c.category === state.selected);
+    if (!keep) state.selected = defaultTrendCategory(cat, trend);
     renderTrend();
+  } catch (e) {
+    if (my === seqs.trend) showError(e);
   }
+}
+
+function loadAll() {
+  $('dash-month').textContent = monthTitle(state.base);
+  $('dash-error').textContent = '';
+  loadInsights(state.base); // 인사이트는 달이 바뀔 때와 탭에 들어올 때만
+  loadMonthly();
+  loadTrend(loadCat());
 }
 
 function renderCatView() {
@@ -108,29 +138,31 @@ function setCatType(type) {
   state.catType = type;
   state.selected = null; // 다른 유형의 카테고리 이름이 남지 않게
   state.trend = null;
+  state.catResp = null;
   renderCatView();
-  load();
+  loadTrend(loadCat());
 }
 
 function setRange(n) {
   state.range = n;
   $('range-6').setAttribute('aria-pressed', String(n === 6));
   $('range-12').setAttribute('aria-pressed', String(n === 12));
-  load();
+  loadMonthly();
+  loadTrend();
 }
 
 export function initDashboard() {
   state.base = monthOf(todayLocal());
-  $('dash-prev').addEventListener('click', () => { state.base = shiftMonth(state.base, -1) || state.base; load(); });
-  $('dash-next').addEventListener('click', () => { state.base = shiftMonth(state.base, 1) || state.base; load(); });
+  $('dash-prev').addEventListener('click', () => { state.base = shiftMonth(state.base, -1) || state.base; loadAll(); });
+  $('dash-next').addEventListener('click', () => { state.base = shiftMonth(state.base, 1) || state.base; loadAll(); });
   $('catview-expense').addEventListener('click', () => setCatType('expense'));
   $('catview-income').addEventListener('click', () => setCatType('income'));
   renderCatView();
   $('range-6').addEventListener('click', () => setRange(6));
   $('range-12').addEventListener('click', () => setRange(12));
   // 탭 전환 시 재조회 (저장/수정/삭제 후에도 최신)
-  document.addEventListener('tabchange', (ev) => { if (ev.detail.tab === 'dashboard') load(); });
+  document.addEventListener('tabchange', (ev) => { if (ev.detail.tab === 'dashboard') loadAll(); });
   // 카테고리 목록이 늦게 도착하거나 바뀌면 색·무늬 번호가 달라질 수 있으니 열려 있을 때 다시 그린다
-  document.addEventListener('categorieschanged', () => { if (!$('panel-dashboard').hidden) load(); });
-  if (!$('panel-dashboard').hidden) load();
+  document.addEventListener('categorieschanged', () => { if (!$('panel-dashboard').hidden) loadAll(); });
+  if (!$('panel-dashboard').hidden) loadAll();
 }

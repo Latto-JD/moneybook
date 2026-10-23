@@ -61,6 +61,8 @@ test.describe('재검증 4 입력 초기화 버튼', () => {
     await expect(page.locator('#flash')).toHaveText('저장했어요');
     await expect(page.locator('#category-chips button[aria-pressed="true"]')).toHaveCount(1);
     await expect(page.locator(RESET), '저장 직후').toBeHidden();
+    await page.mouse.move(2, 2); // 토스트가 포인터 아래에 뜨면 hover 로 타이머가 멈춘다(개선 QA A2 결함)
+    await expect(page.locator('#flash')).toHaveText('', { timeout: 8000 }); // 토스트가 목록 행을 덮으면 클릭이 가로채인다(개선 QA A2 관찰)
     // 수정 모드: 숨김(금액이 채워져 있어도)
     await page.locator('#tx-list .tx-edit', { hasText: '기존' }).click();
     await expect(page.locator('#amount')).not.toHaveValue('');

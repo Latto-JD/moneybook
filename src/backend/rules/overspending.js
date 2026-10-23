@@ -26,10 +26,13 @@ export function detectOverspending(transactions, month, today, recurringKeys, or
   const totals = new Map();
   const pace = new Map(); // 카테고리 -> 이번 달 비반복 거래 {sum, count}
   const wanted = new Set([month, ...Array.from({ length: OVERSPENDING.baselineMonths }, (_, i) => addMonths(month, -(i + 1)))]);
+  const todayMonth = today.slice(0, 7);
   for (const t of transactions) {
     if (t.type !== 'expense') continue;
     const m = t.date.slice(0, 7);
     if (!wanted.has(m)) continue;
+    // 진행 중인 달은 오늘까지만 센다 (오늘 이후로 미리 입력한 거래는 제외)
+    if (m === month && month === todayMonth && t.date > today) continue;
     if (m === month && !rkeys.has(recurringGroupKey(t))) {
       const pc = pace.get(t.category) || { sum: 0, count: 0 };
       pc.sum += t.amount;

@@ -71,7 +71,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ── 토스트 (#flash) ─────────────────── */
 /* 헤더(높이 = 위 여백 + 버튼) 아래에 둔다: 모드 버튼·이름을 가리지 않게 */
-#toast { top: calc(var(--header-h) + var(--space-2) + env(safe-area-inset-top)); max-width: calc(100vw - var(--space-5) * 2); }
+/* 화면 아래쪽: 탭바 바로 위(대시보드·내 정보). 기록 탭에서는 고정 저장 영역 안 저장 버튼 바로 위로 옮겨 간다(.save-dock) */
+#toast { top: auto; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--space-3)); max-width: calc(100vw - var(--space-5) * 2); }
 #toast:has(#flash:empty):has(#flash-undo[hidden]) { display: none; }
 #flash { min-width: 0; padding: var(--space-2) 0; text-align: center; overflow-wrap: anywhere; }
 #flash:empty { display: none; }
@@ -84,6 +85,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ── 하단 탭 ─────────────────────────── */
 .tabbar__item .icon { width: 22px; height: 22px; }
 .tabbar__item:focus-visible { box-shadow: var(--shadow-focus); }
+
+/* 화면 이동 때 스크린리더용으로 포커스만 받는 제목(tabindex=-1)은 누를 수 있는 요소처럼 보이지 않게 링을 그리지 않는다 */
+h1[tabindex="-1"]:focus, h1[tabindex="-1"]:focus-visible, h2[tabindex="-1"]:focus, h2[tabindex="-1"]:focus-visible { outline: none; box-shadow: none; }
 
 /* ── 폼 ──────────────────────────────── */
 .error-text { color: var(--color-error); display: flex; align-items: flex-start; gap: var(--space-1); font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); }
@@ -109,10 +113,12 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .btn-primary:disabled, .btn-primary[aria-disabled="true"] { background: var(--color-surface-sunken); color: var(--color-text-disabled); }
 .btn--ghost:hover:not(:disabled) { border-color: var(--color-text-muted); }
 .btn-danger { color: var(--color-error); border-color: var(--color-error); }
+a.btn { text-decoration: none; }
 
 /* ── 세그먼트 / 칩 ───────────────────── */
-.segmented__item[aria-pressed="true"] { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
-.segmented__item[aria-pressed="true"]:focus-visible { box-shadow: var(--shadow-sm), var(--shadow-focus); } /* 선택 그림자가 포커스 링을 덮지 않게 */
+/* 선택 항목: 배경 + 1px 테두리(색 외의 구분) + 굵은 글자. 테두리는 inset 그림자라 칸 크기가 변하지 않는다 */
+.segmented__item[aria-pressed="true"] { background: var(--color-surface); color: var(--color-text); font-weight: var(--fw-bold); box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm); }
+.segmented__item[aria-pressed="true"]:focus-visible { box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm), var(--shadow-focus); } /* 선택 그림자가 포커스 링을 덮지 않게 */
 .segmented--sm { flex: none; }
 .segmented--sm .segmented__item { padding: 0 var(--space-4); }
 .seg-count { margin-left: var(--space-1); font-variant-numeric: tabular-nums; font-weight: var(--fw-regular); color: var(--color-text-muted); }
@@ -133,7 +139,7 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 
 /* ── 요약 카드 (기록·대시보드 공용) ─────── */
 .sum-card { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4) var(--space-5); border-radius: var(--radius-lg); }
-.sum-card--record { margin-bottom: var(--space-3); }
+.sum-card--record { margin-bottom: var(--space-3); padding: var(--space-3) var(--space-5); gap: var(--space-2); }
 .sum-balance { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--space-3); }
 .sum-balance__label { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--color-text-muted); }
 .sum-balance__value { margin-left: auto; font-size: var(--fs-figure-sum); line-height: var(--lh-figure-sum); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -217,12 +223,6 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 #month-summary h3 { margin-top: var(--space-2); }
 
 /* ── 인사이트 ────────────────────────── */
-.insight-section { margin-bottom: var(--space-4); }
-.insight-section h3 { margin-bottom: var(--space-2); }
-.insight-list { list-style: none; margin: 0; padding: 0; }
-.insight { display: flex; gap: var(--space-2); align-items: baseline; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--color-line); margin-bottom: var(--space-1); font-size: var(--fs-label); }
-.insight.strong { border-left-color: var(--color-primary); background: var(--color-surface-sunken); font-weight: var(--fw-bold); }
-.insight-label { flex: none; font-size: var(--fs-micro); font-weight: var(--fw-bold); color: var(--color-text-muted); border: 1px solid var(--color-line); border-radius: var(--radius-xs); padding: 0 var(--space-1); }
 .insight-text { min-width: 0; }
 
 /* ── 대시보드 ────────────────────────── */
@@ -245,7 +245,7 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .donut__value.chart-text { font-family: var(--font-figure); font-size: 18px; font-weight: var(--fw-regular); }
 .donut__slice { stroke: var(--viz-gap); stroke-width: 2; }
 .viz-other { fill: var(--color-text-muted); }
-.chart-grid { stroke: var(--color-line); stroke-width: 1; }
+.chart-grid { stroke: color-mix(in srgb, var(--color-text-muted) 25%, transparent); stroke-width: 1; } /* 금색 선 토큰 대신 중립색 */
 .chart-axis { stroke: var(--color-text-muted); stroke-width: 1; }
 .chart-stroke { stroke: var(--color-text); stroke-width: .8; }
 .chart-fill-income { fill: var(--color-income); }
@@ -303,13 +303,14 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .auth-wrap h1 { text-align: center; margin-bottom: var(--space-4); }
 .auth-wrap form { margin-top: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
 
-/* ── 기록: 저장 버튼을 하단 탭바 바로 위에 고정 ── */
-#save-btn { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--space-2)); z-index: 5;
-  box-shadow: 0 0 0 var(--space-2) var(--color-bg), 0 calc(var(--space-3) * -1) var(--space-3) var(--space-2) var(--color-bg); }
-/* 포커스 링이 후광 위에 보이게 (앞선 그림자가 위에 그려진다) */
-#save-btn:focus-visible { box-shadow: var(--shadow-focus), 0 0 0 var(--space-2) var(--color-bg), 0 calc(var(--space-3) * -1) var(--space-3) var(--space-2) var(--color-bg); }
-/* 포커스한 입력이 고정 저장 버튼·탭바 뒤로 가려지지 않게: 저장 버튼 52 + 후광·여백 + 탭바 */
+/* ── 기록: 저장 영역(저장 버튼 + 토스트)을 하단 탭바 바로 위에 고정 ── */
+/* 불투명 배경 영역 하나라서 그 뒤의 칸·입력은 가려진 채로 눌리지 않는다. 토스트는 이 영역 안 저장 버튼 바로 위에 들어간다(JS 가 옮긴다) */
+.save-dock { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--space-2)); z-index: 5; background: var(--color-bg);
+  box-shadow: 0 0 0 var(--space-1) var(--color-bg), 0 calc(var(--space-2) * -1) var(--space-2) var(--space-1) var(--color-bg); }
+.save-dock #toast { position: static; transform: none; width: fit-content; max-width: 100%; margin: 0 auto var(--space-2); }
+/* 포커스한 입력이 고정 저장 영역·탭바 뒤로 가려지지 않게: 저장 버튼 52 + (토스트가 있으면 토스트 52 + 간격) + 후광·여백 + 탭바 */
 html { --save-clearance: calc(52px + var(--space-6) + var(--tabbar-h) + env(safe-area-inset-bottom)); scroll-padding-bottom: var(--save-clearance); }
+html:has(#save-dock #flash:not(:empty)) { --save-clearance: calc(52px + 52px + var(--space-2) + var(--space-6) + var(--tabbar-h) + env(safe-area-inset-bottom)); }
 /* 저장 버튼 자신은 이미 그 자리에 고정돼 있으므로 위 여백을 상쇄한다 (안 그러면 포커스 때 페이지가 끝까지 스크롤된다) */
 #save-btn { scroll-margin-bottom: calc(var(--save-clearance) * -1); }
 
@@ -337,21 +338,22 @@ html { --save-clearance: calc(52px + var(--space-6) + var(--tabbar-h) + env(safe
 .figure, .tx-amount, .tx-day-sum, .legend-amount, .legend-ratio, .cat-bar-amount, .month-title, .seg-count, .kpi-extra { font-variant-numeric: tabular-nums; }
 
 /* ── 화면 정리: 대시보드 카테고리 카드 ── */
-.donut-card { position: relative; }
-.catview-head { flex-wrap: wrap; margin-bottom: var(--space-3); }
-.catview-head h2 { flex: 1 1 auto; font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-bold); }
-.catview-head .segmented { flex: 1 1 100%; }
-/* "표로 보기" 는 제목 줄 오른쪽 글자 버튼, 표는 카드 안 아래쪽에 열린다 */
-.donut-card .chart-table { margin-top: 0; }
-.donut-card .chart-table > summary {
+/* 차트 카드 공통: 제목 줄 오른쪽에 "표로 보기" 글자 버튼 하나, 표는 카드 안 아래쪽에 열린다 */
+.chart-card { position: relative; }
+.catview-head, .chart-head { flex-wrap: wrap; margin-bottom: var(--space-3); }
+.catview-head h2, .chart-head h2 { flex: 1 1 auto; font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-bold); }
+.catview-head .segmented, .chart-head .segmented { flex: 1 1 100%; }
+.chart-card figcaption { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* 카드 제목과 같은 뜻이라 화면에서는 숨긴다 */
+.chart-card .chart-table { margin-top: 0; }
+.chart-card .chart-table > summary {
   position: absolute; top: var(--space-2); right: var(--space-5); width: auto; min-height: var(--h-control); padding: 0;
   border: 0; background: transparent; color: var(--color-text-muted); font-size: var(--fs-caption); font-weight: var(--fw-regular);
 }
-.donut-card .chart-table > summary .icon { display: none; }
-.donut-card .chart-table[open] > summary { margin-bottom: 0; }
-.donut-card .chart-table .table-wrap { margin-top: var(--space-3); }
+.chart-card .chart-table > summary .icon { display: none; }
+.chart-card .chart-table[open] > summary { margin-bottom: 0; }
+.chart-card .chart-table .table-wrap { margin-top: var(--space-3); }
 .donut-body .chart-svg { max-width: 180px; } /* viewBox 200 기준 글자 13px -> 11.7px (11px 이상) */
-.donut-card .chart-summary { text-align: center; }
+.donut-card .chart-summary { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* 도넛 요약은 아래 행 목록과 같은 내용: SVG desc 와 표로 대신한다 */
 .legend-list li {
   display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 48px; column-gap: var(--space-2); row-gap: var(--space-1);
   align-items: center; min-height: 0; padding: var(--space-2) 0; border-bottom: 0; font-size: var(--fs-label);
@@ -369,8 +371,12 @@ html { --save-clearance: calc(52px + var(--space-6) + var(--tabbar-h) + env(safe
 .insights-card .card-title { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-bold); }
 .insight-section { margin-bottom: var(--space-2); }
 .insight-section h3 { margin-bottom: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: var(--fw-medium); color: var(--color-text-muted); }
-.insight { padding: var(--space-3) 0; border-left: 0; border-bottom: 1px solid var(--color-line); margin-bottom: 0; font-size: var(--fs-label); }
+.insight-list { list-style: none; margin: 0; padding: 0; }
 .insight-list > li:last-child { border-bottom: 0; }
-.insight.strong { background: transparent; border-left: 0; }
-.insight-icon { flex: none; width: 20px; text-align: center; }
+/* 한 줄 = 아이콘 + 문장. 라벨은 스크린리더용으로만 남긴다 */
+.insight { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) 0; border-bottom: 1px solid var(--color-line); font-size: var(--fs-label); }
+.insight.strong { font-weight: var(--fw-bold); }
+.insight-icon { flex: none; width: 20px; height: 20px; margin-top: 1px; color: var(--color-text-muted); }
+.insight-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.icon--alert { --icon: url("../icons/alert.svg"); }
 .account-form > label { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); }

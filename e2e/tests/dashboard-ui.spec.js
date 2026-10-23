@@ -50,7 +50,7 @@ test.describe('C66 신규 사용자 빈 상태', () => {
     await expect(page.locator('#chart-monthly .chart-empty')).toHaveText(EMPTY);
     await expect(page.locator('#chart-cat-trend .chart-empty')).toHaveText(EMPTY);
     expect(await page.locator('#chart-donut svg, #chart-monthly svg, #chart-cat-trend svg').count()).toBe(0);
-    await expect(page.locator('#kpi')).toContainText(NO_PREV);
+    await expect(page.locator('#kpi')).toContainText('지난달 기록이 없어 비교하지 않아요'); // 개선 A3: 두 칸 반복 대신 카드 아래 한 줄
     await expect(page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     await expectNoBadNumbers(page);
     await page.locator('#range-12').click();

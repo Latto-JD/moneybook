@@ -1,6 +1,13 @@
-# API 계약 (v4.2)
+# API 계약 (v4.3)
 
 작성: backend / 기준: `docs/plan.md` v2.1 + `docs/plan-categories.md` + `docs/plan-theme-name.md` / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+
+## 0D. v4.3 변경 요약 (응답 모양·스키마 변경 없음)
+
+| 구분 | 변경 | 호환 |
+|---|---|---|
+| 동작 변경 | `overspending`(R4): 조회 달이 `today`의 달(진행 중인 달)이면 `date > today`인 거래를 `currentTotal`·exceeded·pace 계산에서 뺀다 (6.3). 지난 달·미래 달 조회는 그대로 | 응답 형식 동일. 미리 입력한 지출이 있던 달의 값만 달라짐 |
+| 내부 | insights 조회 시작 날짜에 I1 기준 개월 수도 반영 (값은 지금과 같음) | 응답 변화 없음 |
 
 ## 0C. v4.2 변경 요약 (후속 2단계, 스키마 변경 없음)
 
@@ -475,7 +482,7 @@ v3 (**비호환**): `category`는 그 메모 그룹에서 가장 많이 쓴 **�
   - 예: 월세 500,000원이 매달 같은 날 4건 감지되면 이번 달 월세는 pace에서 빠지고, 월세 외 비반복 지출이 2건 미만이면 pace 항목이 없다. 월세 + 비반복 지출로 `currentTotal`이 baseline의 1.2배 이상이면 `exceeded`는 나온다.
   - 알려진 한계(plan 열린 쟁점 R4-Q1~Q3, 기본값대로 구현): baseline은 반복 포함 합계인데 pace는 반복 제외 금액만 외삽해 비교한다(반복+비반복 혼합 카테고리의 pace가 늦게/안 뜰 수 있음). 큰 단건 1건 + 소액 1건은 pace가 될 수 있다. 비활성 제외로 빠진 주간 반복은 반복으로 보지 않는다.
 - `largeExpenses` 비교군: 해당 거래일 포함 90일(거래일-89 ~ 거래일) 같은 카테고리 지출 중 해당 거래 제외. `median`은 정수가 아닐 수 있음(짝수 건수 평균).
-- `recurring`/`quick`/`autocomplete`는 `date <= today`인 거래만 쓴다. `largeExpenses`/`overspending`은 **month 안의 거래 전체**를 쓰므로, `today` 이후 날짜로 미리 입력한 이번 달 거래(`date > today`)도 `currentTotal`(과 exceeded 판정)에 **포함된다**. pace 대상도 같은 집합(반복 제외)에서 시작해 미리 입력한 거래가 합계·건수에 들어가지만, 경과일은 today 기준이다. (R4-Q4: 현재 구현 동작을 그대로 문서화했으며 변경하지 않음)
+- `recurring`/`quick`/`autocomplete`는 `date <= today`인 거래만 쓴다. `largeExpenses`는 **month 안의 거래 전체**를 쓴다. `overspending`(v4.3 변경)은 조회 달이 `today`의 달(진행 중인 달)이면 **`date > today`인 거래를 `currentTotal`·exceeded·pace 계산에서 뺀다**(오늘 포함, 오늘까지만 센다). 지난 달·미래 달 조회는 month 안 거래 전체를 그대로 쓴다. 날짜 기준 `today`는 다른 규칙과 같다(쿼리 `today` 또는 Asia/Seoul 현재 날짜). 비교: I2(`missingIncome`)의 "이번 달 같은 그룹 거래 없음" 검사는 반대로 미리 입력한 거래(`date > today`)도 포함한다(미리 입력한 수입이 있으면 누락이 아님).
 - 거래 `memo` 비교는 정규화 키(앞뒤 공백 제거, 연속 공백 1칸, 소문자화)로 하고, 응답의 `memo`는 가장 최근 거래의 원래 메모(앞뒤 공백 제거)이다.
 
 **수입 규칙 (v4.2, 응답 키 2개 추가. 값이 없으면 항상 빈 배열 `[]`)**

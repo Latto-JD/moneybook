@@ -171,6 +171,8 @@ test.describe('C-C24 사용 안 함 카테고리 거래 수정', () => {
     await page.locator('#amount').fill('60000');
     await page.locator('#save-btn').click();
     await expect(page.locator('#flash')).toHaveText('수정했어요');
+    await page.mouse.move(2, 2); // 수정 저장 직후 토스트가 포인터(방금 누른 저장 버튼) 아래에 뜨면 hover 로 타이머가 멈춘다(개선 QA A2 결함)
+    await expect(page.locator('#flash')).toHaveText('', { timeout: 8000 }); // 토스트가 목록 행을 덮고 있으면 클릭이 가로채인다(개선 QA A2 관찰) -> 사라진 뒤 진행
     await expect(page.locator('#tx-list')).toContainText('60,000원');
     await expect(page.locator('#tx-list')).toContainText('경조사');
     await expect(page.locator('#category-chips button', { hasText: '사용 안 함' })).toHaveCount(0); // 저장 후 사라짐
@@ -1036,8 +1038,10 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
     });
     await expect(none.page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     const k = await kpiExtra(none.page);
-    expect(k[1].extra).toBe('비교할 지난달 기록이 없어요'); // k[0] = 남은 돈 칸
-    expect(k[2].extra).toBe('비교할 지난달 기록이 없어요');
+    // 개선 A3: 둘 다 비교값이 없으면 칸마다 반복하지 않고 카드 아래 한 줄만
+    expect(k[1].extra).toBe(''); // k[0] = 남은 돈 칸
+    expect(k[2].extra).toBe('');
+    await expect(none.page.locator('#kpi .sum-footnote')).toHaveText('지난달 기록이 없어 비교하지 않아요');
     await none.ctx.close();
     const mixed = await openApp(browser, testInfo, {
       hash: '#dashboard',
@@ -1049,7 +1053,7 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
     });
     await expect(mixed.page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     const m = await kpiExtra(mixed.page);
-    expect(m[1].extra).toBe('비교할 지난달 기록이 없어요');
+    expect(m[1].extra).toBe('—비교할 지난달 기록이 없어요'); // 개선 A3: 보이는 글자는 "—", 스크린리더 문구는 유지
     expect(m[2].extra).toBe('▲ 지난달보다 지출이 20.0% 늘었어요');
     await mixed.ctx.close();
   });

@@ -1,4 +1,4 @@
-// 기록 탭: 입력 폼(F5), 빠른 입력 칩/자동완성(F7), 이번 달 영역(F6), 인사이트(F8)
+// 기록 탭: 입력 폼(F5), 빠른 입력 칩/자동완성(F7), 이번 달 영역(F6)
 import { api } from './api.js';
 import { el, $, chipItem, keepFocus, swatch } from './dom.js';
 import { formatWon, formatAmountInput, parseAmount, addToAmount, formatSignedWon } from './lib/money.js';
@@ -14,7 +14,7 @@ import { gridView, selectedHidden } from './lib/category-grid.js';
 import { renderSummaryCard } from './summary-card.js';
 import { balanceLabel } from './lib/dashboard-data.js';
 import { shouldShowReset } from './lib/reset.js';
-import { txBody, undoPlan, undoFailText } from './lib/undo.js';
+import { txBody, undoPlan, undoFailText, pausedAfterMove } from './lib/undo.js';
 
 const today = () => todayLocal();
 const state = {
@@ -27,7 +27,6 @@ const state = {
   origTx: null, // 수정 중인 거래의 원래 값 전체 (되돌리기용 스냅샷)
   legacy: null, // orig 의 카테고리가 사용 안 함일 때만 orig 와 같음 (그대로 두면 저장할 수 있다)
   txs: [],
-  incomeCats: [], // 이번 달 stats/categories?type=income 의 items
   expanded: { expense: false, income: false }, // 카테고리 격자 펼침(유형별, 새로고침하면 접힘)
 };
 
@@ -103,6 +102,17 @@ async function onUndo() {
     undoing = false;
   }
 }
+/** 토스트는 기록 탭에서는 고정 저장 영역 안(저장 버튼 바로 위), 다른 탭에서는 화면 아래 탭바 위에 둔다. 옮겨도 타이머·포커스 규칙은 그대로다 */
+function placeToast(tab) {
+  const toast = $('toast');
+  const dock = $('save-dock');
+  const to = tab === 'record' ? dock : $('main');
+  if (toast.parentElement === to) return;
+  if (tab === 'record') dock.prepend(toast); else $('main').prepend(toast);
+  // 옮기면 pointerleave 가 오지 않아 멈춤 상태가 남는다: 지우고, 실제로 위에 있을 때만 다시 멈춘 뒤 타이머를 다시 센다
+  toastPaused = pausedAfterMove({ hover: toast.matches(':hover'), focusInside: toast.contains(document.activeElement) });
+  if (toast.querySelector('#flash').textContent) armFlashTimer();
+}
 export function notifyChanged() {
   document.dispatchEvent(new CustomEvent('datachanged'));
 }
@@ -120,10 +130,6 @@ function showFieldErrors(errors) {
   }
 }
 
-/**
- * 저장 버튼 라벨: "지출 저장 · 12,500원" / "수입 저장 · …" / "수정 저장 · …".
- * 금액이 없으면 비활성 모양(aria-disabled)이지만 눌러도 막지 않는다: 금액 오류를 보여 주고 포커스를 금액칸으로 옮기기 위해서다.
- */
 /** 입력 초기화 아이콘: 새 기록 입력 중이고 금액·메모 입력 또는 종류·날짜 변경이 있을 때만 보인다 */
 function updateResetBtn() {
   const b = $('reset-btn');
@@ -132,6 +138,10 @@ function updateResetBtn() {
   b.hidden = hide;
 }
 
+/**
+ * 저장 버튼 라벨: "지출 저장 · 12,500원" / "수입 저장 · …" / "수정 저장 · …".
+ * 금액이 없으면 비활성 모양(aria-disabled)이지만 눌러도 막지 않는다: 금액 오류를 보여 주고 포커스를 금액칸으로 옮기기 위해서다.
+ */
 function updateSaveLabel() {
   const n = parseAmount($('amount').value);
   const base = state.editingId ? '수정 저장' : `${KIND_TEXT[state.type]} 저장`;
@@ -624,6 +634,12 @@ export function initRecord() {
     updateResetBtn();
   });
   $('tx-form').addEventListener('submit', onSubmit);
+  // 다른 탭에서 그려진 격자는 크기를 잴 수 없어 잘린 이름의 title 이 빠진다: 기록 탭이 보일 때 다시 잰다
+  document.addEventListener('tabchange', (ev) => {
+    placeToast(ev.detail.tab);
+    if (ev.detail.tab === 'record') markClamped($('category-chips'));
+  });
+  placeToast($('panel-record').hidden ? '' : 'record');
   const toast = $('toast');
   $('flash-undo').addEventListener('click', onUndo);
   toast.addEventListener('pointerenter', () => { toastPaused = true; if (undo) clearTimeout(flashTimer); });

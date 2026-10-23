@@ -4,6 +4,8 @@ import { el, $ } from './dom.js';
 import { todayLocal } from './lib/date.js';
 import { buildInsightSections, INSIGHT_EMPTY_TEXT } from './lib/insight-text.js';
 
+// 글자 기호(insight-text.js 의 icon) -> 기존 선 아이콘 클래스
+const ICON_CLASS = { '↗': 'expense', '▲': 'expense', '⏳': 'chart', '⏰': 'alert', '↻': 'reset', '↘': 'income', '…': 'alert' };
 const errMsg = (e) => (e && e.message) || '요청을 처리하지 못했어요.';
 let seq = 0;
 
@@ -25,7 +27,7 @@ export async function loadInsights(month) {
       const ul = el('ul', { class: 'insight-list' });
       for (const line of sec.lines) {
         const li = el('li', { class: line.strong ? 'insight strong' : 'insight' });
-        li.appendChild(el('span', { class: 'insight-icon', 'aria-hidden': 'true' }, line.icon));
+        li.appendChild(el('span', { class: `insight-icon icon icon--${ICON_CLASS[line.icon] || 'chart'}`, 'aria-hidden': 'true' }));
         li.appendChild(el('span', { class: 'insight-label' }, line.label));
         li.appendChild(el('span', { class: 'insight-text' }, line.text));
         ul.appendChild(li);
