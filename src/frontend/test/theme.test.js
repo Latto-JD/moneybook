@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
-import { parseTheme, readTheme, saveTheme, applyTheme, initThemeToggle, nextTheme, toggleLabel, THEME_KEY } from '../public/js/lib/theme.js';
+import { parseTheme, readTheme, saveTheme, applyTheme, initThemeToggle, nextTheme, toggleLabel, systemTheme, effectiveTheme, THEME_KEY } from '../public/js/lib/theme.js';
 
 function memStorage(init = {}) {
   const m = new Map(Object.entries(init));
@@ -56,60 +56,108 @@ test('applyTheme: 속성 설정/제거', () => {
   assert.equal('data-theme' in r.a, false);
 });
 
-test('nextTheme: 자동 -> 라이트 -> 다크 -> 자동', () => {
-  assert.equal(nextTheme('auto'), 'light');
+test('nextTheme: 2상태 (다크 -> 라이트, 그 밖 -> 다크)', () => {
   assert.equal(nextTheme('light'), 'dark');
-  assert.equal(nextTheme('dark'), 'auto');
-  assert.equal(nextTheme('blue'), 'light');
+  assert.equal(nextTheme('dark'), 'light');
+  assert.equal(nextTheme('auto'), 'dark');
+  assert.equal(nextTheme('blue'), 'dark');
 });
 
 test('toggleLabel: 현재 모드 글자를 포함하고 다음 모드를 알림', () => {
-  assert.equal(toggleLabel('light'), '화면 모드: 라이트. 누르면 다크(으)로 바뀌어요');
-  assert.match(toggleLabel('auto'), /^화면 모드: 자동/);
+  assert.equal(toggleLabel('light'), '화면 모드: 라이트. 누르면 다크로 바뀌어요');
+  assert.equal(toggleLabel('dark'), '화면 모드: 다크. 누르면 라이트로 바뀌어요');
 });
 
-test('initThemeToggle: 클릭마다 순환·저장·적용·알림, storage 이벤트 반영', () => {
+test('systemTheme: matchMedia 결과, 없거나 예외면 light', () => {
+  assert.equal(systemTheme({ matchMedia: () => ({ matches: true }) }), 'dark');
+  assert.equal(systemTheme({ matchMedia: () => ({ matches: false }) }), 'light');
+  assert.equal(systemTheme({}), 'light');
+  assert.equal(systemTheme({ matchMedia() { throw new Error('x'); } }), 'light');
+});
+
+test('effectiveTheme: 저장값 우선, 그 밖은 OS', () => {
+  assert.equal(effectiveTheme('light', 'dark'), 'light');
+  assert.equal(effectiveTheme('dark', 'light'), 'dark');
+  for (const v of ['auto', null, 'blue']) assert.equal(effectiveTheme(v, 'dark'), 'dark');
+  assert.equal(effectiveTheme('auto', 'light'), 'light');
+});
+
+function mqlWin(dark) {
+  const h = {};
+  const mql = { matches: dark, addEventListener: (t, f) => { h.mql = f; } };
+  return { h, mql, addEventListener: (t, f) => { h[t] = f; }, matchMedia: () => mql };
+}
+
+test('initThemeToggle: 저장값 없음 + OS 다크 -> 다크 표시, 클릭하면 light 저장', () => {
   const s = memStorage();
   const root = fakeRoot();
   const btn = fakeBtn();
-  const win = fakeWin();
+  const win = mqlWin(true);
   const status = { textContent: '' };
   initThemeToggle(btn, { status, storage: s, root, win });
-  assert.equal(btn.dataset.mode, 'auto');
-  assert.equal(btn.text.textContent, '자동');
-  assert.equal(btn.icon.className, 'icon icon--theme-auto');
+  assert.equal(btn.dataset.mode, 'dark');
+  assert.equal(btn.text.textContent, '다크');
+  assert.equal(btn.icon.className, 'icon icon--theme-dark');
+  assert.equal('data-theme' in root.a, false);
 
   btn.h.click();
-  assert.equal(btn.dataset.mode, 'light');
   assert.equal(s.m.get(THEME_KEY), 'light');
   assert.equal(root.a['data-theme'], 'light');
+  assert.equal(btn.dataset.mode, 'light');
   assert.equal(btn.text.textContent, '라이트');
-  assert.equal(btn.icon.className, 'icon icon--theme-light');
   assert.equal(status.textContent, '라이트 모드');
-  assert.match(btn.attrs['aria-label'], /라이트/);
+  assert.match(btn.attrs['aria-label'], /^화면 모드: 라이트/);
 
   btn.h.click();
   assert.equal(s.m.get(THEME_KEY), 'dark');
-  assert.equal(root.a['data-theme'], 'dark');
-  btn.h.click();
-  assert.equal(s.m.has(THEME_KEY), false);
-  assert.equal('data-theme' in root.a, false);
-  assert.equal(btn.dataset.mode, 'auto');
-
-  s.setItem(THEME_KEY, 'dark');
-  win.h.storage({ key: THEME_KEY });
-  assert.equal(btn.dataset.mode, 'dark');
-  assert.equal(btn.text.textContent, '다크');
-  assert.equal(root.a['data-theme'], 'dark');
-  s.setItem(THEME_KEY, 'light');
-  win.h.storage({ key: 'other' });
-  assert.equal(btn.dataset.mode, 'dark');
+  assert.equal(status.textContent, '다크 모드');
+  assert.equal(s.m.size, 1); // 키 삭제 없음
 });
 
-test('initThemeToggle: 저장값으로 시작', () => {
+test('initThemeToggle: OS 변경은 저장값이 없을 때만 표시에 반영', () => {
+  const s = memStorage();
   const btn = fakeBtn();
-  initThemeToggle(btn, { storage: memStorage({ [THEME_KEY]: 'dark' }), root: fakeRoot(), win: fakeWin() });
+  const win = mqlWin(false);
+  initThemeToggle(btn, { storage: s, root: fakeRoot(), win });
+  assert.equal(btn.dataset.mode, 'light');
+  win.mql.matches = true;
+  win.h.mql();
   assert.equal(btn.dataset.mode, 'dark');
+  btn.h.click(); // light 저장
+  win.mql.matches = true;
+  win.h.mql();
+  assert.equal(btn.dataset.mode, 'light');
+});
+
+test('initThemeToggle: storage 이벤트 반영, 키가 지워지면 OS 모드로', () => {
+  const s = memStorage();
+  const root = fakeRoot();
+  const btn = fakeBtn();
+  const win = mqlWin(true);
+  initThemeToggle(btn, { storage: s, root, win });
+  s.setItem(THEME_KEY, 'light');
+  win.h.storage({ key: THEME_KEY });
+  assert.equal(btn.dataset.mode, 'light');
+  assert.equal(root.a['data-theme'], 'light');
+  s.setItem(THEME_KEY, 'dark');
+  win.h.storage({ key: 'other' });
+  assert.equal(btn.dataset.mode, 'light');
+  s.removeItem(THEME_KEY);
+  win.h.storage({ key: THEME_KEY });
+  assert.equal(btn.dataset.mode, 'dark'); // OS 다크
+  assert.equal('data-theme' in root.a, false);
+});
+
+test('initThemeToggle: 저장값·잘못된 값·matchMedia 없음', () => {
+  let btn = fakeBtn();
+  initThemeToggle(btn, { storage: memStorage({ [THEME_KEY]: 'dark' }), root: fakeRoot(), win: mqlWin(false) });
+  assert.equal(btn.dataset.mode, 'dark');
+  btn = fakeBtn();
+  initThemeToggle(btn, { storage: memStorage({ [THEME_KEY]: 'auto' }), root: fakeRoot(), win: mqlWin(true) });
+  assert.equal(btn.dataset.mode, 'dark'); // 'auto' 는 저장값 없음으로 본다
+  btn = fakeBtn();
+  initThemeToggle(btn, { storage: memStorage(), root: fakeRoot(), win: fakeWin() });
+  assert.equal(btn.dataset.mode, 'light');
 });
 
 function runInit(storage) {
@@ -132,10 +180,13 @@ test('HTML: 헤더는 #theme-toggle 버튼(select 없음), 상태 영역 role=st
   assert.doesNotMatch(html, /<select/i);
   assert.doesNotMatch(html.match(/<button[^>]*id="theme-toggle"[^>]*>/)[0], /aria-pressed/);
   assert.match(html, /id="theme-status" role="status"/);
+  assert.match(html, /id="theme-toggle" data-mode="light"/);
+  assert.doesNotMatch(html, /theme-auto/);
 });
 
-test('아이콘 3개: svg, metadata·외부 URL 없음', () => {
-  for (const n of ['auto', 'light', 'dark']) {
+test('아이콘 2개: svg, metadata·외부 URL 없음, theme-auto.svg 없음', () => {
+  assert.equal(existsSync(new URL('../public/icons/theme-auto.svg', import.meta.url)), false);
+  for (const n of ['light', 'dark']) {
     const svg = readFileSync(new URL(`../public/icons/theme-${n}.svg`, import.meta.url), 'utf8');
     assert.match(svg, /^<svg /);
     assert.doesNotMatch(svg, /metadata|c2pa|data:|https?:\/\/(?!www\.w3\.org)/);

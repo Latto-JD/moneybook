@@ -31,11 +31,14 @@ export function recurringGroupKey(t) {
 }
 
 // 감지된 반복 항목과 그 그룹 키 목록: [{ key, item }] (R4 가 반복 거래를 제외할 때 사용)
-export function detectRecurringGroups(transactions, today) {
+// options (I2 반복 수입 누락용, 생략하면 R3 그대로): { type, period, activeDays }
+//   type/period: 해당 구분·주기 그룹만. activeDays: 비활성 제외 기준(마지막 날짜 + N일 < today 이면 제외), 기본은 주기별 maxGap
+export function detectRecurringGroups(transactions, today, options = {}) {
   const from = addDays(today, -(RECURRING.windowDays - 1));
   const groups = new Map();
   for (const t of transactions) {
     if (t.date < from || t.date > today) continue;
+    if (options.type && t.type !== options.type) continue;
     const key = recurringGroupKey(t);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(t);
@@ -51,12 +54,13 @@ export function detectRecurringGroups(transactions, today) {
     const items = [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
     const found = detectPeriod(items.map((t) => t.date));
     if (!found) continue;
+    if (options.period && found.period !== options.period) continue;
     const med = median(items.map((t) => t.amount));
     // 모든 금액이 중앙값의 +-10% 이내 (정수 연산으로 부동소수 오차 방지)
     if (!items.every((t) => t.amount * 10 >= med * 9 && t.amount * 10 <= med * 11)) continue;
     const last = items[items.length - 1];
     // 비활성 제외
-    if (addDays(last.date, found.rule.maxGap) < today) continue;
+    if (addDays(last.date, options.activeDays ?? found.rule.maxGap) < today) continue;
     const nextDate = addDays(last.date, Math.floor(median(found.gaps)));
     const item = {
       type: last.type,

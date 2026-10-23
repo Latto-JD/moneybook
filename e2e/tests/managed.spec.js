@@ -262,7 +262,7 @@ test.describe('C26 시드 / C35 기본 today', () => {
       // 다른 사용자에게는 시드 데이터가 보이지 않는다
       const other = await createLoggedInUser('c26other', { baseURL: s.url });
       const oi = await (await get(other.api, `/api/insights?month=${today.slice(0, 7)}&today=${today}`)).json();
-      expect(oi).toEqual({ month: '2026-10', recurring: [], overspending: [], largeExpenses: [] });
+      expect(oi).toEqual({ month: '2026-10', recurring: [], overspending: [], largeExpenses: [], incomeDrops: [], missingIncome: [] });
       // 관찰사항 기록용: 시드 insights 요약
       test.info().annotations.push({
         type: 'seed-insights',

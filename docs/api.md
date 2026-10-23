@@ -1,6 +1,14 @@
-# API 계약 (v4.1)
+# API 계약 (v4.2)
 
 작성: backend / 기준: `docs/plan.md` v2.1 + `docs/plan-categories.md` + `docs/plan-theme-name.md` / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+
+## 0C. v4.2 변경 요약 (후속 2단계, 스키마 변경 없음)
+
+| 구분 | 변경 | 호환 |
+|---|---|---|
+| 추가 | `GET /api/insights` 응답에 키 2개 추가: `incomeDrops`(I1 수입 감소), `missingIncome`(I2 반복 수입 누락) (6.3, 6.4) | 추가 전용. 기존 키·필드·정렬 불변 |
+| 불변 | 다른 API, DB 스키마, 마이그레이션, 에러 코드 | - |
+| 메모 | 저장·수정 되돌리기는 새 API 없이 기존 `DELETE`(4.4)·`PUT`(4.3)을 쓴다 (4.3 끝의 메모) | - |
 
 ## 0B. v4.1 변경 요약 (후속 1단계, 응답 형식·스키마 변경 없음)
 
@@ -369,6 +377,8 @@ month 필수(형식 오류/누락 400). 응답: date 내림차순, 같은 날은
 - 검사 순서: type/amount/date/memo 형식 검증(400) -> 대상 거래 조회(404) -> 카테고리 검증(400 `fields.category`). 즉 존재하지 않는 거래에 잘못된 카테고리를 보내면 404이고, 존재하는 거래에 형식 오류와 카테고리 오류가 함께 있으면 형식 오류 400 하나만 `fields`에 담긴다(카테고리 오류는 형식이 통과한 뒤에 판정).
 - 예: "경조사"(사용 안 함)로 기록된 거래의 금액만 고치기: `PUT {type:"expense", amount:50000, category:"경조사", ...}` -> 200. 같은 거래를 활성 "식비"로 바꾸기 -> 200. 다른 거래를 "경조사"로 바꾸기 -> 400.
 
+**되돌리기 메모 (v4.2)**: 프론트의 저장·수정 되돌리기는 새 엔드포인트 없이 기존 API를 쓴다. 생성 되돌리기는 `DELETE`(404도 성공으로 취급), 수정 되돌리기는 수정 전 값 전체를 `PUT`으로 보낸다. 이때 되돌릴 (type, category)가 **현재 저장 값과 다르고** 그 카테고리가 사용 안 함이면 위 예외가 적용되지 않아 400 `fields.category`이다(예: 사용 안 함 "경조사" 거래를 "식비"로 고친 뒤 "경조사"로 되돌리는 PUT). `createdAt`은 PUT에서 유지되므로 목록 순서는 원래대로 돌아온다.
+
 ### 4.4 DELETE /api/transactions/:id
 204 (본문 없음). 404 규칙은 PUT과 동일.
 
@@ -446,7 +456,9 @@ v3 (**비호환**): `category`는 그 메모 그룹에서 가장 많이 쓴 **�
   "month": "2026-10",
   "recurring": [ { "type": "expense", "memo": "넷플릭스", "category": "문화/여가", "amount": 17000, "period": "monthly", "occurrences": 4, "lastDate": "2026-10-05", "nextDate": "2026-11-04", "dueSoon": false } ],
   "overspending": [ { "category": "식비", "level": "exceeded", "currentTotal": 130000, "baseline": 100000, "projectedTotal": null, "ratio": 1.3 } ],
-  "largeExpenses": [ { "transactionId": "uuid", "date": "2026-10-12", "category": "쇼핑", "memo": "패딩", "amount": 250000, "median": 40000, "multiple": 6.3 } ]
+  "largeExpenses": [ { "transactionId": "uuid", "date": "2026-10-12", "category": "쇼핑", "memo": "패딩", "amount": 250000, "median": 40000, "multiple": 6.3 } ],
+  "incomeDrops": [ { "category": "급여", "currentTotal": 1800000, "baseline": 2500000, "ratio": 0.72 } ],
+  "missingIncome": [ { "memo": "급여", "category": "급여", "amount": 2500000, "lastDate": "2026-09-25", "expectedDate": "2026-10-25" } ]
 }
 ```
 `projectedTotal`은 level이 `pace`일 때만 숫자(예상 월 합계, 반올림), `exceeded`면 `null`. 정렬/제한은 plan.md 6장.
@@ -466,15 +478,32 @@ v3 (**비호환**): `category`는 그 메모 그룹에서 가장 많이 쓴 **�
 - `recurring`/`quick`/`autocomplete`는 `date <= today`인 거래만 쓴다. `largeExpenses`/`overspending`은 **month 안의 거래 전체**를 쓰므로, `today` 이후 날짜로 미리 입력한 이번 달 거래(`date > today`)도 `currentTotal`(과 exceeded 판정)에 **포함된다**. pace 대상도 같은 집합(반복 제외)에서 시작해 미리 입력한 거래가 합계·건수에 들어가지만, 경과일은 today 기준이다. (R4-Q4: 현재 구현 동작을 그대로 문서화했으며 변경하지 않음)
 - 거래 `memo` 비교는 정규화 키(앞뒤 공백 제거, 연속 공백 1칸, 소문자화)로 하고, 응답의 `memo`는 가장 최근 거래의 원래 메모(앞뒤 공백 제거)이다.
 
+**수입 규칙 (v4.2, 응답 키 2개 추가. 값이 없으면 항상 빈 배열 `[]`)**
+
+- `incomeDrops` (I1 수입 감소, R4 `exceeded`의 수입판)
+  - 판정하는 달: `month`가 `today`의 달보다 **앞선 달(끝난 달)**일 때만. 이번 달·미래 달은 `[]`.
+  - 수입(`type=income`)만, 카테고리별. `currentTotal`: 그 달 그 카테고리 수입 합계(반복 포함, 없으면 0). `baseline`: 직전 3개 달력월 중 그 카테고리 수입이 있는 달의 월 합계 평균(원 단위 반올림). 기록 있는 달이 2개월 미만이거나 baseline(반올림 전)이 10,000원 미만이면 판정 안 함.
+  - 조건: `currentTotal <= baseline x 0.8` (정수 연산: `currentTotal x k x 5 <= S x 4`, k = 기록 있는 달 수, S = 그 합계). 경계값 포함. `currentTotal = 0`도 포함.
+  - 필드: `category`(string), `currentTotal`(정수), `baseline`(정수), `ratio`(number, `currentTotal / baseline` 소수 둘째 자리 반올림).
+  - 정렬: `ratio` 오름차순 -> 사용자 카테고리 `sortOrder`(income) -> 가나다. 카테고리당 1개, 개수 제한 없음.
+- `missingIncome` (I2 반복 수입 누락)
+  - 판정하는 달: `month`가 `today`의 달과 **같을 때만**. 다른 달은 `[]`.
+  - 대상 그룹: R3와 같은 그룹 키(메모 정규화 키, 메모 없으면 구분+카테고리+금액)와 월간 조건(같은 날 1건으로 계산, 3회 이상, 간격 26~35일, 금액 중앙값 +-10%), **수입·월간만**. R3의 비활성 제외(마지막 날짜+35일) 대신 `마지막 날짜 + 70일 >= today`인 그룹까지 본다. `date <= today` 거래만 그룹 감지에 쓴다. `recurring` 결과는 바뀌지 않는다.
+  - `expectedDate = 마지막 날짜 + floor(간격 중앙값)` (R3 `nextDate`와 같은 계산).
+  - 조건: `today >= expectedDate + 3일`(유예) 이고, 이번 달 거래 중 같은 그룹 키 거래가 하나도 없음(이 검사만 `date > today`로 미리 입력한 거래도 포함). 마지막 거래가 이번 달이면 대상이 아니다.
+  - 필드: `memo`(string, 마지막 거래의 메모, 앞뒤 공백 제거. 메모가 없으면 `""`), `category`(string), `amount`(정수, 금액 중앙값 반올림), `lastDate`, `expectedDate`(`YYYY-MM-DD`).
+  - 정렬: `expectedDate` 오름차순 -> `memo` 가나다. 사용 안 함 카테고리도 계속 판정.
+  - 알려진 겹침: 마지막+35일 이내에는 `recurring`의 같은 수입 항목(다음 예정일이 지난 날짜)과 `missingIncome` 항목이 함께 나올 수 있다.
+
 ### 6.4 카테고리 변경이 인사이트에 주는 영향 (v3)
 
 응답 형식은 v2와 같다. 규칙은 거래의 카테고리 **문자열**로 묶으므로 다음과 같이 동작한다.
 
-| 상황 | R3 recurring | R4 overspending | R5 largeExpenses |
-|---|---|---|---|
-| 이름 변경 | 과거 거래도 새 이름이라 그룹·건수·간격이 이어진다 | 직전 3개월 baseline이 새 이름으로 합쳐져 연속(같은 `currentTotal`/`baseline`/`ratio`) | 비교군 연속 |
-| 사용 안 함 | 계속 감지·표시 | 계속 판정(`level`/값 불변). 정렬 동률만 `sortOrder` 기준 | 계속 판정 |
-| 새 카테고리 | 기존 규칙(건수 조건) | 기록 있는 달 2개월 미만이면 판정 없음 | 비교군 5건 미만이면 판정 없음 |
+| 상황 | R3 recurring | R4 overspending | R5 largeExpenses | I1 incomeDrops (v4.2) | I2 missingIncome (v4.2) |
+|---|---|---|---|---|---|
+| 이름 변경 | 과거 거래도 새 이름이라 그룹·건수·간격이 이어진다 | 직전 3개월 baseline이 새 이름으로 합쳐져 연속(같은 `currentTotal`/`baseline`/`ratio`) | 비교군 연속 | baseline이 새 이름으로 합쳐져 연속 | 메모 있는 그룹은 그대로, 메모 없는 그룹은 새 이름으로 이어짐 |
+| 사용 안 함 | 계속 감지·표시 | 계속 판정(`level`/값 불변). 정렬 동률만 `sortOrder` 기준 | 계속 판정 | 계속 판정. 정렬 동률만 `sortOrder` 기준 | 계속 판정 |
+| 새 카테고리 | 기존 규칙(건수 조건) | 기록 있는 달 2개월 미만이면 판정 없음 | 비교군 5건 미만이면 판정 없음 | 기록 있는 달 2개월 미만이면 판정 없음 | 3회 미만이면 판정 없음 |
 
 `level` 값(`exceeded`/`pace`) 등 응답 필드는 바뀌지 않는다. 사용 안 함 여부는 응답에 담지 않는다(프론트는 `GET /api/categories`의 `items`로 판단한다).
 

@@ -116,3 +116,23 @@ export function balanceBars(income, expense) {
   const pct = (v) => Math.round((v / base) * 1000) / 10;
   return { income: pct(inc), expense: pct(exp) };
 }
+
+/** 소수 첫째 자리 + 천 단위 쉼표 */
+const percentText = (pct) => pct.toFixed(1).replace(/\B(?=(\d{3})+\.)/g, ',');
+
+/**
+ * 남은 돈 비율 (사실 문구, 좋고 나쁨을 가르지 않는다).
+ * 수입 > 0: 남은 돈 >= 0 이면 "수입의 N%가 남았어요", 음수면 "지출이 수입보다 N% 많아요" (N = |남은 돈| ÷ 수입, 소수 첫째 자리).
+ * 수입 = 0 이고 지출 > 0 (남은 돈 < 0): "수입 기록이 없어 비율을 계산하지 않아요". 둘 다 0: null (줄을 그리지 않는다).
+ * 반환: null | { direction:'left'|'over'|'none', percent:number|null, text }
+ */
+export function balanceRate(income, balance) {
+  const inc = Number.isFinite(income) && income > 0 ? income : 0;
+  const bal = Number.isFinite(balance) ? balance : 0;
+  if (inc <= 0) {
+    return bal < 0 ? { direction: 'none', percent: null, text: '수입 기록이 없어 비율을 계산하지 않아요' } : null;
+  }
+  const pct = Math.round((Math.abs(bal) / inc) * 1000) / 10 + 0; // +0: -0 방지
+  if (bal < 0) return { direction: 'over', percent: pct, text: `지출이 수입보다 ${percentText(pct)}% 많아요` };
+  return { direction: 'left', percent: pct, text: `수입의 ${percentText(pct)}%가 남았어요` };
+}

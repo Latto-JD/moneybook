@@ -16,15 +16,18 @@
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
   <header class="app-header">
     <a class="user" id="user-name" href="#account"></a>
-    <button type="button" class="btn btn--ghost btn--sm theme-toggle" id="theme-toggle" data-mode="auto">
-      <span class="icon icon--theme-auto" aria-hidden="true"></span><span class="theme-toggle__text">자동</span>
+    <button type="button" class="btn btn--ghost btn--sm theme-toggle" id="theme-toggle" data-mode="light">
+      <span class="icon icon--theme-light" aria-hidden="true"></span><span class="theme-toggle__text">라이트</span>
     </button>
     <p class="visually-hidden" id="theme-status" role="status"></p>
     <button type="button" class="btn btn--ghost btn--sm" id="logout-btn">로그아웃</button>
   </header>
 
   <main class="app-main screen" id="main">
-    <p class="toast" id="flash" role="status" aria-live="polite"></p>
+    <div class="toast" id="toast">
+      <p id="flash" role="status" aria-live="polite"></p>
+      <button type="button" class="btn btn--ghost btn--sm" id="flash-undo" hidden>되돌리기</button>
+    </div>
 
     <!-- 기록 탭 -->
     <section id="panel-record" aria-label="기록">

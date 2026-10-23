@@ -67,6 +67,6 @@ test.describe('C51 집계/추천 격리', () => {
     expect(ac).toEqual({ items: [] });
 
     const ins = await (await get(B.api, `/api/insights?month=2026-10&today=${today}`)).json();
-    expect(ins).toEqual({ month: '2026-10', recurring: [], overspending: [], largeExpenses: [] });
+    expect(ins).toEqual({ month: '2026-10', recurring: [], overspending: [], largeExpenses: [], incomeDrops: [], missingIncome: [] });
   });
 });

@@ -7,7 +7,7 @@ import { stableVizMap } from './lib/viz.js';
 import { todayLocal, monthOf, shiftMonth, monthTitle, trailingRange } from './lib/date.js';
 import { renderDonut, renderGroupedBars, renderBars } from './charts.js';
 import {
-  buildKpi, balanceBars, balanceLabel, summaryLabel, NO_PREV_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
+  buildKpi, balanceBars, balanceRate, balanceLabel, summaryLabel, NO_PREV_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
 } from './lib/dashboard-data.js';
 
 // 카테고리 보기(도넛·추이) 유형별 문구. 지출과 수입은 같은 구조의 문장을 쓴다.
@@ -52,10 +52,12 @@ function renderKpi(kpi, base) {
   const balance = el('div', { class: 'kpi kpi--balance' });
   balance.appendChild(el('div', { class: 'kpi-label' }, balanceLabel(base, thisMonth)));
   balance.appendChild(el('div', { class: 'kpi-value figure' }, formatBalanceWon(kpi.balance)));
+  const rate = balanceRate(kpi.income, kpi.balance);
+  if (rate) balance.appendChild(el('p', { class: 'balance-rate' }, rate.text));
   const row = el('div', { class: 'balance-pair' });
   row.appendChild(pair('income', '수입', kpi.income, bars.income, kpi.incomeChange));
   row.appendChild(pair('expense', '지출', kpi.expense, bars.expense, kpi.expenseChange));
-  // 읽는 순서 = 화면 순서: 남은 돈 -> 수입 -> 지출
+  // 읽는 순서 = 화면 순서: 남은 돈 -> 비율 -> 수입 -> 지출
   $('kpi').replaceChildren(balance, row);
 }
 

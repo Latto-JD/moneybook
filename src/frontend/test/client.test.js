@@ -6,7 +6,7 @@ import { authErrorMessage, waitText } from '../public/js/lib/messages.js';
 import {
   buildKpi, expenseChange, incomeChange, donutItemsFrom, trendCategories, defaultTrendCategory, seriesFor,
 } from '../public/js/lib/dashboard-data.js';
-import { buildInsightSections, overspendingLine, recurringLine, largeExpenseLine, INSIGHT_EMPTY_TEXT } from '../public/js/lib/insight-text.js';
+import { buildInsightSections, overspendingLine, recurringLine, largeExpenseLine, incomeDropLine, missingIncomeLine, INSIGHT_EMPTY_TEXT } from '../public/js/lib/insight-text.js';
 import { debounce } from '../public/js/lib/debounce.js';
 
 function mockFetch(status, body, headers = {}) {
@@ -190,6 +190,35 @@ test('인사이트 문장: api.md 6.3 예시', () => {
   const all = JSON.stringify(secs);
   assert.doesNotMatch(all, /NaN|undefined|Infinity|null/);
   assert.doesNotMatch(all + INSIGHT_EMPTY_TEXT, /과소비|더 썼|덜 썼|초과|⚠/);
+});
+
+test('인사이트 문장: 수입 I1·I2', () => {
+  const data = {
+    month: '2026-09',
+    incomeDrops: [
+      { category: '급여', currentTotal: 1800000, baseline: 2500000, ratio: 0.72 },
+      { category: '용돈', currentTotal: 0, baseline: 50000, ratio: 0 },
+    ],
+    missingIncome: [
+      { memo: '급여', category: '급여', amount: 2500000, lastDate: '2026-09-25', expectedDate: '2026-10-25' },
+      { memo: '', category: '이자', amount: 30000, lastDate: '2026-09-02', expectedDate: '2026-10-02' },
+    ],
+  };
+  const secs = buildInsightSections(data);
+  assert.deepEqual(secs.map((s) => s.key), ['income-drop', 'income-missing']);
+  assert.deepEqual(secs.map((s) => s.title), ['평소보다 적은 수입', '아직 들어오지 않은 수입']);
+  assert.equal(incomeDropLine(data.incomeDrops[0], '2026-09').text, '급여: 9월 수입 1,800,000원으로 평소 월 평균 2,500,000원보다 28% 적어요');
+  assert.equal(incomeDropLine(data.incomeDrops[1], '2026-09').text, '용돈: 9월에는 수입 기록이 없어요 (평소 월 평균 50,000원)');
+  assert.equal(incomeDropLine(data.incomeDrops[0], '2026-09').label, '평소보다 적음');
+  assert.equal(missingIncomeLine(data.missingIncome[0]).text, '급여 2,500,000원: 매달 들어오던 수입이 이번 달엔 아직 없어요 (마지막 9월 25일)');
+  assert.match(missingIncomeLine(data.missingIncome[1]).text, /^이자 30,000원:/);
+  assert.equal(missingIncomeLine(data.missingIncome[0]).label, '아직 없음');
+  // 구버전 응답(키 없음)과 빈 배열
+  assert.deepEqual(buildInsightSections({ recurring: [], overspending: [], largeExpenses: [], incomeDrops: [], missingIncome: [] }), []);
+  const all = JSON.stringify(secs);
+  assert.doesNotMatch(all, /NaN|undefined|Infinity|null/);
+  assert.doesNotMatch(all + INSIGHT_EMPTY_TEXT, /과소비|더 썼|덜 썼|초과|⚠/);
+  assert.match(INSIGHT_EMPTY_TEXT, /^아직 알려드릴 내용이 없어요\./);
 });
 
 test('debounce: 마지막 호출만 실행, cancel', () => {

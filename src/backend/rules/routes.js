@@ -8,6 +8,7 @@ import { autocomplete, AUTOCOMPLETE } from './autocomplete.js';
 import { detectRecurringGroups, RECURRING } from './recurring.js';
 import { detectOverspending, OVERSPENDING } from './overspending.js';
 import { detectLargeExpenses, LARGE } from './large.js';
+import { detectIncomeDrops, detectMissingIncome } from './income.js';
 import { memoKey } from './common.js';
 import { loadActiveNames, loadOrderFn } from '../lib/categories.js';
 
@@ -68,6 +69,8 @@ async function insights({ db, user, query, now }) {
       recurring: groups.map((g) => g.item),
       overspending: detectOverspending(txs, month, today, new Set(groups.map((g) => g.key)), orderOf),
       largeExpenses: detectLargeExpenses(txs, month),
+      incomeDrops: detectIncomeDrops(txs, month, today, orderOf),
+      missingIncome: detectMissingIncome(txs, month, today),
     },
   };
 }

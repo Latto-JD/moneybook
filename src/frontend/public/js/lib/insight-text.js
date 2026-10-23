@@ -1,7 +1,7 @@
-// 인사이트(R3/R4/R5) -> 한 줄 문장. 순수 함수. 필드는 docs/api.md 6.3 기준.
+// 인사이트(R3/R4/R5, 수입 I1/I2) -> 한 줄 문장. 순수 함수. 필드는 docs/api.md 6.3 기준.
 import { formatWon } from './money.js';
 
-export const INSIGHT_EMPTY_TEXT = '아직 알려드릴 내용이 없어요. 기록이 쌓이면 반복 지출과 평소보다 지출이 많은 곳을 알려드려요.';
+export const INSIGHT_EMPTY_TEXT = '아직 알려드릴 내용이 없어요. 기록이 쌓이면 반복 거래와 평소와 다른 지출·수입을 알려드려요.';
 
 const mdText = (dateStr) => {
   const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(dateStr));
@@ -44,6 +44,29 @@ export function largeExpenseLine(l) {
   };
 }
 
+/** I1 수입 감소 (끝난 달만). month: 'YYYY-MM' (응답의 month) */
+export function incomeDropLine(d, month) {
+  const m = /^\d{4}-(\d{2})$/.exec(String(month));
+  const name = m ? `${Number(m[1])}월` : '그 달';
+  if (!(d.currentTotal > 0)) {
+    return { icon: '↘', label: '평소보다 적음', text: `${d.category}: ${name}에는 수입 기록이 없어요 (평소 월 평균 ${formatWon(d.baseline)})` };
+  }
+  const pct = Math.round((1 - (d.ratio || 0)) * 100);
+  return {
+    icon: '↘', label: '평소보다 적음',
+    text: `${d.category}: ${name} 수입 ${formatWon(d.currentTotal)}으로 평소 월 평균 ${formatWon(d.baseline)}보다 ${Math.max(pct, 0)}% 적어요`,
+  };
+}
+
+/** I2 반복 수입 누락 (이번 달만). memo 가 비면 카테고리 이름 */
+export function missingIncomeLine(x) {
+  const last = mdText(x.lastDate);
+  return {
+    icon: '…', label: '아직 없음',
+    text: `${x.memo || x.category} ${formatWon(x.amount)}: 매달 들어오던 수입이 이번 달엔 아직 없어요${last ? ` (마지막 ${last})` : ''}`,
+  };
+}
+
 /** 응답 전체 -> 섹션 목록. 모두 비면 []. */
 export function buildInsightSections(data) {
   const d = data || {};
@@ -51,8 +74,12 @@ export function buildInsightSections(data) {
   const over = Array.isArray(d.overspending) ? d.overspending : [];
   const rec = Array.isArray(d.recurring) ? d.recurring : [];
   const big = Array.isArray(d.largeExpenses) ? d.largeExpenses : [];
+  const drops = Array.isArray(d.incomeDrops) ? d.incomeDrops : [];
+  const missing = Array.isArray(d.missingIncome) ? d.missingIncome : [];
   if (over.length) sections.push({ key: 'overspending', title: '평소보다 많은 지출', lines: over.map(overspendingLine) });
   if (rec.length) sections.push({ key: 'recurring', title: '반복 거래', lines: rec.map(recurringLine) });
   if (big.length) sections.push({ key: 'large', title: '평소보다 큰 지출', lines: big.map(largeExpenseLine) });
+  if (drops.length) sections.push({ key: 'income-drop', title: '평소보다 적은 수입', lines: drops.map((x) => incomeDropLine(x, d.month)) });
+  if (missing.length) sections.push({ key: 'income-missing', title: '아직 들어오지 않은 수입', lines: missing.map(missingIncomeLine) });
   return sections;
 }

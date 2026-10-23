@@ -371,8 +371,8 @@ test.describe('C-F12 폰트', () => {
     test.setTimeout(120_000);
     const sizes = {};
     for (const f of readdirSync(join(PUBLIC, 'fonts')).filter((n) => n.endsWith('.woff2'))) sizes[f] = statSync(join(PUBLIC, 'fonts', f)).size;
-    const oldCss = execFileSync('git', ['show', 'HEAD:src/frontend/public/css/fonts.css'], { cwd: ROOT, encoding: 'utf8' });
-    const oldMedium = execFileSync('git', ['show', 'HEAD:src/frontend/public/fonts/Newsreader-Medium.latin.woff2'], { cwd: ROOT, maxBuffer: 10_000_000 });
+    const oldCss = execFileSync('git', ['show', '5a0689d^:src/frontend/public/css/fonts.css'], { cwd: ROOT, encoding: 'utf8' });
+    const oldMedium = execFileSync('git', ['show', '5a0689d^:src/frontend/public/fonts/Newsreader-Medium.latin.woff2'], { cwd: ROOT, maxBuffer: 10_000_000 });
     sizes['Newsreader-Medium.latin.woff2 (삭제됨)'] = oldMedium.length;
     const u = await createLoggedInUser('f12');
     for (const [i, c] of ['식비', '교통', '쇼핑'].entries()) await addTx(u.api, { type: 'expense', amount: 10000 * (i + 1), category: c, date: '2026-10-05' });

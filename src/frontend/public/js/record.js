@@ -11,6 +11,7 @@ import { formatPercent } from './lib/chart-geometry.js';
 import { shouldSubmitOnChipEnter } from './lib/chip-keys.js';
 import { debounce }from './lib/debounce.js';
 import { buildInsightSections, INSIGHT_EMPTY_TEXT } from './lib/insight-text.js';
+import { txBody, undoPlan, undoFailText } from './lib/undo.js';
 
 const today = () => todayLocal();
 const state = {
@@ -20,6 +21,7 @@ const state = {
   month: monthOf(today()),
   editingId: null,
   orig: null, // 수정 중인 거래의 원래 { type, category }
+  origTx: null, // 수정 중인 거래의 원래 값 전체 (되돌리기용 스냅샷)
   legacy: null, // orig 의 카테고리가 사용 안 함일 때만 orig 와 같음 (그대로 두면 저장할 수 있다)
   txs: [],
   incomeCats: [], // 이번 달 stats/categories?type=income 의 items
@@ -32,12 +34,70 @@ const KIND_TEXT = { expense: '지출', income: '수입' };
 /** 폼의 현재 유형 (카테고리 관리 화면의 초기 탭) */
 export const currentFormType = () => state.type;
 const errMsg = (e) => (e && e.message) || '요청을 처리하지 못했어요.';
+// 토스트: #flash 는 글자 전용, 되돌리기 버튼은 형제 #flash-undo. 되돌리기는 직전 저장·수정 1건만.
+const FLASH_MS = 4000;
+const UNDO_MS = 5000;
 let flashTimer = null;
-function flash(text) {
+let undo = null; // { plan, label } | null
+let undoing = false;
+let toastPaused = false; // 포인터가 위에 있거나 포커스가 안에 있음
+function armFlashTimer() {
+  clearTimeout(flashTimer);
+  if (undo && toastPaused) return;
+  flashTimer = setTimeout(() => { flash(''); }, undo ? UNDO_MS : FLASH_MS);
+}
+function hideUndo() {
+  const b = $('flash-undo');
+  const hadFocus = document.activeElement === b;
+  undo = null;
+  toastPaused = false;
+  b.hidden = true;
+  b.disabled = false;
+  b.removeAttribute('aria-label');
+  if (hadFocus) $('amount').focus(); // 포커스가 body 로 가지 않게
+}
+function flash(text, undoInfo = null) {
   const f = $('flash');
   f.textContent = text;
+  hideUndo();
+  if (undoInfo) {
+    undo = undoInfo;
+    const b = $('flash-undo');
+    b.setAttribute('aria-label', undoInfo.label);
+    b.hidden = false;
+  }
+  if (text) armFlashTimer();
+  else clearTimeout(flashTimer);
+}
+function clearUndo() {
+  if (undo) flash('');
+}
+async function onUndo() {
+  if (!undo || undoing) return; // 버튼은 저장 요청이 끝난 뒤에만 보이므로 submitting 과 겹치지 않는다
+  const { plan } = undo;
+  const b = $('flash-undo');
+  const hadFocus = document.activeElement === b;
+  undoing = true;
+  b.disabled = true;
   clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => { f.textContent = ''; }, 4000);
+  try {
+    try {
+      if (plan.method === 'DELETE') await api.deleteTransaction(plan.id);
+      else await api.updateTransaction(plan.id, plan.body);
+    } catch (e) {
+      if (!(plan.method === 'DELETE' && e.status === 404)) throw e; // 이미 지워진 생성 기록은 되돌린 것과 같다
+    }
+    if (plan.month) state.month = plan.month;
+    flash('되돌렸어요');
+    if (hadFocus) $('amount').focus();
+    await refreshAll();
+    notifyChanged();
+  } catch (e) {
+    flash(undoFailText(e));
+    if (hadFocus) $('amount').focus();
+  } finally {
+    undoing = false;
+  }
 }
 export function notifyChanged() {
   document.dispatchEvent(new CustomEvent('datachanged'));
@@ -151,6 +211,7 @@ function resetForm({ keepFocus: focusAmount = true, keepCategory = false } = {})
   if (state.editingId) { state.date = today(); $('date').value = today(); renderDateSummary(); } // 수정하던 거래의 날짜가 다음 입력에 새지 않게
   state.editingId = null;
   state.orig = null;
+  state.origTx = null;
   state.legacy = null;
   if (!keepCategory) state.category = ''; // 새 기록을 저장한 뒤에는 같은 카테고리를 이어서 입력하기 쉽게 유지한다
   $('amount').value = '';
@@ -168,7 +229,7 @@ let submitting = false;
 
 async function onSubmit(ev) {
   ev.preventDefault();
-  if (submitting) return;
+  if (submitting || undoing) return;
   clearFieldErrors();
   const v = validateTransaction({
     type: state.type, amount: $('amount').value, category: state.category, memo: $('memo').value, date: state.date,
@@ -183,15 +244,19 @@ async function onSubmit(ev) {
   const btn = $('save-btn');
   submitting = true;
   btn.disabled = true;
+  clearUndo();
   try {
     const editing = state.editingId;
+    const before = state.origTx;
+    const legacyBefore = Boolean(state.legacy);
     const saved = editing
       ? await api.updateTransaction(editing, v.value)
       : await api.createTransaction(v.value);
     const savedMonth = monthOf(saved && saved.date ? saved.date : v.value.date);
     state.month = savedMonth;
     resetForm({ keepCategory: !editing });
-    flash(editing ? '수정했어요' : '저장했어요');
+    const plan = undoPlan(editing ? 'update' : 'create', before, saved, legacyBefore);
+    flash(editing ? '수정했어요' : '저장했어요', plan && { plan, label: editing ? '방금 수정한 내용 되돌리기' : '방금 저장한 기록 되돌리기' });
     await refreshAll();
     notifyChanged();
   } catch (e) {
@@ -205,11 +270,14 @@ async function onSubmit(ev) {
 }
 
 function startEdit(tx) {
+  if (undoing) return;
+  clearUndo();
   state.editingId = tx.id;
   state.type = tx.type;
   state.category = tx.category;
   state.date = tx.date;
   state.orig = { type: tx.type, category: tx.category };
+  state.origTx = txBody(tx);
   syncLegacy();
   renderTypeButtons();
   renderCategoryChips();
@@ -408,11 +476,12 @@ function txRow(t, map) {
 
 let deleting = false;
 async function onDelete(t) {
-  if (deleting) return;
+  if (deleting || undoing) return;
   const label = `${t.category}${t.memo ? ` ${t.memo}` : ''} ${formatWon(t.amount)}`;
   deleting = true;
   try {
     if (!window.confirm(`${label} 기록을 삭제할까요?`)) return;
+    clearUndo();
     await api.deleteTransaction(t.id);
     if (state.editingId === t.id) resetForm({ keepFocus: false });
     flash('삭제했어요');
@@ -537,6 +606,12 @@ export function initRecord() {
     renderDateSummary();
   });
   $('tx-form').addEventListener('submit', onSubmit);
+  const toast = $('toast');
+  $('flash-undo').addEventListener('click', onUndo);
+  toast.addEventListener('pointerenter', () => { toastPaused = true; if (undo) clearTimeout(flashTimer); });
+  toast.addEventListener('pointerleave', () => { toastPaused = toast.contains(document.activeElement); armFlashTimer(); });
+  toast.addEventListener('focusin', () => { toastPaused = true; if (undo) clearTimeout(flashTimer); });
+  toast.addEventListener('focusout', (ev) => { if (!toast.contains(ev.relatedTarget)) { toastPaused = toast.matches(':hover'); armFlashTimer(); } });
   $('cancel-edit-btn').addEventListener('click', () => resetForm());
   $('month-prev').addEventListener('click', () => moveMonth(-1));
   $('month-next').addEventListener('click', () => moveMonth(1));

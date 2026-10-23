@@ -37,7 +37,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 #account-email { overflow-wrap: anywhere; margin-bottom: var(--space-4); }
 .theme-toggle { gap: var(--space-1); padding: 0 var(--space-2); }
 .theme-toggle .icon { width: 20px; height: 20px; }
-.icon--theme-auto  { --icon: url("../icons/theme-auto.svg"); }
 .icon--theme-light { --icon: url("../icons/theme-light.svg"); }
 .icon--theme-dark  { --icon: url("../icons/theme-dark.svg"); }
 .page-head { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) 0; }
@@ -50,8 +49,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: var(--touch-min); }
 
 /* ── 토스트 (#flash) ─────────────────── */
-#flash { max-width: calc(100vw - var(--space-5) * 2); padding: var(--space-2) var(--space-4); text-align: center; }
+/* 헤더(높이 = 위 여백 + 버튼) 아래에 둔다: 모드 버튼·이름을 가리지 않게 */
+#toast { top: calc(var(--space-2) + var(--touch-min) + var(--space-2) + env(safe-area-inset-top)); max-width: calc(100vw - var(--space-5) * 2); }
+#toast:has(#flash:empty):has(#flash-undo[hidden]) { display: none; }
+#flash { min-width: 0; padding: var(--space-2) 0; text-align: center; overflow-wrap: anywhere; }
 #flash:empty { display: none; }
+#toast:has(#flash-undo:not([hidden])) #flash { text-align: left; }
+#flash-undo { flex: none; min-height: var(--touch-min); color: var(--color-text-inverse); border-color: var(--color-text-inverse); background: transparent; white-space: nowrap; }
+#flash-undo:hover:not(:disabled) { border-color: var(--color-text-inverse); background: color-mix(in srgb, var(--color-text-inverse) 16%, transparent); }
+#flash-undo:focus-visible { outline: 2px solid var(--color-text-inverse); outline-offset: 2px; box-shadow: none; }
 
 /* ── 하단 탭 ─────────────────────────── */
 .tabbar__item .icon { width: 22px; height: 22px; }
@@ -245,3 +251,6 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 .auth-wrap { max-width: 420px; margin: 0 auto; padding: var(--space-6) var(--space-5); }
 .auth-wrap h1 { text-align: center; margin-bottom: var(--space-4); }
 .auth-wrap form { margin-top: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+
+/* ── 대시보드: 남은 돈 비율 ───────────── */
+.balance-rate { margin-top: var(--space-1); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--color-text-muted); }

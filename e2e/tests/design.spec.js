@@ -168,7 +168,7 @@ const scanErrorScope = (page, errColor) => page.evaluate((ERR) => {
 
 // ================================================================== 11.1 자산 · CSP
 test.describe('11.1 자산 · CSP', () => {
-  test('C-D1 / C-F11 / C-F12 자산: 원본(design_handoff_moneybook/handoff)과 같되 의도한 차이만 (fonts.css 의 Newsreader 500 한 줄, Medium 폰트 파일, SVG 메타데이터, 새 아이콘 3개)', async () => {
+  test('C-D1 / C-F11 / C-F12 자산: 원본(design_handoff_moneybook/handoff)과 같되 의도한 차이만 (fonts.css 의 Newsreader 500 한 줄, Medium 폰트 파일, SVG 메타데이터, 새 아이콘 2개)', async () => {
     const read = (root, rel) => readFileSync(join(root, rel), 'utf8');
     const same = (rel, dstRel = rel) => {
       const a = readFileSync(join(HANDOFF, rel));
@@ -208,14 +208,14 @@ test.describe('11.1 자산 · CSP', () => {
       }
     }
     const pubIcons = readdirSync(join(PUBLIC, 'icons')).filter((f) => f.endsWith('.svg'));
-    expect(pubIcons, '배포 아이콘 18개 = 원본 15 + theme 3').toHaveLength(18);
-    expect(pubIcons.filter((f) => !icons.includes(f)).sort()).toEqual(['theme-auto.svg', 'theme-dark.svg', 'theme-light.svg']);
+    expect(pubIcons, '배포 아이콘 17개 = 원본 15 + theme 2').toHaveLength(17);
+    expect(pubIcons.filter((f) => !icons.includes(f)).sort()).toEqual(['theme-dark.svg', 'theme-light.svg']);
     expect(readdirSync(join(PUBLIC, 'patterns')).filter((f) => f.endsWith('.svg'))).toHaveLength(7);
     // 배포 svg 22개 + 새 3개: 메타데이터 문자열 없음
     for (const dir of ['icons', 'patterns']) for (const f of readdirSync(join(PUBLIC, dir)).filter((n) => n.endsWith('.svg'))) expect(read(PUBLIC, join(dir, f)), `${dir}/${f}`).not.toMatch(/c2pa|<metadata/i);
     // public/ 에 있는 자산 중 원본에 없는 것은 theme 아이콘 3개뿐
     for (const dir of ['fonts', 'icons', 'patterns']) {
-      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f) && !(dir === 'icons' && /^theme-(auto|light|dark)\.svg$/.test(f)));
+      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f) && !(dir === 'icons' && /^theme-(light|dark)\.svg$/.test(f)));
       expect(extra, `${dir} 여분 파일`).toEqual([]);
     }
   });
