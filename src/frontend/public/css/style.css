@@ -31,12 +31,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal;
 }
 .app-header .btn { flex-shrink: 0; white-space: nowrap; }
-.app-header a.user { display: block; font-size: var(--fs-label); line-height: var(--touch-min); text-decoration: none; } /* flex 면 text-overflow 말줄임이 안 그려짐 */
+.app-header a.user { display: block; font-size: var(--fs-body-lg); font-weight: var(--fw-semibold); color: var(--color-text); line-height: var(--touch-min); text-decoration: none; } /* flex 면 text-overflow 말줄임이 안 그려짐 */
 .app-header a.user:hover { text-decoration: underline; }
 .app-header a.user:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: var(--radius-sm); }
 #account-email { overflow-wrap: anywhere; margin-bottom: var(--space-4); }
-.theme-toggle { gap: var(--space-1); padding: 0 var(--space-2); }
-.theme-toggle .icon { width: 20px; height: 20px; }
+/* 글자 없는 둥근 아이콘 버튼. 해·달은 색이 있는 SVG 라 마스크 대신 배경 그림으로 그린다 */
+.theme-toggle { width: var(--touch-min); min-width: var(--touch-min); height: var(--touch-min); padding: 0; border-radius: 50%; }
+.theme-toggle .icon { width: 24px; height: 24px; background-color: transparent; -webkit-mask: none; mask: none; background-image: var(--icon); background-position: center; background-size: contain; background-repeat: no-repeat; }
+.theme-toggle__text { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .icon--theme-light { --icon: url("../icons/theme-light.svg"); }
 .icon--theme-dark  { --icon: url("../icons/theme-dark.svg"); }
 .page-head { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) 0; }
@@ -55,8 +57,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 #flash { min-width: 0; padding: var(--space-2) 0; text-align: center; overflow-wrap: anywhere; }
 #flash:empty { display: none; }
 #toast:has(#flash-undo:not([hidden])) #flash { text-align: left; }
-#flash-undo { flex: none; min-height: var(--touch-min); color: var(--color-text-inverse); border-color: var(--color-text-inverse); background: transparent; white-space: nowrap; }
-#flash-undo:hover:not(:disabled) { border-color: var(--color-text-inverse); background: color-mix(in srgb, var(--color-text-inverse) 16%, transparent); }
+#toast:has(#flash-undo:not([hidden])) { padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4); gap: var(--space-4); }
+#flash-undo { flex: none; min-height: var(--touch-min); border: 0; border-radius: var(--radius-pill); padding: 0 var(--space-4); color: var(--color-text-inverse); background: color-mix(in srgb, var(--color-text-inverse) 18%, transparent); white-space: nowrap; }
+#flash-undo:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text-inverse) 28%, transparent); }
 #flash-undo:focus-visible { outline: 2px solid var(--color-text-inverse); outline-offset: 2px; box-shadow: none; }
 
 /* ── 하단 탭 ─────────────────────────── */
@@ -254,3 +257,13 @@ details > summary { min-height: var(--touch-min); display: flex; align-items: ce
 
 /* ── 대시보드: 남은 돈 비율 ───────────── */
 .balance-rate { margin-top: var(--space-1); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--color-text-muted); }
+
+/* ── 기록: 저장 버튼을 하단 탭바 바로 위에 고정 ── */
+#save-btn { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--space-2)); z-index: 5;
+  box-shadow: 0 0 0 var(--space-2) var(--color-surface), 0 calc(var(--space-3) * -1) var(--space-3) var(--space-2) var(--color-surface); }
+/* 포커스 링이 후광 위에 보이게 (앞선 그림자가 위에 그려진다) */
+#save-btn:focus-visible { box-shadow: var(--shadow-focus), 0 0 0 var(--space-2) var(--color-surface), 0 calc(var(--space-3) * -1) var(--space-3) var(--space-2) var(--color-surface); }
+/* 포커스한 입력이 고정 저장 버튼·탭바 뒤로 가려지지 않게: 저장 버튼 52 + 후광·여백 + 탭바 */
+html { --save-clearance: calc(52px + var(--space-6) + var(--tabbar-h) + env(safe-area-inset-bottom)); scroll-padding-bottom: var(--save-clearance); }
+/* 저장 버튼 자신은 이미 그 자리에 고정돼 있으므로 위 여백을 상쇄한다 (안 그러면 포커스 때 페이지가 끝까지 스크롤된다) */
+#save-btn { scroll-margin-bottom: calc(var(--save-clearance) * -1); }

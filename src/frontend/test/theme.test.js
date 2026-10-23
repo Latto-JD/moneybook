@@ -202,3 +202,13 @@ test('HTML: theme-init.js 는 첫 stylesheet 보다 앞, classic 동기', () => 
     assert.ok(html.indexOf(tag[0]) < html.indexOf('<link rel="stylesheet"'), f);
   }
 });
+
+test('CSS: 화면 모드 버튼은 아이콘만(글자는 시각적으로 숨김), 44px 원형, 색 있는 SVG 는 배경으로', () => {
+  const css = readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  assert.match(css, /\.theme-toggle \{[^}]*width: var\(--touch-min\)[^}]*border-radius: 50%/);
+  assert.match(css, /\.theme-toggle__text \{[^}]*clip: rect/);
+  for (const n of ['light', 'dark']) {
+    const svg = readFileSync(new URL(`../public/icons/theme-${n}.svg`, import.meta.url), 'utf8');
+    assert.match(svg, /#F6C343/);
+  }
+});

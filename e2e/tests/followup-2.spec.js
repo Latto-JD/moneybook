@@ -616,7 +616,7 @@ test.describe('C-S11~S13 수입 인사이트 API', () => {
   test('C-S13 기존 키 month, recurring, overspending, largeExpenses 가 변경 전(HEAD) 서버와 같다 (같은 데이터, 여러 달·today)', async ({}, testInfo) => {
     onlyMobile(testInfo);
     test.setTimeout(180_000);
-    const oldDir = checkoutCommit('HEAD');
+    const oldDir = checkoutCommit('5a0689d');
     const dir = tmpPgliteDir();
     let old;
     try {
@@ -771,7 +771,8 @@ test.describe('정적 검사', () => {
     const forbidden = ['src/backend/db/schema.sql', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/public/js/theme-init.js', 'src/frontend/office', 'docs/plan.md'];
     const existing = forbidden.filter((p) => existsSync(join(ROOT, p)));
     expect(git('status', '--porcelain', '--', ...existing).trim(), `금지 파일 변경: ${existing}`).toBe('');
-    const changed = git('status', '--porcelain').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));
+    expect(git('diff', '--name-only', '5a0689d', '--', ...existing).trim(), `1단계 커밋 이후 금지 파일 변경: ${existing}`).toBe('');
+    const changed = [...git('status', '--porcelain').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, '')), ...git('diff', '--name-only', '5a0689d').split('\n').filter(Boolean)];
     const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/|e2e\/|docs\/|design_handoff_moneybook\/)/;
     const outside = changed.filter((f) => !allowed.test(f));
     expect(outside, `허용 폴더 밖 변경: ${outside}`).toEqual([]);
@@ -780,13 +781,13 @@ test.describe('정적 검사', () => {
   test('C-S23 API 변경은 insights 응답 키 2개 추가뿐: 라우트 목록 불변, 스키마 불변', async ({}, testInfo) => {
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-    const diff = git('diff', 'HEAD', '--', 'src/backend/rules/routes.js');
+    const diff = git('diff', '5a0689d', '--', 'src/backend/rules/routes.js');
     const added = diff.split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
     expect(added.filter((l) => l.startsWith('-')), '삭제된 줄 없음(추가 전용)').toEqual([]);
     expect(added.join('\n')).toMatch(/incomeDrops/);
     expect(added.join('\n')).toMatch(/missingIncome/);
-    expect(git('diff', 'HEAD', '--stat', '--', 'src/backend/db/schema.sql').trim()).toBe('');
-    const names = git('diff', 'HEAD', '--name-only', '--', 'src/backend', 'api').split('\n').filter(Boolean);
+    expect(git('diff', '5a0689d', '--stat', '--', 'src/backend/db/schema.sql').trim()).toBe('');
+    const names = git('diff', '5a0689d', '--name-only', '--', 'src/backend', 'api').split('\n').filter(Boolean);
     const untracked = git('ls-files', '--others', '--exclude-standard', '--', 'src/backend', 'api').split('\n').filter(Boolean);
     console.log(`BACKEND-CHANGED ${[...names, ...untracked].join(', ')}`);
     expect([...names, ...untracked].filter((f) => /api\/|routes|handlers?\.js|index\.js|auth|categor|transaction|stats|summary|db\//i.test(f) && !/rules\/routes\.js|test\//.test(f)), '인사이트 외 API/DB 파일 변경').toEqual([]);

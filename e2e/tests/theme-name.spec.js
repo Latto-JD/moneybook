@@ -400,20 +400,18 @@ test.describe('C-T 화면 모드', () => {
       expect((await btn.boundingBox()).height).toBeGreaterThanOrEqual(44);
       expect((await page.locator('#user-name').boundingBox()).height).toBeGreaterThanOrEqual(44);
       expect((await page.locator('#logout-btn').boundingBox()).height).toBeGreaterThanOrEqual(44);
-      // 아이콘 대비(배경 대비 3:1) + CSS mask
-      const contrast = await page.evaluate(() => {
-        const parse = (c) => c.match(/[\d.]+/g).slice(0, 3).map(Number);
-        const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-        const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-        const ic = document.querySelector('#theme-toggle .icon');
-        const cs = getComputedStyle(ic);
-        const fg = parse(cs.backgroundColor);
-        const bg = parse(getComputedStyle(document.body).backgroundColor);
-        const [x, y] = [lum(fg), lum(bg)].sort((m, n) => n - m);
-        return { ratio: (x + 0.05) / (y + 0.05), fg, bg, mask: cs.maskImage || cs.webkitMaskImage };
-      });
-      expect(contrast.ratio, `${scheme} 아이콘 대비 ${JSON.stringify(contrast)}`).toBeGreaterThanOrEqual(3);
-      expect(contrast.mask, 'CSS mask 사용').toMatch(new RegExp(`theme-${scheme}\\.svg`));
+      // 아이콘: 색 있는 SVG 를 배경 그림으로 그린다(마스크 아님). 윤곽선 색 대비 3:1 은 SVG 파일의 stroke 색으로 계산한다
+      const ico = await page.evaluate(() => { const cs = getComputedStyle(document.querySelector('#theme-toggle .icon')); return { img: cs.backgroundImage, mask: cs.maskImage || cs.webkitMaskImage, bg: getComputedStyle(document.body).backgroundColor }; });
+      expect(ico.img, '배경 그림 사용').toMatch(new RegExp(`theme-${scheme}\.svg`));
+      expect(ico.mask, '마스크 사용 안 함').toMatch(/none|^$/);
+      const svg = readFileSync(join(PUBLIC, 'icons', `theme-${scheme}.svg`), 'utf8');
+      const stroke = svg.match(/stroke="(#[0-9A-Fa-f]{6})"/)[1];
+      const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+      const lum = (h) => { const n = parseInt(h.slice(1), 16); return 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255); };
+      const bgHex = '#' + ico.bg.match(/[0-9]+/g).slice(0, 3).map((x) => Number(x).toString(16).padStart(2, '0')).join('');
+      const [hi, lo] = [lum(stroke), lum(bgHex)].sort((m, n) => n - m);
+      expect((hi + 0.05) / (lo + 0.05), `${scheme} 아이콘 윤곽선 ${stroke} 대 배경 ${bgHex}`).toBeGreaterThanOrEqual(3);
+      expect(Math.round((await btn.boundingBox()).width), '44px 원형 버튼').toBe(44);
       // 로드 직후 금액칸에 포커스가 있어 Tab 시작점을 헤더 이름 링크로 옮긴 뒤 Tab 순서(이름 -> 모드 -> 로그아웃)를 확인
       await page.locator('#user-name').focus();
       await page.keyboard.press('Tab');

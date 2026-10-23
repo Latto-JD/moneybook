@@ -338,12 +338,12 @@ test.describe('C-F8/C-F5 정적·헤더', () => {
       await expect(ui.page.locator('#user-name')).toHaveText(u.account.name);
       const m = await ui.page.evaluate(() => {
         const cs = (s) => getComputedStyle(document.querySelector(s));
-        const fs = getComputedStyle(document.documentElement).getPropertyValue('--fs-label');
+        const fs = getComputedStyle(document.documentElement).getPropertyValue('--fs-body-lg'); // 휴대폰 피드백: 이름은 본문 큰 글자(로그아웃 버튼은 --fs-label 그대로)
         const probe = document.createElement('span'); probe.style.fontSize = fs.trim(); document.body.appendChild(probe);
         const labelPx = getComputedStyle(probe).fontSize; probe.remove();
         return { name: cs('#user-name').fontSize, logout: cs('#logout-btn').fontSize, toggle: cs('#theme-toggle').fontSize, labelPx, nameW: document.querySelector('#user-name').getBoundingClientRect().width };
       });
-      expect(m.name, `${scheme} 이름`).toBe(m.logout);
+      expect(m.name, `${scheme} 이름은 --fs-body-lg`).not.toBe(m.logout);
       expect(m.name).toBe(m.labelPx);
       expect(m.nameW, '이름 칸 폭').toBeGreaterThan(40);
       await ui.ctx.close();
