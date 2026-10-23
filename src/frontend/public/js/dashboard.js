@@ -1,19 +1,20 @@
 // 대시보드 탭 (F10): 기준 월 이동, 6/12개월 전환, KPI, 도넛, 월별 수입/지출, 카테고리별 월 추이
 import { api } from './api.js';
 import { el, $, chipItem, keepFocus } from './dom.js';
-import { formatWon, formatBalanceWon } from './lib/money.js';
+import { renderSummaryCard } from './summary-card.js';
+import { loadInsights } from './insights.js';
 import { categoryResponse } from './categories.js';
 import { stableVizMap } from './lib/viz.js';
 import { todayLocal, monthOf, shiftMonth, monthTitle, trailingRange } from './lib/date.js';
 import { renderDonut, renderGroupedBars, renderBars } from './charts.js';
 import {
-  buildKpi, balanceBars, balanceRate, balanceLabel, summaryLabel, NO_PREV_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
+  buildKpi, balanceRate, balanceLabel, summaryLabel, NO_PREV_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
 } from './lib/dashboard-data.js';
 
 // 카테고리 보기(도넛·추이) 유형별 문구. 지출과 수입은 같은 구조의 문장을 쓴다.
 const VIEW = {
-  expense: { noun: '지출', donutTitle: '카테고리 지출 비중', centerLabel: '총 지출', heading: '어디에 썼나' },
-  income: { noun: '수입', donutTitle: '카테고리 수입 비중', centerLabel: '총 수입', heading: '어디서 들어왔나' },
+  expense: { noun: '지출', donutTitle: '카테고리 지출 비중', centerLabel: '총 지출', heading: '카테고리별 지출' },
+  income: { noun: '수입', donutTitle: '카테고리 수입 비중', centerLabel: '총 수입', heading: '카테고리별 수입' },
 };
 
 const state = {
@@ -27,38 +28,20 @@ let seq = 0;
 
 const catVizMap = () => stableVizMap(categoryResponse() && categoryResponse().items, state.catType);
 
-/** 균형 카드: 남은 돈(크게) + 수입·지출 같은 크기 두 칸. 두 막대는 둘 중 큰 값을 100%로 하는 같은 기준 */
+/** 요약 카드(기록 화면과 같은 그리기): 남은 돈 + 비율 + 수입 | 지출, 전월 대비 문구는 각 열 아래 */
 function renderKpi(kpi, base) {
   const thisMonth = monthOf(todayLocal());
   $('kpi').setAttribute('aria-label', summaryLabel(base, thisMonth));
-  const bars = balanceBars(kpi.income, kpi.expense);
-  const pair = (kind, label, value, ratio, change) => {
-    const d = el('div', { class: `kpi kpi--${kind}` });
-    const head = el('div', { class: 'kpi-label' });
-    head.appendChild(el('span', { class: `icon icon--${kind}`, 'aria-hidden': 'true' }));
-    head.appendChild(document.createTextNode(label));
-    d.appendChild(head);
-    d.appendChild(el('div', { class: `kpi-value figure amt-${kind}`, 'aria-label': `${label} ${formatWon(value)}` }, formatWon(value)));
-    const track = el('div', { class: 'bar-track', 'aria-hidden': 'true' });
-    const fill = el('div', { class: `bar-fill ${kind}` });
-    fill.style.width = `${ratio}%`;
-    track.appendChild(fill);
-    d.appendChild(track);
-    // ▲/▼ 는 방향만 알려 준다. 색은 보조 글자색 (늘고 줄어드는 것에 좋고 나쁨을 매기지 않는다)
-    const text = change ? { up: '▲ ', down: '▼ ', same: '= ' }[change.direction] + change.text : NO_PREV_TEXT;
-    d.appendChild(el('div', { class: `kpi-extra ${change ? change.direction : 'muted'}` }, text));
-    return d;
-  };
-  const balance = el('div', { class: 'kpi kpi--balance' });
-  balance.appendChild(el('div', { class: 'kpi-label' }, balanceLabel(base, thisMonth)));
-  balance.appendChild(el('div', { class: 'kpi-value figure' }, formatBalanceWon(kpi.balance)));
-  const rate = balanceRate(kpi.income, kpi.balance);
-  if (rate) balance.appendChild(el('p', { class: 'balance-rate' }, rate.text));
-  const row = el('div', { class: 'balance-pair' });
-  row.appendChild(pair('income', '수입', kpi.income, bars.income, kpi.incomeChange));
-  row.appendChild(pair('expense', '지출', kpi.expense, bars.expense, kpi.expenseChange));
-  // 읽는 순서 = 화면 순서: 남은 돈 -> 비율 -> 수입 -> 지출
-  $('kpi').replaceChildren(balance, row);
+  // ▲/▼ 는 방향만 알려 준다. 색은 보조 글자색 (늘고 줄어드는 것에 좋고 나쁨을 매기지 않는다)
+  const note = (change) => (change
+    ? { cls: change.direction, text: { up: '▲ ', down: '▼ ', same: '= ' }[change.direction] + change.text }
+    : { cls: 'muted', text: NO_PREV_TEXT });
+  renderSummaryCard($('kpi'), {
+    balanceLabel: balanceLabel(base, thisMonth),
+    income: kpi.income, expense: kpi.expense, balance: kpi.balance,
+    rate: balanceRate(kpi.income, kpi.balance),
+    notes: { income: note(kpi.incomeChange), expense: note(kpi.expenseChange) },
+  });
 }
 
 function renderTrend() {
@@ -83,6 +66,7 @@ async function load() {
   const base = state.base;
   const r = trailingRange(base, state.range);
   $('dash-month').textContent = monthTitle(base);
+  loadInsights(base);
   $('dash-error').textContent = '';
   const [monthly, cat, trend] = await Promise.allSettled([
     api.statsMonthly(r.from, r.to),

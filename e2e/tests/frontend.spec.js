@@ -297,6 +297,8 @@ test.describe('C59 로그아웃 / C60 세션 소멸', () => {
     await expect(page.locator('#tx-list .tx-row').first()).toContainText('로그아웃전메모');
     const cookies = await ctx.cookies();
     const sid = cookies.find((c) => c.name === 'mb_sid');
+    await page.evaluate(() => { location.hash = '#account'; }); // 로그아웃은 내 정보 화면 아래로 옮겨졌다(화면 정리)
+    await expect(page.locator('#logout-btn')).toBeVisible();
     await page.locator('#logout-btn').click();
     await page.waitForURL(/\/login\.html/);
     // 같은 토큰으로 재사용 불가
@@ -701,6 +703,7 @@ test.describe('C33 오류 처리', () => {
 test.describe('C34 인사이트 영역', () => {
   test('C34 신규 사용자: 빈 상태 문구', async ({ browser }, testInfo) => {
     const { ctx, page } = await openRecord(browser, testInfo);
+    await page.evaluate(() => { location.hash = '#dashboard'; });
     await expect(page.locator('#insights')).toContainText('아직 알려드릴 내용이 없어요');
     await ctx.close();
   });
@@ -719,6 +722,7 @@ test.describe('C34 인사이트 영역', () => {
         await addTx(api, { memo: '외식', category: '식비', amount: 130000, date: '2026-10-05' });
       },
     });
+    await page.evaluate(() => { location.hash = '#dashboard'; });
     const ins = page.locator('#insights');
     await expect(ins).toContainText('평소보다 많은 지출');
     await expect(ins.locator('.insight-overspending')).toContainText('평소보다 많음');
@@ -739,7 +743,7 @@ test.describe('C34 인사이트 영역', () => {
     const api = await newApi();
     expect((await json(api, 'POST', '/api/auth/login', { email: SEED_EMAIL, password: SEED_PASSWORD })).status()).toBe(200);
     const { ctx, page } = await newUiPage(browser, testInfo, { api });
-    await page.goto('/#record');
+    await page.goto('/#dashboard');
     const over = page.locator('#insights .insight-overspending');
     await expect(over).toContainText('쇼핑: 이번 달 290,000원으로 평소 월 평균 100,000원보다 190% 많아요');
     await expect(over).toContainText('식비: 이번 달 420,000원으로 평소 월 평균 300,000원보다 40% 많아요');
@@ -769,7 +773,9 @@ test.describe('C61 XSS', () => {
     await page.goto('/#record');
     await expect(page.locator('#tx-list')).toContainText(xss);
     await expect(page.locator('#quick-chips')).toContainText(xss);
+    await page.evaluate(() => { location.hash = '#dashboard'; }); // 인사이트는 대시보드로 옮겨졌다
     await expect(page.locator('#insights')).toContainText(xss);
+    await page.evaluate(() => { location.hash = '#record'; });
     await page.locator('#memo').pressSequentially('<img');
     await expect(page.locator('#memo-suggestions')).toContainText(xss);
     // 이전 달(9월)로 이동해도 동일
@@ -801,7 +807,7 @@ test.describe('C32 가로 스크롤/터치 영역 (login, 기록 탭)', () => {
     await expect(page.locator('#tx-list .tx-row').first()).toBeVisible();
     await expect(page.locator('#quick-chips button').first()).toBeVisible();
     await expectNoHorizontalScroll(page, widthOf(testInfo));
-    const sels = ['#logout-btn', '#type-expense', '#type-income', '#category-chips button', '#quick-chips button', '#save-btn', '#month-prev', '#month-next',
+    const sels = ['#type-expense', '#type-income', '#category-chips button', '#quick-chips button', '#save-btn', '#month-prev', '#month-next',
       '.tx-edit', '.tx-del', '#tab-record', '#tab-dashboard', '#date-details summary'];
     const small = await tooSmall(page, sels);
     expect(small, JSON.stringify(small)).toEqual([]);

@@ -1,7 +1,7 @@
 // 기록 탭: 입력 폼(F5), 빠른 입력 칩/자동완성(F7), 이번 달 영역(F6), 인사이트(F8)
 import { api } from './api.js';
 import { el, $, chipItem, keepFocus, swatch } from './dom.js';
-import { formatWon, formatAmountInput, parseAmount, addToAmount, formatSignedWon, formatBalanceWon } from './lib/money.js';
+import { formatWon, formatAmountInput, parseAmount, addToAmount, formatSignedWon } from './lib/money.js';
 import { todayLocal, monthOf, shiftMonth, monthTitle, dayLabel, longDayLabel } from './lib/date.js';
 import { validateTransaction, AMOUNT_RANGE_TEXT } from './lib/validate.js';
 import { stableVizMap, vizOf } from './lib/viz.js';
@@ -10,7 +10,9 @@ import { inactiveChipLabel } from './lib/categories-data.js';
 import { formatPercent } from './lib/chart-geometry.js';
 import { shouldSubmitOnChipEnter } from './lib/chip-keys.js';
 import { debounce }from './lib/debounce.js';
-import { buildInsightSections, INSIGHT_EMPTY_TEXT } from './lib/insight-text.js';
+import { gridView, selectedHidden } from './lib/category-grid.js';
+import { renderSummaryCard } from './summary-card.js';
+import { balanceLabel } from './lib/dashboard-data.js';
 import { shouldShowReset } from './lib/reset.js';
 import { txBody, undoPlan, undoFailText } from './lib/undo.js';
 
@@ -26,6 +28,7 @@ const state = {
   legacy: null, // orig 의 카테고리가 사용 안 함일 때만 orig 와 같음 (그대로 두면 저장할 수 있다)
   txs: [],
   incomeCats: [], // 이번 달 stats/categories?type=income 의 items
+  expanded: { expense: false, income: false }, // 카테고리 격자 펼침(유형별, 새로고침하면 접힘)
 };
 
 const cats = () => activeCategories()[state.type];
@@ -160,16 +163,61 @@ function renderCategoryChips() {
   }
   updateResetBtn();
   const map = vizMap(state.type);
-  const chips = cats().map((c) => chipItem(c, {
+  const names = cats();
+  const view = gridView(names, state.category, state.expanded[state.type]);
+  const chips = view.visible.map((c) => categoryChip(c, {
     pressed: state.category === c,
     viz: vizOf(map, c),
     onClick: () => { state.category = c; $('category-error').textContent = ''; keepFocus(ul, renderCategoryChips); },
   }));
-  if (state.legacy && state.legacy.type === state.type && state.legacy.category === state.category && !cats().includes(state.category)) {
-    // 사용 안 함으로 바꾼 카테고리의 거래를 고칠 때: 선택된 상태로 보여 준다. 다른 칩을 고르면 사라진다.
-    chips.push(chipItem(inactiveChipLabel(state.category), { pressed: true, viz: vizOf(map, state.category), onClick: () => {} }));
+  if (state.legacy && state.legacy.type === state.type && state.legacy.category === state.category && !names.includes(state.category)) {
+    // 사용 안 함으로 바꾼 카테고리의 거래를 고칠 때: 선택된 상태로 보여 준다(접힘과 상관없이 마지막 칸). 다른 칩을 고르면 사라진다.
+    chips.push(categoryChip(inactiveChipLabel(state.category), { pressed: true, viz: vizOf(map, state.category), onClick: () => {} }));
   }
+  if (view.toggle) chips.push(toggleChip(view, ul));
   ul.replaceChildren(...chips);
+  markClamped(ul);
+}
+
+/** 카테고리 칸: 견본(선택되면 체크로 대체) + 이름(2줄까지). 버튼 글자·접근 이름은 전체 이름 */
+function categoryChip(label, { pressed, viz, onClick }) {
+  const li = chipItem('', { pressed, onClick, viz });
+  const b = li.querySelector('button');
+  b.classList.add('chip--cat');
+  b.appendChild(el('span', { class: 'chip__name' }, label));
+  return li;
+}
+
+/** 8번째 칸의 "더 보기 (N)" / "접기" */
+function toggleChip(view, ul) {
+  const li = el('li');
+  const more = view.toggle === 'more';
+  const b = el('button', {
+    type: 'button', class: 'chip chip--cat chip--toggle', 'aria-expanded': String(!more), 'aria-controls': 'category-chips',
+  }, more ? `더 보기 (${view.hiddenCount})` : '접기');
+  b.addEventListener('click', () => {
+    state.expanded[state.type] = more;
+    renderCategoryChips();
+    // 포커스는 그 자리 버튼 또는 펼친 뒤의 8번째 카테고리
+    const items = ul.querySelectorAll('button');
+    (more ? items[GRID_FOCUS_AFTER_MORE] : ul.querySelector('.chip--toggle'))?.focus();
+  });
+  li.appendChild(b);
+  return li;
+}
+const GRID_FOCUS_AFTER_MORE = 7; // 펼치면 8번째 카테고리(더 보기 칸이 있던 자리)
+
+/** 이름이 2줄로도 넘쳐 잘린 칸에는 전체 이름을 title 로 붙인다 */
+function markClamped(ul) {
+  for (const n of ul.querySelectorAll('.chip__name')) {
+    if (n.scrollHeight > n.clientHeight + 1) n.closest('button').setAttribute('title', n.textContent);
+    else n.closest('button').removeAttribute('title');
+  }
+}
+
+/** 코드로 고른 카테고리(자동완성·빠른 입력·수정)가 접힌 부분에 있으면 펼친다 */
+function ensureSelectedVisible() {
+  if (selectedHidden(cats(), state.category)) state.expanded[state.type] = true;
 }
 
 /** 수정 중인 거래의 원래 카테고리가 지금 사용 안 함이면 legacy 로 기억한다 */
@@ -296,6 +344,7 @@ function startEdit(tx) {
   state.editingId = tx.id;
   state.type = tx.type;
   state.category = tx.category;
+  ensureSelectedVisible();
   state.date = tx.date;
   state.orig = { type: tx.type, category: tx.category };
   state.origTx = txBody(tx);
@@ -338,6 +387,7 @@ async function loadQuick() {
 
 function applySuggestion(it, focusSave) {
   if (it.category && cats().includes(it.category)) state.category = it.category; // category 가 null 이면 비워 둔다
+  ensureSelectedVisible();
   $('memo').value = it.memo;
   $('amount').value = formatAmountInput(String(it.amount));
   $('category-error').textContent = '';
@@ -397,26 +447,15 @@ function renderCategoryBlock(title, list, kind) {
   return parts;
 }
 
-/** 수입·지출 같은 크기의 두 칸 + 남은 돈 한 줄 */
+/** 요약 카드 1장: 남은 돈 + 수입 | 지출 (대시보드와 같은 그리기). 남은 돈 비율은 기록 화면에 넣지 않는다 */
 function renderMonthTotals(s) {
-  const box = $('month-totals');
-  const prefix = state.month === monthOf(today()) ? '이번 달' : monthTitle(state.month);
-  const cell = (kind, value) => {
-    const label = `${prefix} ${KIND_TEXT[kind]}`;
-    const d = el('div', { class: 'sum-cell' });
-    const head = el('div', { class: `sum-cell__label amt-${kind}` });
-    head.appendChild(el('span', { class: `icon icon--${kind}`, 'aria-hidden': 'true' }));
-    head.appendChild(document.createTextNode(label));
-    d.appendChild(head);
-    d.appendChild(el('div', { class: `sum-cell__value figure amt-${kind}`, 'aria-label': `${label} ${formatWon(value)}` }, formatWon(value)));
-    return d;
-  };
-  const rest = formatBalanceWon(s.balance);
-  box.replaceChildren(
-    cell('income', s.incomeTotal),
-    cell('expense', s.expenseTotal),
-    el('p', { class: 'caption summary-note' }, `남은 돈 ${rest}`),
-  );
+  const thisMonth = monthOf(today());
+  const prefix = state.month === thisMonth ? '이번 달' : monthTitle(state.month);
+  $('month-totals').setAttribute('aria-label', `${prefix} 요약`);
+  renderSummaryCard($('month-totals'), {
+    balanceLabel: balanceLabel(state.month, thisMonth),
+    prefix, income: s.incomeTotal, expense: s.expenseTotal, balance: s.balance,
+  });
 }
 
 function renderMonthSummary(s, incomeItems) {
@@ -540,40 +579,8 @@ async function loadMonth() {
   }
 }
 
-// ---------------- 인사이트 ----------------
-let insightSeq = 0;
-async function loadInsights() {
-  const seq = ++insightSeq;
-  const box = $('insights');
-  try {
-    const data = await api.insights(state.month, today());
-    if (seq !== insightSeq) return;
-    const sections = buildInsightSections(data);
-    if (!sections.length) {
-      box.replaceChildren(el('p', { class: 'hint' }, INSIGHT_EMPTY_TEXT));
-      return;
-    }
-    box.replaceChildren(...sections.map((sec) => {
-      const wrap = el('div', { class: `insight-section insight-${sec.key}` });
-      wrap.appendChild(el('h3', {}, sec.title));
-      const ul = el('ul', { class: 'insight-list' });
-      for (const line of sec.lines) {
-        const li = el('li', { class: line.strong ? 'insight strong' : 'insight' });
-        li.appendChild(el('span', { class: 'insight-icon', 'aria-hidden': 'true' }, line.icon));
-        li.appendChild(el('span', { class: 'insight-label' }, line.label));
-        li.appendChild(el('span', { class: 'insight-text' }, line.text));
-        ul.appendChild(li);
-      }
-      wrap.appendChild(ul);
-      return wrap;
-    }));
-  } catch (e) {
-    if (seq === insightSeq) box.replaceChildren(el('p', { class: 'error-text' }, errMsg(e)));
-  }
-}
-
 async function refreshAll() {
-  await Promise.all([loadMonth(), loadInsights(), loadQuick()]);
+  await Promise.all([loadMonth(), loadQuick()]);
 }
 
 function moveMonth(delta) {
@@ -581,7 +588,6 @@ function moveMonth(delta) {
   if (!next) return;
   state.month = next;
   loadMonth();
-  loadInsights();
 }
 
 export function initRecord() {
@@ -596,17 +602,6 @@ export function initRecord() {
   }
   $('today-caption').textContent = longDayLabel(today());
   // C29: 선택된 칩에서 Enter 를 다시 누르면 저장 (칩 클릭 직후 Enter). 선택 전 Enter/Space 는 기본 동작(선택).
-  // Tab 으로 칩에 가면 가로 스크롤 목록 안에서 칩 전체가 (양쪽 20px 여백 포함) 보이게 맞춘다. 넓은 화면에서 브라우저 기본 스크롤이 모자란다
-  $('category-chips').addEventListener('focusin', (ev) => {
-    const list = $('category-chips');
-    const chip = ev.target.closest('.chip');
-    if (!chip || !chip.matches(':focus-visible')) return; // 마우스·터치 포커스는 건드리지 않는다 (첫 클릭이 사라질 수 있다)
-    const inset = parseFloat(getComputedStyle(list).paddingLeft) || 0;
-    const l = list.getBoundingClientRect();
-    const c = chip.getBoundingClientRect();
-    if (c.right > l.right - inset) list.scrollLeft += c.right - (l.right - inset);
-    else if (c.left < l.left + inset) list.scrollLeft -= (l.left + inset) - c.left;
-  });
   $('category-chips').addEventListener('keydown', (ev) => {
     const btn = ev.target.closest && ev.target.closest('button');
     if (!btn) return;

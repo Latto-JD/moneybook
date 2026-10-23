@@ -173,8 +173,15 @@ export function renderDonut(container, opts) {
   const body = h('div', { class: 'chart-body donut-body' });
   body.appendChild(svg);
   const legend = h('ol', { class: 'legend legend-list' });
+  const maxValue = segs.reduce((m, x) => Math.max(m, x.value), 0);
   segs.forEach((seg, i) => {
     const li = legendItem(swatch(vizs[i]), seg.label, [['legend-amount', formatWon(seg.value)], ['legend-ratio', formatPercent(seg.ratio)]]);
+    // 막대(장식): 가장 큰 항목 = 100%. 색은 견본과 같은 번호(data-viz)가 정한다
+    const bar = h('span', { class: 'legend-bar', 'aria-hidden': 'true' });
+    const fill = h('span', { class: 'legend-bar__fill', 'data-viz': Array.isArray(seg.members) ? 'other' : String(vizs[i]) });
+    if (fill.style) fill.style.width = `${maxValue > 0 ? Math.round((seg.value / maxValue) * 1000) / 10 : 0}%`;
+    bar.appendChild(fill);
+    li.appendChild(bar);
     if (Array.isArray(seg.members)) {
       // 묶음 행: 같은 이름의 실제 카테고리와 글자만으로 구분되지 않으므로 보이지 않는 설명을 붙인다
       const descId = nextId('lg');

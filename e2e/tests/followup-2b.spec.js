@@ -139,7 +139,7 @@ test.describe('재검증 2 토스트·헤더', () => {
         const colorOf = (v) => { const i = document.createElement('i'); i.style.color = `var(${v})`; document.body.appendChild(i); const x = getComputedStyle(i).color; i.remove(); return x; };
         const t = document.querySelector('#theme-toggle'); const tr = t.getBoundingClientRect();
         const ic = cs('#theme-toggle .icon'); const tx = document.querySelector('#theme-toggle .theme-toggle__text'); const txr = tx.getBoundingClientRect();
-        const n = document.querySelector('#user-name').getBoundingClientRect(); const o = document.querySelector('#logout-btn').getBoundingClientRect();
+        const n = document.querySelector('#user-name').getBoundingClientRect(); const o = document.querySelector('#theme-toggle').getBoundingClientRect(); // 로그아웃은 내 정보 화면으로 옮겨졌다
         return {
           nameFs: cs('#user-name').fontSize, bodyLg: probe('--fs-body-lg'), nameFw: cs('#user-name').fontWeight, nameColor: cs('#user-name').color, textColor: colorOf('--color-text'),
           w: tr.width, h: tr.height, radius: cs('#theme-toggle').borderTopLeftRadius, bgImg: ic.backgroundImage, mask: ic.maskImage || ic.webkitMaskImage, iconW: ic.width, iconBg: ic.backgroundColor,
@@ -164,7 +164,6 @@ test.describe('재검증 2 토스트·헤더', () => {
       expect(Math.abs(m.tMid - m.nMid), tag).toBeLessThan(6);
       expect(Math.abs(m.tMid - m.oMid), tag).toBeLessThan(6);
       expect(m.nameR, `${tag} 이름/토글 겹침`).toBeLessThanOrEqual(m.toggleL + 0.5);
-      expect(m.toggleR).toBeLessThanOrEqual(m.outL + 0.5);
       expect(m.outR).toBeLessThanOrEqual(m.vw + 0.5);
       expect(m.headH, `${tag} 헤더 한 줄`).toBeLessThan(80);
       await page.screenshot({ path: join(testInfo.outputDir, `header-${scheme}-${stored}-${w}.png`), clip: { x: 0, y: 0, width: w, height: 80 } });

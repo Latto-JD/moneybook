@@ -290,8 +290,8 @@ test.describe('C-F7 균형 카드 월 라벨', () => {
     const ui = await newUiPage(browser, testInfo, { api: u.api });
     const { page } = ui;
     await page.goto('/#dashboard');
-    await expect(page.locator('#kpi .kpi-label').first()).toBeVisible();
-    const label = () => page.locator('#kpi .kpi-label').first().innerText();
+    await expect(page.locator('#kpi .sum-balance__label')).toBeVisible();
+    const label = () => page.locator('#kpi .sum-balance__label').innerText();
     const aria = () => page.locator('#kpi').getAttribute('aria-label');
     await expect.poll(label).toBe('이번 달 남은 돈');
     expect(await aria()).toBe('이번 달 요약');

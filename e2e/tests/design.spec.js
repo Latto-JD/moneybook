@@ -51,7 +51,7 @@ async function seedApi() {
 
 const SCREENS = {
   record: { hash: '#record', ready: async (page) => { await expect(page.locator('#category-chips button').first()).toBeVisible(); await expect(page.locator('#tx-list .tx-row').first()).toBeVisible(); } },
-  dashboard: { hash: '#dashboard', ready: async (page) => { await expect(page.locator('#chart-donut svg.chart-svg')).toBeVisible(); await expect(page.locator('#chart-monthly svg.chart-svg')).toBeVisible(); await expect(page.locator('#chart-cat-trend svg.chart-svg')).toBeVisible(); await expect(page.locator('#kpi .kpi').first()).toBeVisible(); } },
+  dashboard: { hash: '#dashboard', ready: async (page) => { await expect(page.locator('#chart-donut svg.chart-svg')).toBeVisible(); await expect(page.locator('#chart-monthly svg.chart-svg')).toBeVisible(); await expect(page.locator('#chart-cat-trend svg.chart-svg')).toBeVisible(); await expect(page.locator('#kpi .sum-balance').first()).toBeVisible(); } },
   categories: { hash: '#categories', ready: async (page) => { await expect(page.locator('#catm-active .cat-row').first()).toBeVisible(); } },
 };
 async function go(page, name) {
@@ -218,14 +218,14 @@ test.describe('11.1 자산 · CSP', () => {
       }
     }
     const pubIcons = readdirSync(join(PUBLIC, 'icons')).filter((f) => f.endsWith('.svg'));
-    expect(pubIcons, '배포 아이콘 18개 = 원본 15 + theme 2 + reset 1').toHaveLength(18);
-    expect(pubIcons.filter((f) => !icons.includes(f)).sort()).toEqual(['reset.svg', 'theme-dark.svg', 'theme-light.svg']);
+    expect(pubIcons, '배포 아이콘 19개 = 원본 15 + theme 2 + reset 1 + logout 1').toHaveLength(19);
+    expect(pubIcons.filter((f) => !icons.includes(f)).sort()).toEqual(['logout.svg', 'reset.svg', 'theme-dark.svg', 'theme-light.svg']);
     expect(readdirSync(join(PUBLIC, 'patterns')).filter((f) => f.endsWith('.svg'))).toHaveLength(7);
     // 배포 svg 22개 + 새 3개: 메타데이터 문자열 없음
     for (const dir of ['icons', 'patterns']) for (const f of readdirSync(join(PUBLIC, dir)).filter((n) => n.endsWith('.svg'))) expect(read(PUBLIC, join(dir, f)), `${dir}/${f}`).not.toMatch(/c2pa|<metadata/i);
     // public/ 에 있는 자산 중 원본에 없는 것은 theme 아이콘 3개뿐
     for (const dir of ['fonts', 'icons', 'patterns']) {
-      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f) && !(dir === 'icons' && /^(theme-(light|dark)|reset)\.svg$/.test(f)));
+      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f) && !(dir === 'icons' && /^(theme-(light|dark)|reset|logout)\.svg$/.test(f)));
       expect(extra, `${dir} 여분 파일`).toEqual([]);
     }
   });
@@ -457,9 +457,9 @@ test.describe('11.2 토큰 · 다크 · 균형', () => {
       const T = await tok();
       expect(T.income).not.toBe(T.expense);
       // 월 요약
-      const cells = await page.locator('#month-totals .sum-cell').evaluateAll((els) => els.map((e) => ({
-        label: e.querySelector('.sum-cell__label').textContent.trim(), icon: !!e.querySelector('.sum-cell__label .icon'),
-        color: getComputedStyle(e.querySelector('.sum-cell__value')).color, aria: e.querySelector('.sum-cell__value').getAttribute('aria-label'), text: e.querySelector('.sum-cell__value').textContent,
+      const cells = await page.locator('#month-totals .sum-col').evaluateAll((els) => els.map((e) => ({
+        label: e.querySelector('.sum-label').textContent.trim(), icon: !!e.querySelector('.sum-label .icon'),
+        color: getComputedStyle(e.querySelector('.sum-amount')).color, aria: e.querySelector('.sum-amount').getAttribute('aria-label'), text: e.querySelector('.sum-amount').textContent,
       })));
       expect(cells).toHaveLength(2);
       expect(cells[0].color).toBe(T.income);
@@ -481,14 +481,14 @@ test.describe('11.2 토큰 · 다크 · 균형', () => {
       }
       // 대시보드 균형 카드
       await go(page, 'dashboard');
-      const kp = await page.locator('#kpi .kpi--income, #kpi .kpi--expense').evaluateAll((els) => els.map((e) => ({
-        kind: e.className, icon: !!e.querySelector('.kpi-label .icon'), label: e.querySelector('.kpi-label').textContent.trim(),
-        aria: e.querySelector('.kpi-value').getAttribute('aria-label'), color: getComputedStyle(e.querySelector('.kpi-value')).color, text: e.querySelector('.kpi-value').textContent,
+      const kp = await page.locator('#kpi .sum-col').evaluateAll((els) => els.map((e) => ({
+        kind: e.className, icon: !!e.querySelector('.sum-label .icon'), label: e.querySelector('.sum-label').textContent.trim(),
+        aria: e.querySelector('.sum-amount').getAttribute('aria-label'), color: getComputedStyle(e.querySelector('.sum-amount')).color, text: e.querySelector('.sum-amount').textContent,
       })));
       expect(kp).toHaveLength(2);
       expect(kp[0].color).toBe(T.income);
       expect(kp[1].color).toBe(T.expense);
-      for (const k of kp) { expect(k.icon).toBe(true); expect(k.aria).toMatch(/^(수입|지출) [\d,]+원$/); }
+      for (const k of kp) { expect(k.icon).toBe(true); expect(k.aria).toMatch(/(수입|지출) [\d,]+원$/); }
       // 부호 기호 없이 라벨(수입/지출)+아이콘 2가지 (남은 돈은 음수일 때만 U+2212)
       await ctx.close();
     });
@@ -605,7 +605,7 @@ test.describe('11.3 공통 컴포넌트 · 접근성', () => {
       const inc = await seg('#type-income');
       expect(exp.pressed).toBe('true');
       expect(inc.pressed).toBe('false');
-      const cardBg = await page.locator('#tx-form').evaluate((e) => getComputedStyle(e).backgroundColor);
+      const cardBg = await page.evaluate(() => { const t = document.createElement('i'); document.body.appendChild(t); t.style.color = 'var(--color-surface)'; const c = getComputedStyle(t).color; t.remove(); return c; }); // 폼은 카드 밖으로 나왔으므로 카드색 = --color-surface
       expect(exp.bg, `${scheme} 선택 세그먼트 배경 = 카드 배경`).toBe(cardBg);
       expect(exp.shadow).not.toBe('none');
       expect(inc.bg).not.toBe(cardBg);
@@ -730,27 +730,26 @@ test.describe('11.3 공통 컴포넌트 · 접근성', () => {
 
 // ================================================================== 11.4 기록
 test.describe('11.4 기록', () => {
-  test('C-D20 배치 순서와 월 요약 두 칸 크기', async ({ browser }, testInfo) => {
+  test('C-D20 배치 순서(화면 정리): 제목 줄 날짜, 요약 카드 1장(남은 돈 + 수입|지출), 폼, 목록, 인사이트는 기록 화면에 없음', async ({ browser }, testInfo) => {
     test.skip(!(SEED_EMAIL && SEED_PASSWORD), 'SEED_* 필요');
     const { ctx, page } = await open(browser, testInfo, { api: await seedApi() });
     await SCREENS.record.ready(page);
-    await expect(page.locator('#insights .insight').first()).toBeVisible();
     const tops = await page.evaluate(() => {
       const y = (sel) => { const e = document.querySelector(sel); return e ? e.getBoundingClientRect().top + scrollY : null; };
-      return { caption: y('#today-caption'), h1: y('#panel-record h1'), totals: y('#month-totals'), form: y('#tx-form'), quick: y('#quick-section:not([hidden])'), list: y('#tx-list'), insights: y('#insights') };
+      return { caption: y('#today-caption'), h1: y('#panel-record h1'), totals: y('#month-totals'), form: y('#tx-form'), quick: y('#quick-section:not([hidden])'), list: y('#tx-list'), insights: document.querySelector('#panel-record #insights') ? 1 : 0 };
     });
-    expect(tops.caption).toBeLessThan(tops.h1);
+    expect(Math.abs(tops.caption - tops.h1), '날짜가 제목과 같은 줄').toBeLessThanOrEqual(12);
     expect(tops.h1).toBeLessThan(tops.totals);
     expect(tops.totals).toBeLessThan(tops.form);
     if (tops.quick !== null) { expect(tops.form).toBeLessThan(tops.quick); expect(tops.quick).toBeLessThan(tops.list); } else expect(tops.form).toBeLessThan(tops.list);
-    expect(tops.list).toBeLessThan(tops.insights);
+    expect(tops.insights, '인사이트는 대시보드로 옮겨졌다').toBe(0);
     test.info().annotations.push({ type: 'quick-visible', description: String(tops.quick !== null) });
-    // 날짜 caption 은 "오늘 날짜" 형식
-    expect((await page.locator('#today-caption').textContent()).trim()).toMatch(/2026|10월|19/);
-    const cells = await page.locator('#month-totals .sum-cell').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { w: r.width, h: r.height }; }));
-    expect(cells).toHaveLength(2);
-    expect(Math.abs(cells[0].w - cells[1].w)).toBeLessThanOrEqual(1);
-    expect(Math.abs(cells[0].h - cells[1].h)).toBeLessThanOrEqual(1);
+    expect((await page.locator('#today-caption').textContent()).trim()).toMatch(/10월|19/);
+    const parts = await page.locator('#month-totals').evaluate((c) => ({ bal: !!c.querySelector('.sum-balance'), cols: [...c.querySelectorAll('.sum-col')].map((e) => { const r = e.getBoundingClientRect(); return { w: r.width, h: r.height }; }), divider: !!c.querySelector('.sum-divider') }));
+    expect(parts.bal).toBe(true);
+    expect(parts.divider).toBe(true);
+    expect(parts.cols).toHaveLength(2);
+    expect(Math.abs(parts.cols[0].w - parts.cols[1].w)).toBeLessThanOrEqual(1);
     await ctx.close();
   });
 
@@ -869,7 +868,7 @@ test.describe('11.4 기록', () => {
     await ctx.close();
   });
 
-  test('C-D24 카테고리 칩: 한 줄 가로 스크롤, 앞에 견본(기본 지출 8개 data-viz 1..8), 30개여도 가로 스크롤 없음, Tab 으로 마지막 칩 가시, "편집 ›" 위치·동작', async ({ browser }, testInfo) => {
+  test('C-D24 카테고리 격자(화면 정리): 4열, 8개 모두 견본 data-viz 1..8, 9개 이상은 7개 + 더 보기, 30개도 가로 스크롤 없음, Tab 으로 마지막 칸 가시, "편집 ›" 위치·동작', async ({ browser }, testInfo) => {
     const w = widthOf(testInfo);
     const { api } = await createLoggedInUser('dch');
     const { ctx, page } = await open(browser, testInfo, { api });
@@ -878,40 +877,39 @@ test.describe('11.4 기록', () => {
     expect(vizs).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
     const names = await page.locator('#category-chips button').allTextContents();
     expect(names).toEqual(['식비', '카페/간식', '교통', '쇼핑', '주거/통신', '의료/건강', '문화/여가', '기타']);
+    const g8 = await page.evaluate(() => { const ul = document.getElementById('category-chips'); const bs = [...ul.querySelectorAll('button')]; const lefts = new Set(bs.map((b) => Math.round(b.getBoundingClientRect().left))); const tops = new Set(bs.map((b) => Math.round(b.getBoundingClientRect().top))); return { cols: lefts.size, rows: tops.size, scrollable: ul.scrollWidth > ul.clientWidth + 1 }; });
+    expect(g8).toEqual({ cols: 4, rows: 2, scrollable: false });
     // 편집 링크: 라벨 행 오른쪽
-    const pos = await page.evaluate(() => { const l = document.getElementById('category-label').getBoundingClientRect(); const a = document.querySelector('.cat-edit-link').getBoundingClientRect(); return { sameRow: Math.abs((l.top + l.height / 2) - (a.top + a.height / 2)) < 12, right: a.left > l.right, w: a.width, h: a.height, fits: a.right <= innerWidth }; });
+    const pos = await page.evaluate(() => { const l = document.getElementById('category-label').getBoundingClientRect(); const a = document.querySelector('.cat-edit-link').getBoundingClientRect(); return { sameRow: Math.abs((l.top + l.height / 2) - (a.top + a.height / 2)) < 12, right: a.left > l.right, fits: a.right <= document.documentElement.clientWidth, w: a.width, h: a.height }; });
     expect(pos).toMatchObject({ sameRow: true, right: true, fits: true });
     expect(pos.w).toBeGreaterThanOrEqual(43.5);
     expect(pos.h).toBeGreaterThanOrEqual(43.5);
-    // 30개
-    for (let i = 0; i < 22; i++) { const r = await json(api, 'POST', '/api/categories', { type: 'expense', name: `${'긴이름가나다라마바사'}${String(i).padStart(2, '0')}`.slice(0, 15) }); expect(r.status()).toBe(201); }
+    // 30개: 접힌 상태 7개 + 더 보기 (23)
+    for (let i = 0; i < 22; i++) { const r = await json(api, 'POST', '/api/categories', { type: 'expense', name: ('긴이름가나다라마바사' + String(i).padStart(2, '0')).slice(0, 15) }); expect(r.status()).toBe(201); }
     await page.reload();
-    await expect(page.locator('#category-chips button')).toHaveCount(30);
+    await expect(page.locator('#category-chips button')).toHaveCount(8);
+    await expect(page.locator('#category-chips .chip--toggle')).toHaveText('더 보기 (23)');
+    await expect(page.locator('#category-chips .chip--toggle')).toHaveAttribute('aria-expanded', 'false');
+    await page.locator('#category-chips .chip--toggle').click();
+    await expect(page.locator('#category-chips button')).toHaveCount(31);
+    await expect(page.locator('#category-chips .chip--toggle')).toHaveText('접기');
     await expectNoHorizontalScroll(page, w);
     const geo = await page.evaluate(() => {
       const ul = document.getElementById('category-chips');
-      const tops = [...ul.querySelectorAll('button')].map((b) => Math.round(b.getBoundingClientRect().top));
-      return { oneLine: new Set(tops).size === 1, scrollable: ul.scrollWidth > ul.clientWidth, ox: getComputedStyle(ul).overflowX, vizs: [...ul.querySelectorAll('.swatch')].slice(0, 10).map((s) => s.getAttribute('data-viz')) };
+      const bs = [...ul.querySelectorAll('button:not(.chip--toggle)')];
+      return { rows: new Set(bs.map((b) => Math.round(b.getBoundingClientRect().top))).size, scrollable: ul.scrollWidth > ul.clientWidth + 1, vizs: [...ul.querySelectorAll('.swatch')].slice(0, 10).map((x) => x.getAttribute('data-viz')) };
     });
-    expect(geo.oneLine).toBe(true);
-    expect(geo.scrollable).toBe(true);
-    expect(['auto', 'scroll']).toContain(geo.ox);
+    expect(geo.rows).toBe(8);
+    expect(geo.scrollable).toBe(false);
     expect(geo.vizs).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', 'none', 'none']);
-    // 마지막 칩이 Tab 으로 보이는지
+    // 마지막 칸이 Tab 으로 닿고 보이는지
     await page.locator('#category-chips button').first().focus();
-    for (let i = 0; i < 29; i++) await page.keyboard.press('Tab');
-    await page.waitForTimeout(2000); // 스크롤 애니메이션 종료 대기
-    const last = await page.evaluate(() => {
-      const ul = document.getElementById('category-chips');
-      const b = document.activeElement;
-      const u = ul.getBoundingClientRect(); const r = b.getBoundingClientRect();
-      return { idx: [...ul.querySelectorAll('button')].indexOf(b), inView: r.left >= u.left - 1 && r.right <= u.right + 1, text: b.textContent, chip: [r.left, r.right], list: [u.left, u.right], scrollLeft: ul.scrollLeft, sw: ul.scrollWidth, cw: ul.clientWidth };
-    });
-    expect(last.idx).toBe(29);
-    test.info().annotations.push({ type: 'last-chip', description: JSON.stringify(last) });
-    expect(last.inView, `마지막 칩 가시 ${JSON.stringify(last)}`).toBe(true);
+    for (let i = 0; i < 30; i++) await page.keyboard.press('Tab');
+    await page.waitForTimeout(300);
+    const last = await page.evaluate(() => { const b = document.activeElement; const r = b.getBoundingClientRect(); return { cls: b.className, text: b.textContent, inView: r.left >= 0 && r.right <= document.documentElement.clientWidth }; });
+    expect(last.cls).toContain('chip--toggle');
+    expect(last.inView, JSON.stringify(last)).toBe(true);
     await expectNoHorizontalScroll(page, w);
-    // 편집 › 동작
     await page.locator('a.cat-edit-link').click();
     await expect(page.locator('#panel-categories')).toBeVisible();
     await ctx.close();
@@ -960,21 +958,21 @@ test.describe('11.4 기록', () => {
 
 // ================================================================== 11.5 대시보드
 test.describe('11.5 대시보드', () => {
-  test('C-D27/C-D28 균형 카드: 남은 돈 44px Newsreader, 두 칸 같은 크기, 막대 높이 8px·비율(900,000/400,000 → 44.4%), 0/0 에서 0%·NaN 없음, 음수 U+2212, 보조 문구 muted', async ({ browser }, testInfo) => {
+  test('C-D27/C-D28 요약 카드(화면 정리): 남은 돈 28px Newsreader, 수입|지출 두 열 같은 너비, 막대 없음, 음수 U+2212, 0/0 에서 NaN 없음, 보조 문구 muted', async ({ browser }, testInfo) => {
     const { api } = await createLoggedInUser('dbl');
     await addTx(api, { type: 'income', category: '급여', amount: 900000, date: '2026-10-02' });
     await addTx(api, { category: '식비', amount: 400000, date: '2026-10-03' });
     await addTx(api, { type: 'income', category: '급여', amount: 1000000, date: '2026-09-02' });
     await addTx(api, { category: '식비', amount: 500000, date: '2026-09-03' });
     const { ctx, page } = await open(browser, testInfo, { api, hash: '#dashboard' });
-    await expect(page.locator('#kpi .kpi')).toHaveCount(3);
+    await expect(page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     const measure = () => page.evaluate(() => {
-      const bal = document.querySelector('#kpi .kpi--balance');
-      const pair = [...document.querySelectorAll('#kpi .kpi--income, #kpi .kpi--expense')];
-      const val = bal.querySelector('.kpi-value');
+      const val = document.querySelector('#kpi .sum-balance__value');
+      const cols = [...document.querySelectorAll('#kpi .sum-col')];
       return {
-        label: bal.querySelector('.kpi-label').textContent.trim(), value: val.textContent, fs: getComputedStyle(val).fontSize, fam: getComputedStyle(val).fontFamily.split(',')[0].replace(/["']/g, '').trim(),
-        cells: pair.map((p) => { const r = p.getBoundingClientRect(); const t = p.querySelector('.bar-track').getBoundingClientRect(); const f = p.querySelector('.bar-fill').getBoundingClientRect(); return { w: r.width, h: r.height, trackH: t.height, fillH: f.height, trackW: t.width, fillW: f.width, extra: p.querySelector('.kpi-extra').textContent, extraColor: getComputedStyle(p.querySelector('.kpi-extra')).color }; }),
+        label: document.querySelector('#kpi .sum-balance__label').textContent.trim(), value: val.textContent, fs: getComputedStyle(val).fontSize, fam: getComputedStyle(val).fontFamily.split(',')[0].replace(/["']/g, '').trim(),
+        cells: cols.map((p) => { const r = p.getBoundingClientRect(); const x = p.querySelector('.kpi-extra'); return { w: r.width, h: r.height, extra: x.textContent, extraColor: getComputedStyle(x).color }; }),
+        bars: document.querySelectorAll('#kpi .bar-track, #kpi .bar-fill').length,
         muted: (() => { const t = document.createElement('i'); document.body.appendChild(t); t.style.color = 'var(--color-text-muted)'; const c = getComputedStyle(t).color; t.remove(); return c; })(),
         text: document.querySelector('#kpi').innerText,
       };
@@ -982,13 +980,11 @@ test.describe('11.5 대시보드', () => {
     const m = await measure();
     expect(m.label).toBe('이번 달 남은 돈');
     expect(m.value).toBe('500,000원');
-    expect(m.fs).toBe('44px');
+    expect(m.fs).toBe('28px');
     expect(m.fam).toBe('Newsreader');
+    expect(m.bars, '수입·지출 막대는 없앴다(OQ-R4)').toBe(0);
+    expect(m.cells).toHaveLength(2);
     expect(Math.abs(m.cells[0].w - m.cells[1].w)).toBeLessThanOrEqual(1);
-    expect(Math.abs(m.cells[0].h - m.cells[1].h)).toBeLessThanOrEqual(1);
-    for (const c of m.cells) { expect(c.trackH).toBe(8); expect(c.fillH).toBe(8); }
-    expect(Math.abs(m.cells[0].fillW - m.cells[0].trackW)).toBeLessThanOrEqual(1); // 수입(큰 쪽) 100%
-    expect(Math.abs(m.cells[1].fillW / m.cells[1].trackW - 400000 / 900000) * 100).toBeLessThanOrEqual(1); // 44.4% ±1
     expect(m.cells[0].extra).toBe('▼ 지난달보다 수입이 10.0% 줄었어요');
     expect(m.cells[1].extra).toBe('▼ 지난달보다 지출이 20.0% 줄었어요');
     for (const c of m.cells) expect(c.extraColor, 'C-D28 보조 문구 muted').toBe(m.muted);
@@ -998,21 +994,15 @@ test.describe('11.5 대시보드', () => {
     await addTx(neg.api, { category: '식비', amount: 30000, date: '2026-10-03' });
     await addTx(neg.api, { type: 'income', category: '급여', amount: 10000, date: '2026-10-02' });
     const n = await open(browser, testInfo, { api: neg.api, hash: '#dashboard' });
-    await expect(n.page.locator('#kpi .kpi')).toHaveCount(3);
-    const nm = await n.page.locator('#kpi .kpi--balance .kpi-value').textContent();
-    expect(nm).toBe('−20,000원');
-    const fills = await n.page.locator('#kpi .bar-fill').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width / e.parentElement.getBoundingClientRect().width));
-    expect(Math.abs(fills[0] - 1 / 3)).toBeLessThan(0.01);
-    expect(Math.abs(fills[1] - 1)).toBeLessThan(0.01);
+    await expect(n.page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
+    expect(await n.page.locator('#kpi .sum-balance__value').textContent()).toBe('−20,000원');
     await n.ctx.close();
     // 0 / 0
     const z = await createLoggedInUser('dz');
     const zz = await open(browser, testInfo, { api: z.api, hash: '#dashboard' });
-    await expect(zz.page.locator('#kpi .kpi')).toHaveCount(3);
-    const zf = await zz.page.locator('#kpi .bar-fill').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
-    expect(zf).toEqual([0, 0]);
+    await expect(zz.page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     expect(await zz.page.locator('#kpi').innerText()).not.toMatch(/NaN|undefined|Infinity/);
-    expect(await zz.page.locator('#kpi .kpi--balance .kpi-value').textContent()).toBe('0원');
+    expect(await zz.page.locator('#kpi .sum-balance__value').textContent()).toBe('0원');
     await zz.ctx.close();
     await ctx.close();
   });
@@ -1034,7 +1024,7 @@ test.describe('11.5 대시보드', () => {
       await go(page, 'dashboard');
       // 제목 줄에 세그먼트
       const head = await page.evaluate(() => { const t = document.getElementById('donut-title'); const s = document.getElementById('catview-income'); const h = t.closest('.card-head'); const a = t.getBoundingClientRect(); const b = s.getBoundingClientRect(); return { sameHead: !!h && h.contains(s), sameRow: Math.abs((a.top + a.height / 2) - (b.top + b.height / 2)) < 16, title: t.textContent }; });
-      expect(head).toEqual({ sameHead: true, sameRow: true, title: '어디에 썼나' });
+      expect(head).toMatchObject({ sameHead: true, title: '카테고리별 지출' }); // 화면 정리: 보기 전환 세그먼트는 제목 줄 아래 전체 너비(제목 줄 오른쪽은 표로 보기)
       // 도넛 기하: 바깥 92, 안쪽 60
       const geo = await page.locator('#chart-donut svg.chart-svg > path').evaluateAll((ps) => ps.map((p) => ({ d: p.getAttribute('d'), viz: p.getAttribute('data-viz'), stroke: getComputedStyle(p).stroke, sw: getComputedStyle(p).strokeWidth })));
       expect(geo).toHaveLength(8);
@@ -1061,12 +1051,12 @@ test.describe('11.5 대시보드', () => {
       await expect(page.locator('#chart-donut table tfoot')).toContainText(`${st.grandTotal.toLocaleString('en-US')}원`);
       // 수입 보기 (C-D30)
       await page.locator('#catview-income').click();
-      await expect(page.locator('#donut-title')).toHaveText('어디서 들어왔나');
+      await expect(page.locator('#donut-title')).toHaveText('카테고리별 수입');
       await expect(page.locator('#chart-donut')).toHaveAttribute('aria-label', '카테고리 수입 비중');
       await expect(page.locator('#chart-donut figcaption')).toHaveText('카테고리 수입 비중');
       await expect(page.locator('#chart-donut svg text.chart-text-sub')).toHaveText('총 수입');
       await page.locator('#catview-expense').click();
-      await expect(page.locator('#donut-title')).toHaveText('어디에 썼나');
+      await expect(page.locator('#donut-title')).toHaveText('카테고리별 지출');
       // D3/D4 (C-D31)
       await page.locator('#range-12').click();
       await expect(page.locator('#chart-monthly table tbody tr')).toHaveCount(12);

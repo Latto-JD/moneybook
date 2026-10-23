@@ -188,7 +188,7 @@ test.describe('재검증 4 다크 금색 선, 라이트 불변', () => {
     const [pn, po] = [props(lightBlock), props(oldLight)];
     const diffs = Object.keys(po).filter((k) => pn[k] !== po[k]);
     expect(diffs, '라이트 토큰 변경').toEqual([]);
-    expect(Object.keys(pn).filter((k) => !(k in po)).sort(), '라이트 신규 토큰').toEqual(['--color-field-line', '--color-field-line-active']);
+    expect(Object.keys(pn).filter((k) => !(k in po)).sort(), '라이트 신규 토큰(직전 커밋에 이미 포함)').toEqual([]);
     expect(pn['--color-field-line']).toBe('var(--color-line)');
   });
 

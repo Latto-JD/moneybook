@@ -399,7 +399,7 @@ test.describe('C-T 화면 모드', () => {
       expect((await page.locator(`${TOGGLE} .icon`).boundingBox()).width).toBeGreaterThan(10);
       expect((await btn.boundingBox()).height).toBeGreaterThanOrEqual(44);
       expect((await page.locator('#user-name').boundingBox()).height).toBeGreaterThanOrEqual(44);
-      expect((await page.locator('#logout-btn').boundingBox()).height).toBeGreaterThanOrEqual(44);
+      expect(await page.locator('.app-header #logout-btn').count(), '로그아웃은 내 정보 화면으로 옮겨졌다(화면 정리)').toBe(0);
       // 아이콘: 색 있는 SVG 를 배경 그림으로 그린다(마스크 아님). 윤곽선 색 대비 3:1 은 SVG 파일의 stroke 색으로 계산한다
       const ico = await page.evaluate(() => { const cs = getComputedStyle(document.querySelector('#theme-toggle .icon')); return { img: cs.backgroundImage, mask: cs.maskImage || cs.webkitMaskImage, bg: getComputedStyle(document.body).backgroundColor }; });
       expect(ico.img, '배경 그림 사용').toMatch(new RegExp(`theme-${scheme}\.svg`));
@@ -481,18 +481,16 @@ test.describe('C-T 화면 모드', () => {
         const m = await page.evaluate(() => {
           const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom, h: b.height }; };
           const hd = document.querySelector('.app-header').getBoundingClientRect();
-          const n = document.querySelector('#user-name');
-          return { hd: { t: hd.top, b: hd.bottom, h: hd.height, l: hd.left, r: hd.right }, name: r('#user-name'), sel: r('#theme-toggle'), out: r('#logout-btn'), vw: document.documentElement.clientWidth,
+          const n = document.querySelector('#user-name-text'); // 이름 span 이 말줄임
+          return { hd: { t: hd.top, b: hd.bottom, h: hd.height, l: hd.left, r: hd.right }, name: r('#user-name'), sel: r('#theme-toggle'), vw: document.documentElement.clientWidth,
             ellipsis: getComputedStyle(n).textOverflow, truncated: n.scrollWidth > n.clientWidth, nameScroll: n.scrollWidth, nameClient: n.clientWidth };
         });
         const tag = `${c.label}/${mode}/os-${os}/${w}`;
         const mid = (x) => (x.t + x.b) / 2;
         expect(Math.abs(mid(m.name) - mid(m.sel)), `${tag} 세로 정렬 name/select`).toBeLessThan(6);
-        expect(Math.abs(mid(m.sel) - mid(m.out)), `${tag} 세로 정렬 select/logout`).toBeLessThan(6);
         expect(m.hd.h, `${tag} 헤더 높이(한 줄)`).toBeLessThan(80);
         expect(m.name.r, `${tag} 이름/모드 겹침`).toBeLessThanOrEqual(m.sel.l + 0.5);
-        expect(m.sel.r, `${tag} 모드/로그아웃 겹침`).toBeLessThanOrEqual(m.out.l + 0.5);
-        expect(m.out.r, `${tag} 로그아웃 화면 안`).toBeLessThanOrEqual(m.vw + 0.5);
+        expect(m.sel.r, `${tag} 모드 버튼 화면 안`).toBeLessThanOrEqual(m.vw + 0.5);
         expect(m.name.l, `${tag} 이름 화면 안`).toBeGreaterThanOrEqual(-0.5);
         expect(m.ellipsis).toBe('ellipsis');
         expect(m.name.r - m.name.l, `${tag} 이름 영역 폭`).toBeGreaterThan(40);
@@ -517,11 +515,11 @@ test.describe('C-T 화면 모드', () => {
       await expect(page.locator('#user-name')).toHaveText(c.patch.name ?? c.patch.email);
       await settle(page);
       const m = await page.evaluate(() => {
-        const n = document.querySelector('#user-name');
+        const n = document.querySelector('#user-name-text'); // 화면 정리: 이름은 링크 안쪽 span 에서 말줄임, › 는 항상 보임
         const rg = document.createRange(); rg.selectNodeContents(n);
-        return { display: getComputedStyle(n).display, textW: rg.getBoundingClientRect().width, boxW: n.getBoundingClientRect().width, headerW: document.querySelector('.app-header').getBoundingClientRect().width };
+        return { display: getComputedStyle(n).textOverflow, textW: rg.getBoundingClientRect().width, boxW: n.getBoundingClientRect().width, headerW: document.querySelector('.app-header').getBoundingClientRect().width };
       });
-      expect(m.display, c.label).toBe('block');
+      expect(m.display, c.label).toBe('ellipsis');
       if (c.label === 'long-email') expect(m.textW, `${c.label} 텍스트 폭 ${m.textW} > 박스 ${m.boxW}`).toBeGreaterThan(m.boxW);
       // 렌더 확인: 박스 오른쪽 끝 구간에 글자 잉크가 있어야 한다(말줄임표가 그려진 경우). 잘린 글자만이어도 잉크는 있으므로 스크린샷을 함께 남긴다.
       const box = await page.locator('#user-name').boundingBox();
@@ -840,7 +838,7 @@ test.describe('C-N 이름 UI', () => {
     await expect(page.locator('#user-name')).toHaveAttribute('title', u.account.email);
     expect(await page.locator('#user-name').getAttribute('aria-label')).toBe(`내 정보: ${u.account.email}, 이름 설정`);
     await page.locator('#user-name').click();
-    await expect(page.locator('#account-hint')).toHaveText('이름을 넣으면 위쪽에 이메일 대신 이름이 보여요.');
+    await expect(page.locator('#account-hint')).toContainText('이름을 넣으면 위쪽에 이메일 대신 이름이 보여요.');
     await expect(page.locator('#account-name')).toHaveValue('');
     await ui.ctx.close();
   });
@@ -1042,12 +1040,12 @@ test.describe('C-N1 마이그레이션과 기존 사용자', () => {
     expect(await page.locator('#user-name').getAttribute('aria-label')).toContain('이름 설정');
     await expect(page.locator('#tx-list .tx-row').first()).toBeVisible(); // 기존 거래 표시
     await page.locator('#user-name').click();
-    await expect(page.locator('#account-hint')).toHaveText('이름을 넣으면 위쪽에 이메일 대신 이름이 보여요.');
+    await expect(page.locator('#account-hint')).toContainText('이름을 넣으면 위쪽에 이메일 대신 이름이 보여요.'); // 화면 정리: 앞에 "20자 이하." 안내가 붙는다
     await page.locator('#account-name').fill('기존 사용자');
     await page.locator('#account-save').click();
     await expect(page.locator('#account-status')).toHaveText('저장했어요');
     await expect(page.locator('#user-name')).toHaveText('기존 사용자');
-    await expect(page.locator('#account-hint')).toHaveText('');
+    await expect(page.locator('#account-hint')).not.toContainText('이메일 대신'); // 이름이 있으면 "20자 이하" 안내만 남는다
     await page.reload();
     await expect(page.locator('#user-name')).toHaveText('기존 사용자');
     await ui.ctx.close();

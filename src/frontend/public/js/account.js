@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { $ } from './dom.js';
 import { validateName } from './lib/validate.js';
 
+const NAME_LIMIT_HINT = '20자 이하';
 const NO_NAME_HINT = '이름을 넣으면 위쪽에 이메일 대신 이름이 보여요.';
 
 export function initAccount(user, onUpdate) {
@@ -12,8 +13,9 @@ export function initAccount(user, onUpdate) {
 
   function fill(u) {
     $('account-email').textContent = u.email;
+    $('account-email').title = u.email; // 길어서 말줄임되면 전체 값 확인용
     input.value = u.name || '';
-    $('account-hint').textContent = u.name ? '' : NO_NAME_HINT;
+    $('account-hint').textContent = u.name ? NAME_LIMIT_HINT : `${NAME_LIMIT_HINT}. ${NO_NAME_HINT}`;
   }
   function clearError() {
     err.textContent = '';

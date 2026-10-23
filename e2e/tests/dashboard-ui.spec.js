@@ -51,7 +51,7 @@ test.describe('C66 신규 사용자 빈 상태', () => {
     await expect(page.locator('#chart-cat-trend .chart-empty')).toHaveText(EMPTY);
     expect(await page.locator('#chart-donut svg, #chart-monthly svg, #chart-cat-trend svg').count()).toBe(0);
     await expect(page.locator('#kpi')).toContainText(NO_PREV);
-    await expect(page.locator('#kpi .kpi')).toHaveCount(3);
+    await expect(page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     await expectNoBadNumbers(page);
     await page.locator('#range-12').click();
     await expect(page.locator('#range-12')).toHaveAttribute('aria-pressed', 'true');
@@ -75,7 +75,7 @@ test.describe('C32 대시보드 가로 스크롤/터치 영역', () => {
     await expectNoHorizontalScroll(page, w);
     const small = await page.evaluate(() => {
       const out = [];
-      for (const sel of ['#dash-prev', '#dash-next', '#range-6', '#range-12', '#cat-trend-chips button', '#tab-record', '#tab-dashboard', '#logout-btn', 'details.chart-table summary']) {
+      for (const sel of ['#dash-prev', '#dash-next', '#range-6', '#range-12', '#cat-trend-chips button', '#tab-record', '#tab-dashboard', 'details.chart-table summary']) {
         document.querySelectorAll(sel).forEach((el) => {
           const r = el.getBoundingClientRect();
           if (r.width < 43.99 || r.height < 43.99) out.push(`${sel} "${el.textContent.trim().slice(0, 10)}" ${r.width.toFixed(1)}x${r.height.toFixed(1)}`);
@@ -105,8 +105,9 @@ test.describe('시드 사용자 대시보드 (C62~C65)', () => {
     const m = await stat(api, 'monthly?from=2026-05&to=2026-10');
     const cur = m.months.find((x) => x.month === '2026-10');
     const prev = m.months.find((x) => x.month === '2026-09');
-    const kpis = await page.locator('#kpi .kpi').evaluateAll((els) => els.map((e) => ({
-      label: e.querySelector('.kpi-label').textContent.trim(), value: e.querySelector('.kpi-value').textContent.trim(),
+    // 화면 정리: 요약 카드 구조 .sum-balance(남은 돈) + .sum-col(수입, 지출). 전월 대비 문구 .kpi-extra 는 각 열 아래
+    const kpis = await page.locator('#kpi .sum-balance, #kpi .sum-col').evaluateAll((els) => els.map((e) => ({
+      label: (e.querySelector('.sum-balance__label') || e.querySelector('.sum-label')).textContent.trim(), value: (e.querySelector('.sum-balance__value') || e.querySelector('.sum-amount')).textContent.trim(),
       extra: e.querySelector('.kpi-extra')?.textContent.trim() || '',
     })));
     // 균형 카드(OQ-D12): 남은 돈 -> 수입 -> 지출. 남은 돈이 음수면 ASCII - 대신 U+2212 를 쓴다.
@@ -301,7 +302,7 @@ test.describe('시드 사용자 대시보드 (C62~C65)', () => {
     await page.locator('#dash-prev').click();
     await expect(page.locator('#dash-month')).toHaveText('2026년 9월');
     const sep = (await stat(api, 'monthly?from=2026-09&to=2026-09')).months[0];
-    await expect(page.locator('#kpi .kpi-value').nth(2)).toHaveText(fmtWon(sep.expenseTotal));
+    await expect(page.locator('#kpi .sum-col--expense .sum-amount')).toHaveText(fmtWon(sep.expenseTotal));
     expect(await kpiText()).not.toBe(k0);
     const cSep = await stat(api, 'categories?from=2026-09&to=2026-09&type=expense');
     expect((await tableRows(page.locator('#chart-donut'))).map((r) => r[0])).toEqual(cSep.items.map((i) => i.category));
@@ -353,7 +354,7 @@ test.describe('C67 탭 전환 재조회', () => {
     await addTx(api, { memo: '기존', amount: 5000, category: '식비', date: FIXED_TODAY });
     const { ctx, page } = await newUiPage(browser, testInfo, { api });
     await page.goto('/#dashboard');
-    await expect(page.locator('#kpi .kpi-value').nth(2)).toHaveText('5,000원');
+    await expect(page.locator('#kpi .sum-col--expense .sum-amount')).toHaveText('5,000원');
     await page.locator('#tab-record').click();
     await expect(page.locator('#panel-record')).toBeVisible();
     await page.locator('#amount').fill('12500');
@@ -361,7 +362,7 @@ test.describe('C67 탭 전환 재조회', () => {
     await page.locator('#save-btn').click();
     await expect(page.locator('#flash')).toHaveText('저장했어요');
     await page.locator('#tab-dashboard').click();
-    await expect(page.locator('#kpi .kpi-value').nth(2)).toHaveText('17,500원');
+    await expect(page.locator('#kpi .sum-col--expense .sum-amount')).toHaveText('17,500원');
     await expect(page.locator('#chart-donut .legend li')).toHaveCount(2);
     // 삭제 후에도 다시 반영
     await page.locator('#tab-record').click();
@@ -370,7 +371,7 @@ test.describe('C67 탭 전환 재조회', () => {
     await page.locator('.tx-row', { hasText: '12,500원' }).locator('.tx-del').click();
     await expect(page.locator('#flash')).toHaveText('삭제했어요');
     await page.locator('#tab-dashboard').click();
-    await expect(page.locator('#kpi .kpi-value').nth(2)).toHaveText('5,000원');
+    await expect(page.locator('#kpi .sum-col--expense .sum-amount')).toHaveText('5,000원');
     await ctx.close();
   });
 });

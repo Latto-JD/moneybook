@@ -15,12 +15,11 @@
 <body>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
   <header class="app-header">
-    <a class="user" id="user-name" href="#account"></a>
+    <a class="user" id="user-name" href="#account"><span class="user__text" id="user-name-text"></span><span class="icon icon--chevron" aria-hidden="true"></span></a>
     <button type="button" class="btn btn--ghost btn--sm theme-toggle" id="theme-toggle" data-mode="light">
       <span class="icon icon--theme-light" aria-hidden="true"></span><span class="theme-toggle__text">라이트</span>
     </button>
     <p class="visually-hidden" id="theme-status" role="status"></p>
-    <button type="button" class="btn btn--ghost btn--sm" id="logout-btn">로그아웃</button>
   </header>
 
   <main class="app-main screen" id="main">
@@ -32,13 +31,13 @@
     <!-- 기록 탭 -->
     <section id="panel-record" aria-label="기록">
       <header class="page-head">
-        <p class="caption" id="today-caption"></p>
         <h1>기록</h1>
+        <p class="caption" id="today-caption"></p>
       </header>
 
-      <div class="summary-pair" id="month-totals" role="group" aria-label="이번 달 수입과 지출"></div>
+      <section class="card sum-card sum-card--record" id="month-totals" aria-label="이번 달 요약"></section>
 
-      <form class="card stack" id="tx-form" method="post" action="/" novalidate aria-label="거래 입력">
+      <form class="stack record-form" id="tx-form" method="post" action="/" novalidate aria-label="거래 입력">
         <div class="segmented" role="group" aria-label="거래 종류">
           <button type="button" class="segmented__item" id="type-expense" aria-pressed="true">지출</button>
           <button type="button" class="segmented__item" id="type-income" aria-pressed="false">수입</button>
@@ -64,12 +63,12 @@
             <span class="field__label" id="category-label">카테고리</span>
             <a class="cat-edit-link" href="#categories" aria-label="카테고리 편집">편집<span class="icon icon--chevron" aria-hidden="true"></span></a>
           </div>
-          <ul class="chips chips--scroll" id="category-chips"></ul>
+          <ul class="cat-grid" id="category-chips"></ul>
           <p class="error-text" id="category-error"></p>
         </div>
         <div class="field">
-          <label for="memo">메모 (선택)</label>
-          <input type="text" id="memo" name="memo" class="input" maxlength="50" autocomplete="off" aria-describedby="memo-error">
+          <label for="memo" class="visually-hidden">메모 (선택)</label>
+          <input type="text" id="memo" name="memo" class="input" maxlength="50" autocomplete="off" placeholder="메모 (선택)" aria-describedby="memo-error">
           <p class="error-text" id="memo-error"></p>
           <ul class="chips" id="memo-suggestions" aria-label="메모 제안"></ul>
         </div>
@@ -100,27 +99,23 @@
         <ul id="tx-list" class="list"></ul>
       </section>
 
-      <section class="card" aria-labelledby="insight-title">
-        <h2 id="insight-title" class="card-title">인사이트</h2>
-        <div id="insights"></div>
-      </section>
     </section>
 
     <!-- 대시보드 탭 -->
     <section id="panel-dashboard" aria-label="대시보드" hidden>
-      <h1 class="visually-hidden">대시보드</h1>
       <div class="dash-head">
-        <div class="month-nav">
+        <h1>대시보드</h1>
+        <div class="month-nav month-pill">
           <button type="button" class="btn btn--ghost btn--sm" id="dash-prev" aria-label="이전 달"><span class="icon icon--back" aria-hidden="true"></span></button>
           <h2 class="month-title" id="dash-month">이번 달</h2>
           <button type="button" class="btn btn--ghost btn--sm" id="dash-next" aria-label="다음 달"><span class="icon icon--chevron" aria-hidden="true"></span></button>
         </div>
       </div>
       <p class="error-text" id="dash-error" role="alert"></p>
-      <section class="card balance-card" id="kpi" aria-label="이번 달 요약" aria-live="polite"></section>
+      <section class="card balance-card sum-card" id="kpi" aria-label="이번 달 요약" aria-live="polite"></section>
       <div class="card donut-card">
         <div class="card-head catview-head">
-          <h2 id="donut-title">어디에 썼나</h2>
+          <h2 id="donut-title">카테고리별 지출</h2>
           <div class="segmented segmented--sm" role="group" aria-label="카테고리 보기">
             <button type="button" class="segmented__item" id="catview-expense" aria-pressed="true">지출</button>
             <button type="button" class="segmented__item" id="catview-income" aria-pressed="false">수입</button>
@@ -129,6 +124,10 @@
         <section id="chart-donut" aria-label="카테고리 지출 비중"></section>
         <a class="btn btn--ghost btn--sm" href="#categories">카테고리 관리<span class="icon icon--chevron" aria-hidden="true"></span></a>
       </div>
+      <section class="card insights-card" aria-labelledby="insight-title">
+        <h2 id="insight-title" class="card-title">인사이트</h2>
+        <div id="insights"></div>
+      </section>
       <div class="card">
         <div class="card-head">
           <h2>월별 추이</h2>
@@ -148,7 +147,7 @@
     <!-- 카테고리 관리 (하단 탭 없음, 대시보드 탭이 활성) -->
     <section id="panel-categories" aria-labelledby="cat-title" hidden>
       <div class="cat-top">
-        <a class="btn btn--ghost btn--sm" href="#record" id="catm-back" aria-label="뒤로"><span class="icon icon--back" aria-hidden="true"></span></a>
+        <a class="back-link" href="#record" id="catm-back" aria-label="뒤로"><span class="icon icon--back" aria-hidden="true"></span>뒤로</a>
         <h1 id="cat-title" tabindex="-1">카테고리 관리</h1>
       </div>
       <div class="card">
@@ -186,23 +185,26 @@
     <!-- 내 정보 (하단 탭 없음, 기록 탭이 활성) -->
     <section id="panel-account" aria-labelledby="account-title" hidden>
       <div class="cat-top">
-        <a class="btn btn--ghost btn--sm" href="#record" id="account-back" aria-label="뒤로"><span class="icon icon--back" aria-hidden="true"></span></a>
+        <a class="back-link" href="#record" id="account-back" aria-label="뒤로"><span class="icon icon--back" aria-hidden="true"></span>뒤로</a>
         <h1 id="account-title" tabindex="-1">내 정보</h1>
       </div>
-      <div class="card">
-        <p class="field__label">로그인에 쓰는 이메일</p>
-        <p id="account-email"></p>
-        <form id="account-form" class="stack" method="post" action="/" novalidate>
-          <div class="field">
-            <label for="account-name">이름 (20자 이하)</label>
-            <input type="text" id="account-name" class="input" autocomplete="name" maxlength="40" aria-describedby="account-hint account-name-error">
-            <p class="hint" id="account-hint"></p>
-            <p class="error-text" id="account-name-error" role="alert"></p>
-          </div>
-          <p class="status-text" id="account-status" role="status" aria-live="polite"></p>
-          <button type="submit" class="btn btn-primary btn--primary btn--block" id="account-save">저장</button>
-        </form>
-      </div>
+      <section class="card account-card" aria-label="계정">
+        <div class="account-row">
+          <span class="account-row__label">이메일</span>
+          <span class="account-row__value" id="account-email"></span>
+        </div>
+      </section>
+      <form id="account-form" class="account-form" method="post" action="/" novalidate>
+        <label for="account-name">이름</label>
+        <div class="account-name-row">
+          <input type="text" id="account-name" class="input" autocomplete="name" maxlength="40" aria-describedby="account-hint account-name-error">
+          <button type="submit" class="btn btn-primary btn--primary" id="account-save">저장</button>
+        </div>
+        <p class="hint" id="account-hint"></p>
+        <p class="error-text" id="account-name-error" role="alert"></p>
+        <p class="status-text" id="account-status" role="status" aria-live="polite"></p>
+      </form>
+      <button type="button" class="btn btn--ghost btn--block logout-btn" id="logout-btn"><span class="icon icon--logout" aria-hidden="true"></span>로그아웃</button>
     </section>
   </main>
 

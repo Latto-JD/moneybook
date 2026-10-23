@@ -47,8 +47,16 @@ async function openApp(browser, testInfo, { prepare, hash = '#record', accept = 
   return { ...ui, ...u, ctl, consoleErrors };
 }
 const cspViolations = (page) => page.evaluate(() => window.__csp || []);
-const chipNames = (page) => page.locator('#category-chips button').allTextContents();
-const waitChips = async (page, n) => { if (n !== undefined) await expect(page.locator('#category-chips button')).toHaveCount(n); else await expect(page.locator('#category-chips button').first()).toBeVisible(); };
+// 화면 정리: 9개 이상이면 격자가 7개 + '더 보기 (N)' 로 접힌다. 이름 목록·개수는 토글 버튼을 뺀 카테고리 칩만 센다.
+const chipNames = (page) => page.locator('#category-chips button:not(.chip--toggle)').allTextContents();
+const expandChips = async (page) => {
+  const more = page.locator('#category-chips .chip--toggle[aria-expanded="false"]');
+  if (await more.count()) await more.click();
+};
+const waitChips = async (page, n) => {
+  if (n === undefined) { await expect(page.locator('#category-chips button').first()).toBeVisible(); return; }
+  await expect.poll(async () => { if (n > 8) await expandChips(page); return page.locator('#category-chips button:not(.chip--toggle)').count(); }).toBe(n);
+};
 const rowByName = (page, name) => page.locator('#panel-categories .cat-row', { has: page.locator('.cat-name', { hasText: new RegExp(`^${name.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')}$`) }) });
 const activeNames = (page) => page.locator('#catm-active .cat-name').allTextContents();
 const goManager = async (page) => { await page.locator('a.cat-edit-link').click(); await expect(page.locator('#panel-categories')).toBeVisible(); await expect(page.locator('#catm-active .cat-row').first()).toBeVisible(); };
@@ -632,6 +640,7 @@ test.describe('C-C29 CSP·XSS', () => {
     expect(await noInjected()).toBe(0);
     // 클릭해도 인라인 핸들러가 없다
     await page.goto('/#record');
+    await waitChips(page, 10); // 접힌 격자를 펼친다 (11개 중 하나는 위에서 사용 안 함으로 바꿈)
     await page.locator('#category-chips button', { hasText: XSS[0] }).click();
     expect(ctl.all.filter((d) => d.type !== 'confirm')).toEqual([]);
     expect(await cspViolations(page)).toEqual([]);
@@ -988,8 +997,8 @@ test.describe('C-C34 기록 탭 "카테고리별 수입/지출" 블록', () => {
 
 // ============================================================ C-C35 KPI
 test.describe('C-C35 KPI 증감 문구 대칭', () => {
-  const kpiExtra = (page) => page.locator('#kpi .kpi').evaluateAll((els) => els.map((e) => ({
-    label: e.querySelector('.kpi-label').textContent, extra: e.querySelector('.kpi-extra')?.textContent || '', cls: e.querySelector('.kpi-extra')?.className || '',
+  const kpiExtra = (page) => page.locator('#kpi .sum-balance, #kpi .sum-col').evaluateAll((els) => els.map((e) => ({
+    label: (e.querySelector('.sum-balance__label') || e.querySelector('.sum-label')).textContent, extra: e.querySelector('.kpi-extra')?.textContent || '', cls: e.querySelector('.kpi-extra')?.className || '',
   })));
   test('C-C35 전월 수입·지출 모두 있음: 같은 문장 형식(늘었어요/줄었어요), ▲/▼ 방향 기호, 색은 본문색', async ({ browser }, testInfo) => {
     const { page, ctx } = await openApp(browser, testInfo, {
@@ -1001,7 +1010,7 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
         await addTx(a, { category: '식비', amount: 80000, date: '2026-10-05' });
       },
     });
-    await expect(page.locator('#kpi .kpi')).toHaveCount(3);
+    await expect(page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     const k = await kpiExtra(page);
     // 균형 카드(OQ-D12): DOM·화면 순서 = 남은 돈 -> 수입 -> 지출. 남은 돈 칸에는 전월 대비 문구가 없다.
     expect(k.map((x) => x.label)).toEqual(['이번 달 남은 돈', '수입', '지출']);
@@ -1025,7 +1034,7 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
       hash: '#dashboard',
       prepare: async (a) => { await addTx(a, { type: 'income', category: '급여', amount: 1000000, date: '2026-10-05' }); await addTx(a, { category: '식비', amount: 10000, date: '2026-10-06' }); },
     });
-    await expect(none.page.locator('#kpi .kpi')).toHaveCount(3);
+    await expect(none.page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     const k = await kpiExtra(none.page);
     expect(k[1].extra).toBe('비교할 지난달 기록이 없어요'); // k[0] = 남은 돈 칸
     expect(k[2].extra).toBe('비교할 지난달 기록이 없어요');
@@ -1038,7 +1047,7 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
         await addTx(a, { category: '식비', amount: 12000, date: '2026-10-06' });
       },
     });
-    await expect(mixed.page.locator('#kpi .kpi')).toHaveCount(3);
+    await expect(mixed.page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     const m = await kpiExtra(mixed.page);
     expect(m[1].extra).toBe('비교할 지난달 기록이 없어요');
     expect(m[2].extra).toBe('▲ 지난달보다 지출이 20.0% 늘었어요');
@@ -1052,7 +1061,7 @@ test.describe('C-C35 KPI 증감 문구 대칭', () => {
         for (const m of ['09', '10']) { await addTx(a, { type: 'income', category: '급여', amount: 500000, date: `2026-${m}-05` }); await addTx(a, { category: '식비', amount: 7000, date: `2026-${m}-06` }); }
       },
     });
-    await expect(page.locator('#kpi .kpi')).toHaveCount(3);
+    await expect(page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     const k = await kpiExtra(page);
     expect(k[1].extra).toBe('= 지난달과 같아요');
     expect(k[2].extra).toBe('= 지난달과 같아요');
@@ -1075,7 +1084,7 @@ test.describe('C-C36 가치 중립 색 (빨강/초록 의존 없음)', () => {
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}|rgba?\(/); // 하드코딩 색 0 (tokens.css 만 색을 정의한다)
     const tokens = await (await get(api, '/css/tokens.css')).text();
     expect(tokens.match(/--color-error:\s*#AC3A31/gi) || []).toHaveLength(1); // 라이트 정의 한 번
-    for (const f of ['app.js', 'dashboard.js', 'charts.js', 'record.js', 'category-manager.js', 'categories.js', 'lib/dashboard-data.js', 'lib/insight-text.js', 'lib/viz.js', 'dom.js']) {
+    for (const f of ['app.js', 'dashboard.js', 'charts.js', 'record.js', 'category-manager.js', 'categories.js', 'lib/dashboard-data.js', 'lib/insight-text.js', 'lib/viz.js', 'dom.js', 'insights.js', 'summary-card.js', 'lib/category-grid.js', 'lib/summary-data.js']) {
       const src = await (await get(api, `/js/${f}`)).text();
       expect(src, f).not.toMatch(/#b3261e|#0b6b3a|#ac3a31|#f59387|rgb\(179, ?38, ?30\)|rgb\(172, ?58, ?49\)|rgb\(11, ?107, ?58\)/i);
     }
@@ -1087,7 +1096,6 @@ test.describe('C-C36 가치 중립 색 (빨강/초록 의존 없음)', () => {
     expect((await json(api, 'POST', '/api/auth/login', { email: SEED_EMAIL, password: SEED_PASSWORD })).status()).toBe(200);
     const { ctx, page } = await newUiPage(browser, testInfo, { api });
     await page.goto('/#record');
-    await expect(page.locator('#insights .insight-overspending')).toBeVisible();
     await expect(page.locator('#category-chips button').first()).toBeVisible();
     expect(await scanColors(page), '기록 탭').toEqual([]);
     // 유형 토글 수입, 수정 모드
@@ -1193,10 +1201,12 @@ test.describe('C-C38 중립 문구', () => {
     expect((await json(api, 'POST', '/api/auth/login', { email: SEED_EMAIL, password: SEED_PASSWORD })).status()).toBe(200);
     const { ctx, page } = await newUiPage(browser, testInfo, { api });
     await page.goto('/#record');
-    await expect(page.locator('#insights .insight-overspending')).toBeVisible();
+    await expect(page.locator('#category-chips button').first()).toBeVisible();
     const banned = ['과소비', '더 썼어요', '덜 썼어요', '초과', '페이스 주의', '⚠'];
     const recordText = await page.locator('body').innerText();
     for (const w of banned) expect(recordText, `기록 탭 "${w}"`).not.toContain(w);
+    await page.goto('/#dashboard'); // 인사이트는 대시보드로 옮겨졌다(화면 정리)
+    await expect(page.locator('#insights .insight-overspending')).toBeVisible();
     await expect(page.locator('#insights .insight-overspending h3, #insights .insight-overspending h2').first()).toHaveText('평소보다 많은 지출');
     const lines = await page.locator('#insights .insight-overspending .insight').allTextContents();
     const exceeded = lines.filter((l) => l.includes('평소보다 많음'));
@@ -1207,7 +1217,7 @@ test.describe('C-C38 중립 문구', () => {
     expect(await page.locator('#insights .insight-icon:not([aria-hidden="true"])').count()).toBe(0);
     await page.goto('/#dashboard');
     await expect(page.locator('#chart-donut svg.chart-svg')).toBeVisible();
-    await expect(page.locator('#kpi .kpi')).toHaveCount(3);
+    await expect(page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
     const dashText = await page.locator('body').innerText();
     for (const w of banned) expect(dashText, `대시보드 "${w}"`).not.toContain(w);
     await page.locator('#catview-income').click();

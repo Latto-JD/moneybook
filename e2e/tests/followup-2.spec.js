@@ -96,15 +96,15 @@ test.describe('C-S1/C-S2 남은 돈 비율', () => {
     for (const scheme of ['light', 'dark']) {
       const a = await openApp(browser, testInfo, { user: u, scheme, hash: '#dashboard' });
       const { page } = a;
-      await expect(page.locator('#kpi .kpi')).toHaveCount(3);
-      const rate = page.locator('#kpi .kpi--balance .balance-rate');
-      const goPrev = async () => { await page.locator('#dash-prev').click(); await expect(page.locator('#kpi .kpi--balance')).toBeVisible(); };
+      await expect(page.locator('#kpi .sum-balance, #kpi .sum-col')).toHaveCount(3);
+      const rate = page.locator('#kpi .balance-rate');
+      const goPrev = async () => { await page.locator('#dash-prev').click(); await expect(page.locator('#kpi .sum-balance')).toBeVisible(); };
       await expect(rate).toHaveText('수입의 32.5%가 남았어요');
-      // 위치: .kpi--balance 안, 남은 돈 금액 바로 아래, 수입·지출 칸(.kpi-extra) 2개는 그대로
-      const pos = await page.locator('#kpi .kpi--balance').evaluate((b) => {
+      // 위치(화면 정리): 요약 카드 안, 남은 돈 줄(.sum-balance) 바로 다음 형제, 남은 돈 금액 아래, 수입·지출 칸(.kpi-extra) 2개는 그대로
+      const pos = await page.locator('#kpi').evaluate((b) => {
         const kids = [...b.children].map((c) => c.className);
-        const v = b.querySelector('.kpi-value'); const r = b.querySelector('.balance-rate');
-        return { kids, adjacent: v.nextElementSibling === r, vBottom: v.getBoundingClientRect().bottom, rTop: r.getBoundingClientRect().top, extras: document.querySelectorAll('#kpi .kpi-extra').length, rateInExtra: r.classList.contains('kpi-extra') };
+        const v = b.querySelector('.sum-balance__value'); const r = b.querySelector('.balance-rate');
+        return { kids, adjacent: v.closest('.sum-balance').nextElementSibling === r, vBottom: v.getBoundingClientRect().bottom, rTop: r.getBoundingClientRect().top, extras: document.querySelectorAll('#kpi .kpi-extra').length, rateInExtra: r.classList.contains('kpi-extra') };
       });
       expect(pos.adjacent, JSON.stringify(pos)).toBe(true);
       expect(pos.rTop).toBeGreaterThanOrEqual(pos.vBottom - 1);
@@ -122,8 +122,8 @@ test.describe('C-S1/C-S2 남은 돈 비율', () => {
         let bgEl = r; let bg = 'rgba(0, 0, 0, 0)';
         while (bgEl && /rgba\(0, 0, 0, 0\)|transparent/.test(bg)) { bg = getComputedStyle(bgEl).backgroundColor; bgEl = bgEl.parentElement; }
         const [x, y] = [lum(parse(getComputedStyle(r).color)), lum(parse(bg))].sort((m, n) => n - m);
-        const inc = getComputedStyle(document.querySelector('#kpi .kpi--income .kpi-value')).color;
-        const exp = getComputedStyle(document.querySelector('#kpi .kpi--expense .kpi-value')).color;
+        const inc = getComputedStyle(document.querySelector('#kpi .sum-col--income .sum-amount')).color;
+        const exp = getComputedStyle(document.querySelector('#kpi .sum-col--expense .sum-amount')).color;
         return { color: getComputedStyle(r).color, mutedRgb, bg, ratio: (x + 0.05) / (y + 0.05), inc, exp };
       });
       expect(col.color, `${scheme} ${JSON.stringify(col)}`).toBe(col.mutedRgb);
@@ -136,7 +136,7 @@ test.describe('C-S1/C-S2 남은 돈 비율', () => {
       await expect(rate).toHaveText('수입 기록이 없어 비율을 계산하지 않아요'); // 8월
       await goPrev();
       await expect(page.locator('#kpi .balance-rate')).toHaveCount(0); // 7월 둘 다 0
-      await expect(page.locator('#kpi .kpi--balance .kpi-value')).toHaveText('0원');
+      await expect(page.locator('#kpi .sum-balance__value')).toHaveText('0원');
       await goPrev();
       await expect(rate).toHaveText('수입의 0.0%가 남았어요'); // 6월 수입 = 지출
       await goPrev();
@@ -184,7 +184,7 @@ test.describe('C-S3~S10 저장·수정 되돌리기', () => {
     expect((await json(api, 'DELETE', `/api/transactions/${tx.id}`)).status(), '서버에서 그 id 는 404').toBe(404);
     // 대시보드·인사이트에서도 사라짐
     await page.locator('a[href="#dashboard"], .tabbar__item[href="#dashboard"]').first().click();
-    await expect(page.locator('#kpi .kpi--balance .kpi-value')).toHaveText('0원');
+    await expect(page.locator('#kpi .sum-balance__value')).toHaveText('0원');
     const ins = await insights(api, '2026-10', FIXED_TODAY);
     expect(ins.largeExpenses).toEqual([]);
     expect(await csp(page)).toEqual([]);
@@ -499,7 +499,7 @@ test.describe('C-S3~S10 저장·수정 되돌리기', () => {
     const cover = await page.evaluate(() => {
       const t = document.querySelector('#toast').getBoundingClientRect();
       const out = {};
-      for (const id of ['theme-toggle', 'logout-btn', 'user-name']) {
+      for (const id of ['theme-toggle', 'user-name']) { // 로그아웃은 내 정보 화면으로 옮겨져 헤더에 없다
         const r = document.getElementById(id).getBoundingClientRect();
         const w = Math.max(0, Math.min(t.right, r.right) - Math.max(t.left, r.left));
         const h = Math.max(0, Math.min(t.bottom, r.bottom) - Math.max(t.top, r.top));
@@ -510,7 +510,7 @@ test.describe('C-S3~S10 저장·수정 되돌리기', () => {
       return out;
     });
     console.log(`TOAST-COVER ${w}px ${JSON.stringify(cover)}`);
-    for (const id of ['theme-toggle', 'logout-btn', 'user-name']) expect(cover[id], `토스트가 #${id} 를 가림 ${JSON.stringify(cover)}`).toEqual({ overlapPx: 0, overlapPct: 0, centerCovered: false });
+    for (const id of ['theme-toggle', 'user-name']) expect(cover[id], `토스트가 #${id} 를 가림 ${JSON.stringify(cover)}`).toEqual({ overlapPx: 0, overlapPct: 0, centerCovered: false });
     // 긴 실패 문구 (버튼 없음): 화면 안에 들어오는지
     await page.route('**/api/transactions/*', (route) => (route.request().method() === 'DELETE'
       ? route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":{"code":"INTERNAL_ERROR","message":"x"}}' }) : route.continue()));
@@ -662,6 +662,7 @@ test.describe('C-S14 수입 인사이트 화면', () => {
   test('C-S14 섹션 제목·문구·순서, 메모 HTML 은 글자 그대로, 금지어 없음, 지난달 보기에서는 I1 만', async ({ browser }, testInfo) => {
     test.setTimeout(90_000);
     const a = await openApp(browser, testInfo, {
+      hash: '#dashboard', // 인사이트는 대시보드로 옮겨졌다(화면 정리)
       prepare: async (api) => {
         for (const d of ['2026-06-05', '2026-07-05', '2026-08-05', '2026-09-05']) await income(api, '급여', 2_500_000, d, '급여');
         for (const d of ['2026-07-15', '2026-08-14', '2026-09-13']) await income(api, '부수입', 400_000, d, '<img src=x onerror=alert(1)>');
@@ -685,7 +686,7 @@ test.describe('C-S14 수입 인사이트 화면', () => {
     expect(await box.locator('img').count(), 'HTML 은 요소가 되지 않음').toBe(0);
     expect(a.dialogs.filter((d) => d.type === 'alert')).toEqual([]);
     // 지난달(9월) 보기: I1 만
-    await page.locator('#month-prev').click();
+    await page.locator('#dash-prev').click();
     await expect(box.locator('.insight-income-drop')).toBeVisible();
     const t9 = await box.locator('h3').allTextContents();
     expect(t9).toContain('평소보다 적은 수입');
@@ -703,7 +704,7 @@ test.describe('C-S14 수입 인사이트 화면', () => {
   });
 
   test('C-S14 아무 항목도 없으면 새 빈 문구 (앞부분 유지)', async ({ browser }, testInfo) => {
-    const a = await openApp(browser, testInfo);
+    const a = await openApp(browser, testInfo, { hash: '#dashboard' });
     const hint = a.page.locator('#insights .hint');
     await expect(hint).toHaveText('아직 알려드릴 내용이 없어요. 기록이 쌓이면 반복 거래와 평소와 다른 지출·수입을 알려드려요.');
     expect(await hint.innerText()).toMatch(/^아직 알려드릴 내용이 없어요/);

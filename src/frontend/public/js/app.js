@@ -13,7 +13,7 @@ initThemeToggle($('theme-toggle'), { status: $('theme-status') });
 // 헤더: 이름(없으면 이메일). textContent 만 사용. title 은 로그인 ID(이메일) 확인용.
 function showUser(user) {
   const l = userLabel(user);
-  $('user-name').textContent = l.text;
+  $('user-name-text').textContent = l.text;
   $('user-name').title = l.title;
   $('user-name').setAttribute('aria-label', l.ariaLabel);
 }
