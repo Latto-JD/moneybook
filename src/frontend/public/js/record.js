@@ -10,7 +10,7 @@ import { inactiveChipLabel } from './lib/categories-data.js';
 import { formatPercent } from './lib/chart-geometry.js';
 import { shouldSubmitOnChipEnter } from './lib/chip-keys.js';
 import { debounce }from './lib/debounce.js';
-import { gridView, selectedHidden } from './lib/category-grid.js';
+import { gridView, selectedHidden, GRID_LIMIT } from './lib/category-grid.js';
 import { renderSummaryCard } from './summary-card.js';
 import { balanceLabel } from './lib/dashboard-data.js';
 import { shouldShowReset } from './lib/reset.js';
@@ -112,6 +112,8 @@ function placeToast(tab) {
   // 옮기면 pointerleave 가 오지 않아 멈춤 상태가 남는다: 지우고, 실제로 위에 있을 때만 다시 멈춘 뒤 타이머를 다시 센다
   toastPaused = pausedAfterMove({ hover: toast.matches(':hover'), focusInside: toast.contains(document.activeElement) });
   if (toast.querySelector('#flash').textContent) armFlashTimer();
+  // 옮기면 브라우저가 슬라이드 인을 처음부터 다시 시작해 새 메시지처럼 보인다: 끝내 버린다(만드는 것이 아니라 끝내는 것. 줄이기 상태에서는 빈 배열)
+  toast.getAnimations().forEach((a) => a.finish());
 }
 export function notifyChanged() {
   document.dispatchEvent(new CustomEvent('datachanged'));
@@ -155,7 +157,8 @@ function renderTypeButtons() {
   $('type-income').setAttribute('aria-pressed', String(state.type === 'income'));
   updateSaveLabel();
 }
-function renderCategoryChips() {
+/** reveal: 사용자가 "더 보기"를 눌러 새로 드러난 칸(8번째부터 + 접기 칸)에만 슬라이드 인(.chip--reveal). 다른 그리기에서는 붙이지 않는다 */
+function renderCategoryChips({ reveal = false } = {}) {
   const ul = $('category-chips');
   if (!categoryResponse()) {
     // 아직 못 받았다: 칩 대신 상태 문구 (실패하면 다시 시도)
@@ -185,6 +188,9 @@ function renderCategoryChips() {
     chips.push(categoryChip(inactiveChipLabel(state.category), { pressed: true, viz: vizOf(map, state.category), onClick: () => {} }));
   }
   if (view.toggle) chips.push(toggleChip(view, ul));
+  if (reveal) {
+    for (const li of chips.slice(gridRevealFrom())) li.querySelector('button').classList.add('chip--reveal');
+  }
   ul.replaceChildren(...chips);
   markClamped(ul);
 }
@@ -207,7 +213,7 @@ function toggleChip(view, ul) {
   }, more ? `더 보기 (${view.hiddenCount})` : '접기');
   b.addEventListener('click', () => {
     state.expanded[state.type] = more;
-    renderCategoryChips();
+    renderCategoryChips({ reveal: more });
     // 포커스는 그 자리 버튼 또는 펼친 뒤의 8번째 카테고리
     const items = ul.querySelectorAll('button');
     (more ? items[GRID_FOCUS_AFTER_MORE] : ul.querySelector('.chip--toggle'))?.focus();
@@ -215,6 +221,7 @@ function toggleChip(view, ul) {
   li.appendChild(b);
   return li;
 }
+const gridRevealFrom = () => GRID_LIMIT - 1; // 접힌 격자에서 보이던 칸 수
 const GRID_FOCUS_AFTER_MORE = 7; // 펼치면 8번째 카테고리(더 보기 칸이 있던 자리)
 
 /** 이름이 2줄로도 넘쳐 잘린 칸에는 전체 이름을 title 로 붙인다 */

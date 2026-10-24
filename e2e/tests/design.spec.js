@@ -26,7 +26,7 @@ const PAL = (scheme) => (scheme === 'dark' ? DARK : LIGHT);
 async function open(browser, testInfo, { api, scheme = 'light', hash = '#record', reduced = false, dialogs } = {}) {
   const ui = await newUiPage(browser, testInfo, { api, dialogs });
   const { page } = ui;
-  await page.emulateMedia({ colorScheme: scheme, reducedMotion: reduced ? 'reduce' : 'no-preference' });
+  await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
   const problems = [];
   const bad = [];
   const requests = [];
@@ -396,7 +396,7 @@ test.describe('11.2 토큰 · 다크 · 균형', () => {
       const report = [];
       for (const name of ['record', 'dashboard', 'categories']) {
         await go(page, name);
-        if (name === 'record') { await page.locator('#save-btn').click({ force: true }); await expect(page.locator('#amount-error')).not.toHaveText(''); }
+        if (name === 'record') { await page.locator('#save-btn').click({ force: true }); await expect(page.locator('#amount-error')).not.toHaveText(''); await page.mouse.move(2, 2); /* 움직임 줄이기에서는 hover 색(다크 --color-primary-hover)이 즉시 적용되므로 포인터를 치운다 */ }
         if (name === 'dashboard') { await page.locator('#chart-donut details summary').click(); await page.locator('#chart-monthly details summary').click(); }
         // C-D8: 다크에서 흰 배경 / 옛 SVG 색
         const old = await page.evaluate(() => {

@@ -16,6 +16,7 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     trace: 'retain-on-failure',
+    reducedMotion: 'reduce', // 모션 도입 후에도 기존 e2e 는 움직임 없이 돈다(plan-motion 6장). 움직임 자체는 motion.spec.js 가 'no-preference' 로 확인
     screenshot: 'only-on-failure',
   },
   projects: [
@@ -26,7 +27,7 @@ export default defineConfig({
     {
       name: 'tablet-768',
       // API 테스트는 뷰포트와 무관하므로 mobile-360 에서만 실행하고, 768 은 UI 테스트만 실행
-      testMatch: /(frontend|dashboard-ui|categories-ui|design|theme-name|followup-1|followup-2|followup-2b|followup-2c|improvements)\.spec\.js/,
+      testMatch: /(frontend|dashboard-ui|categories-ui|design|theme-name|followup-1|followup-2|followup-2b|followup-2c|improvements|motion)\.spec\.js/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } },
     },
   ],

@@ -3,19 +3,21 @@ import { api } from './api.js';
 import { el, $ } from './dom.js';
 import { todayLocal } from './lib/date.js';
 import { buildInsightSections, INSIGHT_EMPTY_TEXT } from './lib/insight-text.js';
+import { applyMotion } from './lib/motion.js';
 
 // 글자 기호(insight-text.js 의 icon) -> 기존 선 아이콘 클래스
 const ICON_CLASS = { '↗': 'expense', '▲': 'expense', '⏳': 'chart', '⏰': 'alert', '↻': 'reset', '↘': 'income', '…': 'alert' };
 const errMsg = (e) => (e && e.message) || '요청을 처리하지 못했어요.';
 let seq = 0;
 
-/** month: 'YYYY-MM'. 오래된 응답은 버린다. */
-export async function loadInsights(month) {
+/** month: 'YYYY-MM'. 오래된 응답은 버린다. fade: 그릴 때 페이드 인(대시보드가 이유에 따라 정한다) */
+export async function loadInsights(month, { fade = false } = {}) {
   const my = ++seq;
   const box = $('insights');
   try {
     const data = await api.insights(month, todayLocal());
     if (my !== seq) return;
+    applyMotion(box, { fade });
     const sections = buildInsightSections(data);
     if (!sections.length) {
       box.replaceChildren(el('p', { class: 'hint' }, INSIGHT_EMPTY_TEXT));

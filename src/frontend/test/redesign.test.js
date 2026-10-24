@@ -141,14 +141,14 @@ test('개선 A6·A7·A8: 세그먼트 선택 테두리, 격자선 중립색, 제
 test('개선 A9: 대시보드는 요청 종류별로 필요한 것만 다시 받는다', () => {
   const js = read('js/dashboard.js');
   assert.equal((js.match(/loadInsights\(/g) || []).length, 1); // 호출은 loadAll 안 한 곳뿐
-  const loadAll = js.match(/function loadAll\(\) \{[\s\S]*?\n\}/)[0];
-  assert.match(loadAll, /loadInsights\(state\.base\)/);
+  const loadAll = js.match(/function loadAll\(reason\) \{[\s\S]*?\n\}/)[0];
+  assert.match(loadAll, /loadInsights\(state\.base, /);
   const setRange = js.match(/function setRange\(n\) \{[\s\S]*?\n\}/)[0];
   assert.doesNotMatch(setRange, /loadInsights|loadCat\(/);
-  assert.match(setRange, /loadMonthly\(\);\s*loadTrend\(\);/);
+  assert.match(setRange, /loadMonthly\('range'\);\s*loadTrend\('range'\);/);
   const setCat = js.match(/function setCatType\(type\) \{[\s\S]*?\n\}/)[0];
   assert.doesNotMatch(setCat, /loadInsights|loadMonthly/);
-  assert.match(setCat, /loadTrend\(loadCat\(\)\)/);
+  assert.match(setCat, /loadTrend\('catview', loadCat\('catview'\)\)/);
 });
 
 test('개선 A10: record.js 정리', () => {

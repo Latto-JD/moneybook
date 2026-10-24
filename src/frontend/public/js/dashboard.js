@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { el, $, chipItem, keepFocus } from './dom.js';
 import { renderSummaryCard } from './summary-card.js';
 import { loadInsights } from './insights.js';
+import { motionFor, applyMotion } from './lib/motion.js';
 import { categoryResponse } from './categories.js';
 import { stableVizMap } from './lib/viz.js';
 import { todayLocal, monthOf, shiftMonth, monthTitle, trailingRange } from './lib/date.js';
@@ -29,7 +30,7 @@ const state = {
 const catVizMap = () => stableVizMap(categoryResponse() && categoryResponse().items, state.catType);
 
 /** 요약 카드(기록 화면과 같은 그리기): 남은 돈 + 비율 + 수입 | 지출, 전월 대비 문구는 각 열 아래 */
-function renderKpi(kpi, base) {
+function renderKpi(kpi, base, motion) {
   const thisMonth = monthOf(todayLocal());
   $('kpi').setAttribute('aria-label', summaryLabel(base, thisMonth));
   // ▲/▼ 는 방향만 알려 준다. 색은 보조 글자색 (늘고 줄어드는 것에 좋고 나쁨을 매기지 않는다)
@@ -37,6 +38,7 @@ function renderKpi(kpi, base) {
     ? { cls: change.direction, text: { up: '▲ ', down: '▼ ', same: '= ' }[change.direction] + change.text }
     : { cls: 'muted', text: '—', srText: NO_PREV_TEXT }); // 한쪽만 없으면 짧게
   const noneAtAll = !kpi.incomeChange && !kpi.expenseChange;
+  applyMotion($('kpi'), motion);
   renderSummaryCard($('kpi'), {
     balanceLabel: balanceLabel(base, thisMonth),
     income: kpi.income, expense: kpi.expense, balance: kpi.balance,
@@ -47,10 +49,11 @@ function renderKpi(kpi, base) {
   });
 }
 
-function renderTrend() {
+function renderTrend(motion = motionFor('chip', 'trend')) {
   const chips = $('cat-trend-chips');
   const cats = trendCategories(state.trend);
   const box = $('chart-cat-trend');
+  applyMotion(box, motion);
   if (!cats.length) {
     chips.replaceChildren();
     renderBars(box, { title: '카테고리별 월 추이', seriesName: VIEW[state.catType].noun, months: [], totals: [] }); // 빈 상태 문구
@@ -58,7 +61,7 @@ function renderTrend() {
   }
   chips.replaceChildren(...cats.map((c) => chipItem(c.category, {
     pressed: c.category === state.selected,
-    onClick: () => { state.selected = c.category; keepFocus(chips, renderTrend); },
+    onClick: () => { state.selected = c.category; keepFocus(chips, () => renderTrend()); },
   })));
   const s = seriesFor(state.trend, state.selected);
   renderBars(box, { title: `${state.selected} 월별 ${VIEW[state.catType].noun} 추이`, ...s, viz: catVizMap().get(state.selected) });
@@ -69,14 +72,15 @@ function renderTrend() {
 const seqs = { monthly: 0, cat: 0, trend: 0 };
 const showError = (e) => { $('dash-error').textContent = (e && e.message) || '데이터를 불러오지 못했어요.'; };
 
-async function loadMonthly() {
+async function loadMonthly(reason) {
   const my = ++seqs.monthly;
   const r = trailingRange(state.base, state.range);
   const base = state.base;
   try {
     const monthly = await api.statsMonthly(r.from, r.to);
     if (my !== seqs.monthly) return;
-    renderKpi(buildKpi(monthly.months, base), base);
+    renderKpi(buildKpi(monthly.months, base), base, motionFor(reason, 'kpi'));
+    applyMotion($('chart-monthly'), motionFor(reason, 'monthly'));
     renderGroupedBars($('chart-monthly'), { title: '월별 수입 대 지출', months: monthly.months });
   } catch (e) {
     if (my === seqs.monthly) showError(e);
@@ -84,7 +88,7 @@ async function loadMonthly() {
 }
 
 /** 카테고리 응답을 돌려준다(추이의 기본 선택에 쓴다). 실패하면 null */
-async function loadCat() {
+async function loadCat(reason) {
   const my = ++seqs.cat;
   const base = state.base;
   try {
@@ -92,6 +96,7 @@ async function loadCat() {
     if (my !== seqs.cat) return null;
     const v = VIEW[state.catType];
     state.catResp = cat;
+    applyMotion($('chart-donut'), motionFor(reason, 'donut'));
     renderDonut($('chart-donut'), {
       title: v.donutTitle, periodLabel: monthTitle(base), items: groupDonutItems(donutItemsFrom(cat)),
       centerLabel: v.centerLabel, noun: v.noun, vizMap: catVizMap(),
@@ -103,7 +108,7 @@ async function loadCat() {
   }
 }
 
-async function loadTrend(catPromise = Promise.resolve(state.catResp)) {
+async function loadTrend(reason, catPromise = Promise.resolve(state.catResp)) {
   const my = ++seqs.trend;
   const r = trailingRange(state.base, state.range);
   try {
@@ -112,18 +117,19 @@ async function loadTrend(catPromise = Promise.resolve(state.catResp)) {
     state.trend = trend;
     const keep = trendCategories(trend).some((c) => c.category === state.selected);
     if (!keep) state.selected = defaultTrendCategory(cat, trend);
-    renderTrend();
+    renderTrend(motionFor(reason, 'trend'));
   } catch (e) {
     if (my === seqs.trend) showError(e);
   }
 }
 
-function loadAll() {
+/** reason: 'month' | 'tab' | 'catchange' (lib/motion.js) */
+function loadAll(reason) {
   $('dash-month').textContent = monthTitle(state.base);
   $('dash-error').textContent = '';
-  loadInsights(state.base); // 인사이트는 달이 바뀔 때와 탭에 들어올 때만
-  loadMonthly();
-  loadTrend(loadCat());
+  loadInsights(state.base, { fade: motionFor(reason, 'insights').fade }); // 인사이트는 달이 바뀔 때와 탭에 들어올 때만
+  loadMonthly(reason);
+  loadTrend(reason, loadCat(reason));
 }
 
 function renderCatView() {
@@ -140,29 +146,29 @@ function setCatType(type) {
   state.trend = null;
   state.catResp = null;
   renderCatView();
-  loadTrend(loadCat());
+  loadTrend('catview', loadCat('catview'));
 }
 
 function setRange(n) {
   state.range = n;
   $('range-6').setAttribute('aria-pressed', String(n === 6));
   $('range-12').setAttribute('aria-pressed', String(n === 12));
-  loadMonthly();
-  loadTrend();
+  loadMonthly('range');
+  loadTrend('range');
 }
 
 export function initDashboard() {
   state.base = monthOf(todayLocal());
-  $('dash-prev').addEventListener('click', () => { state.base = shiftMonth(state.base, -1) || state.base; loadAll(); });
-  $('dash-next').addEventListener('click', () => { state.base = shiftMonth(state.base, 1) || state.base; loadAll(); });
+  $('dash-prev').addEventListener('click', () => { state.base = shiftMonth(state.base, -1) || state.base; loadAll('month'); });
+  $('dash-next').addEventListener('click', () => { state.base = shiftMonth(state.base, 1) || state.base; loadAll('month'); });
   $('catview-expense').addEventListener('click', () => setCatType('expense'));
   $('catview-income').addEventListener('click', () => setCatType('income'));
   renderCatView();
   $('range-6').addEventListener('click', () => setRange(6));
   $('range-12').addEventListener('click', () => setRange(12));
   // 탭 전환 시 재조회 (저장/수정/삭제 후에도 최신)
-  document.addEventListener('tabchange', (ev) => { if (ev.detail.tab === 'dashboard') loadAll(); });
+  document.addEventListener('tabchange', (ev) => { if (ev.detail.tab === 'dashboard') loadAll('tab'); });
   // 카테고리 목록이 늦게 도착하거나 바뀌면 색·무늬 번호가 달라질 수 있으니 열려 있을 때 다시 그린다
-  document.addEventListener('categorieschanged', () => { if (!$('panel-dashboard').hidden) loadAll(); });
-  if (!$('panel-dashboard').hidden) loadAll();
+  document.addEventListener('categorieschanged', () => { if (!$('panel-dashboard').hidden) loadAll('catchange'); });
+  if (!$('panel-dashboard').hidden) loadAll('tab');
 }

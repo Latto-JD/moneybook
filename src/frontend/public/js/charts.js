@@ -179,7 +179,10 @@ export function renderDonut(container, opts) {
     // 막대(장식): 가장 큰 항목 = 100%. 색은 견본과 같은 번호(data-viz)가 정한다
     const bar = h('span', { class: 'legend-bar', 'aria-hidden': 'true' });
     const fill = h('span', { class: 'legend-bar__fill', 'data-viz': Array.isArray(seg.members) ? 'other' : String(vizs[i]) });
-    if (fill.style) fill.style.width = `${maxValue > 0 ? Math.round((seg.value / maxValue) * 1000) / 10 : 0}%`;
+    if (fill.style) {
+      fill.style.width = `${maxValue > 0 ? Math.round((seg.value / maxValue) * 1000) / 10 : 0}%`;
+      fill.style.setProperty('--motion-i', String(i)); // 스태거 순번(CSSOM). 지연 상한은 CSS 가 둔다
+    }
     bar.appendChild(fill);
     li.appendChild(bar);
     if (Array.isArray(seg.members)) {

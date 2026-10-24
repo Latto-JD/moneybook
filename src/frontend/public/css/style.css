@@ -10,6 +10,15 @@
   --radius-chip: 12px;
   --fs-figure-sum: 28px;   --lh-figure-sum: 32px;
   --fs-figure-input: 40px; --lh-figure-input: 48px;
+  /* 모션 공통값 (components.css 의 기존 transition .15s = --motion-short 와 같은 값이라 그대로 둔다) */
+  --motion-short: 150ms;          /* 패널 페이드, 버튼·입력 상태 변화 */
+  --motion-base: 220ms;           /* 카드 페이드, 토스트·"더 보기" 슬라이드 */
+  --motion-stagger: 30ms;         /* 스태거 한 칸 간격 */
+  --motion-stagger-total: 300ms;  /* 스태거 전체 상한: 마지막 막대가 다 자란 시점 */
+  --motion-distance: 8px;         /* 슬라이드 거리 (바텀시트는 100% 로 덮어쓴다) */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);       /* 나타날 때 */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);  /* 위치 이동·자라기 */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);        /* 사라질 때 (이번에는 바텀시트용으로만 정의) */
 }
 
 /* ── 기본 ───────────────────────────── */
@@ -380,3 +389,26 @@ html:has(#save-dock #flash:not(:empty)) { --save-clearance: calc(52px + 52px + v
 .insight-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .icon--alert { --icon: url("../icons/alert.svg"); }
 .account-form > label { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: var(--fw-semibold); }
+
+/* ── 모션 ────────────────────────────── */
+/* 규칙: keyframes 는 from 만(끝 상태는 요소의 원래 스타일), fill-mode 는 backwards 만, 움직이는 속성은 opacity·translate·transform 뿐.
+   패널은 opacity 만(조상 transform 이 fixed·sticky 기준을 바꾸므로). JS 는 element.animate() 를 쓰지 않는다.
+   움직임 줄이기는 components.css 의 전역 규칙이 모든 애니메이션을 끈다(여기서 !important animation 을 쓰지 않는다). */
+@keyframes mb-fade-in { from { opacity: 0; } }
+@keyframes mb-slide-in { from { opacity: 0; translate: 0 var(--motion-distance); } }
+@keyframes mb-grow-x { from { transform: scaleX(0); } }
+
+/* 탭 전환: 새로 보이게 된 패널만(tabs.js 가 panel--enter 를 붙인다. 첫 화면 로드는 재생하지 않는다) */
+html[data-motion-ready] .app-main > section[id^="panel-"].panel--enter:not([hidden]) { animation: mb-fade-in var(--motion-short) var(--ease-out) backwards; }
+/* 대시보드 카드: 그리기 직전에 data-motion 을 넣거나 지운다(lib/motion.js). 새로 그려진 자식만 재생 */
+[data-motion~="fade"] > * { animation: mb-fade-in var(--motion-base) var(--ease-out) backwards; }
+/* 카테고리 막대: 줄마다 30ms 씩 늦게, 지연 상한 = 전체 300ms - 막대 150ms (몇 줄이든 마지막이 300ms 안에 끝난다) */
+[data-motion~="grow"] .legend-bar__fill {
+  transform-origin: left;
+  animation: mb-grow-x var(--motion-short) var(--ease-in-out) backwards;
+  animation-delay: min(calc(var(--motion-i, 0) * var(--motion-stagger)), calc(var(--motion-stagger-total) - var(--motion-short)));
+}
+/* 토스트: transform 이 아니라 translate 속성이라 탭바 위 토스트의 transform: translateX(-50%) 가운데 정렬과 겹치지 않는다 */
+#toast { animation: mb-slide-in var(--motion-base) var(--ease-out) backwards; }
+/* "더 보기"를 눌렀을 때 새로 드러난 칸 */
+.chip--reveal { animation: mb-slide-in var(--motion-base) var(--ease-out) backwards; }

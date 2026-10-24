@@ -25,13 +25,14 @@ export const FIXED_TODAY = '2026-10-19';
  * clock=true 면 Date 를 FIXED_NOW 로 고정(타이머는 실제로 흐름). 시간대는 Asia/Seoul.
  * TRUST_PROXY 서버를 쓸 때는 컨텍스트마다 고유 x-forwarded-for 를 보내 IP 가입/로그인 제한을 피한다.
  */
-export async function newUiPage(browser, testInfo, { api, clock = true, baseURL = BASE_URL, ip, dialogs } = {}) {
+export async function newUiPage(browser, testInfo, { api, clock = true, baseURL = BASE_URL, ip, dialogs, reducedMotion = 'reduce' } = {}) {
   const ctx = await browser.newContext({
     baseURL,
     viewport: testInfo.project.use.viewport,
     hasTouch: testInfo.project.use.hasTouch,
     timezoneId: 'Asia/Seoul',
     locale: 'ko-KR',
+    reducedMotion, // 기본은 움직임 줄이기(기존 e2e 가 애니메이션 없이 돈다). motion.spec.js 는 'no-preference' 를 넘긴다
     storageState: api ? await api.storageState() : undefined,
     extraHTTPHeaders: TRUST_PROXY ? { 'x-forwarded-for': ip || uniqueIp() } : undefined,
   });

@@ -980,3 +980,59 @@ frontend 가 만든 폰트 표는 전달받지 못해(메시지에 파일 위치
 - 결과: 토스트 관련 스펙(`improvements`, `followup-2`, `redesign`)을 mobile-360 + tablet-768 에서 다시 실행: **105 통과 / 0 실패 / 11 skip**(skip 은 API·정적 테스트의 tablet 자체 skip). `npm test` 312/312. 전체 e2e 는 요청대로 재실행하지 않았다.
 - 결함 1 해소: `improvements.spec.js` "A2 재검증: 탭 전환"(저장 -> 대시보드 -> 기록 왕복 후 포인터를 치우면 토스트와 [되돌리기]가 사라짐, 토스트가 없으면 도크 높이 80 이하, 대시보드에서는 탭바 위·기록에서는 도크 안)이 360/768 모두 통과. 이전 실패(`#flash` 9초 뒤에도 `저장했어요`)가 재현되지 않는다.
 - 회귀 없음: A2 위치 판정, 되돌리기 e2e(`followup-2` C-S3~S10: 5초·4초 타이머, 포인터·포커스 정지, 경합, 키보드), `redesign` C-R13 통과. 서버·임시 디렉터리 정리, 3000 리스너 0.
+
+
+---
+
+# 모션 QA (docs/plan-motion.md C-M1~C-M15, 커밋 전 작업 트리)
+
+## 요약
+
+- 완료 기준 C-M1~C-M15 **15개 중 통과 15 / 실패 0 / 검증 불가 0**. 모션 구현의 결함은 발견하지 못했다.
+- 실행: `npm test` **322/322**. e2e 전체(mobile-360 + tablet-768, `reducedMotion: 'reduce'` 설정 + 신규 `motion.spec.js` 포함): **764 통과 / 0 실패 / 39 skip**(총 803개, 18.9분). skip 은 API·정적 테스트의 tablet 자체 skip 과 기존 skip.
+- 환경: 포트 3000 에 남은 서버가 없음을 확인한 뒤 임시 PGlite 에 마이그레이션·시드하고 `DB_DRIVER=pglite QA_TOOLS=true COOKIE_SECURE=false TRUST_PROXY=true PORT=3000` 서버로 실행. 끝난 뒤 서버 종료·임시 디렉터리 삭제, 3000 리스너 0.
+- 승인된 차이 확인: 패널 페이드는 숨겨져 있던 패널을 보이게 하는 순간에만 `panel--enter` 를 붙여 재생하고, 첫 화면 로드(직접 `#dashboard` 로 열기 포함)는 재생하지 않는다. 같은 이유로 처음부터 대시보드로 연 화면의 카드·막대도 움직이지 않고, 탭을 오가며 들어올 때만 움직인다(OQ-M5 와 일치).
+
+## 설정·기존 테스트 정리 (Q-M1)
+
+- `e2e/playwright.config.js` 공통 `use` 에 `reducedMotion: 'reduce'` 를 넣었다. 다만 `browser.newContext()` 로 직접 만드는 컨텍스트(`helpers/ui.js` `newUiPage`)는 이 설정을 이어받지 않으므로 `newUiPage` 의 기본값을 `reducedMotion: 'reduce'` 로 하고(`motion.spec.js` 만 `'no-preference'` 를 넘김), `design.spec.js` 의 `open()` 이 따로 `no-preference` 로 되돌리던 줄(29행)도 `reduce` 로 바꿨다. 이 줄을 그대로 두면 C-D24(카테고리 30개)가 "더 보기" 슬라이드 도중의 `translate` 때문에 칸 줄 수를 9로 읽어 실패했다(움직임이 켜진 상태 측정이라 테스트 설정 문제, 결함 아님).
+- `design.spec.js` C-D8/9/10 다크: 움직임 줄이기에서는 `:hover` 색(다크 `--color-primary-hover` 흰색)이 즉시 적용되어 저장 버튼 hover 가 "흰 배경 잔존"으로 잡혔다. 이전에는 .15s 전환 때문에 측정 순간에 흰색에 닿지 않았을 뿐이다. 포인터를 치우고 측정하도록 한 줄 추가.
+- 기준선(움직임 줄이기 설정 후 한 번 돌린 결과)은 다른 시험을 동시에 돌려 부하·산출 폴더 충돌이 섞인 실행이라 근거에서 뺐다. 위 두 가지를 고친 뒤 전체를 처음부터 다시 돌려 얻은 764/0/39 만 기록한다.
+
+## 항목별 결과
+
+세부 테스트는 신규 `e2e/tests/motion.spec.js`(15개, 360/768). 시간·이징은 `animationstart` 때 `getAnimations()` 의 effect(`getTiming`·`getComputedTiming`·`getKeyframes`)에서 읽었고, `waitForTimeout` 으로 시간을 재지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| C-M1 모션 변수 | 통과 | 계산값 `--motion-short 150ms`, `--motion-base 220ms`, `--motion-stagger 30ms`, `--motion-stagger-total 300ms`, `--motion-distance 8px`, `--ease-out cubic-bezier(0.2,0,0,1)`, `--ease-in-out cubic-bezier(0.4,0,0.2,1)`, `--ease-in cubic-bezier(0.4,0,1,1)`. 실제 재생된 페이드 220ms ease-out, 막대 150ms ease-in-out. `tokens.css`·`components.css` 변경 0(git) |
+| C-M2 keyframes·끝 상태 | 통과 | 정적: `mb-fade-in`·`mb-slide-in`·`mb-grow-x` 3개뿐, 속성은 `opacity`·`translate`·`transform` 만, `from` 만(`to`·100% 없음), `animation` 에 `both`·`forwards`·`!important` 없음, fill-mode `backwards`. 끝난 뒤 `document.getAnimations().length` 0, 카드·막대·패널의 opacity 1·translate none·transform none |
+| C-M3 레이아웃 밀림 0 | 통과 | 시작 상태를 얼리고(`animationstart` 에서 pause, currentTime 0) 끝 상태와 비교: 대시보드 패널(카드·막대·버튼 전체 요소의 offset 레이아웃과 카드 `top`), 저장 도크(토스트가 뜬 상태, 크기), 카테고리 격자("더 보기" 직후, 격자 크기와 아래 메모 칸 위치) 모두 같음. 데이터가 바뀌지 않는 패널 왕복(기록 <-> 내 정보)의 CLS 합 **0**(움직임 켬 `[0,0,0,0]`, 줄임 `[0,0,0,0]`). 데이터를 새로 받는 장면은 로딩 때문에 CLS 가 실행마다 0.1~0.8 로 흔들려 움직임 여부 비교에 쓰지 못했다(관찰) |
+| C-M4 움직이는 도중 입력 | 통과 | 애니메이션을 시작 상태(opacity 0, translate 8px)에 얼려 둔 채: 달 변경 직후 "표로 보기" 클릭 -> 표 열림, 탭 전환 직후 `#save-btn` 클릭 -> 금액 오류(패널 opacity 0 상태), 금액칸에서 Tab -> Enter 로 빠른 금액 입력, "더 보기" 직후 포커스가 8번째 카테고리(`기타`)이고 Enter 로 선택, 저장 직후 토스트 슬라이드 중 [되돌리기] 클릭 -> `되돌렸어요` |
+| C-M5 움직임 줄이기 | 통과 | `matchMedia('(prefers-reduced-motion: reduce)')` true 에서 탭 진입·달 변경·기간·수입 보기·내 정보·카테고리 관리·더 보기·토스트 모든 장면의 `getAnimations()` 0개이고 `animationstart` 0회, 끝 상태 opacity 1·translate none |
+| C-M6 JS·CSP | 통과 | `public/js` 전체에 `.animate(`·`animationend`·`transitionend` 없음, `index.html`·`login.html` 에 인라인 `style=`·`<style>`·인라인 script 없음, 전 장면 `securitypolicyviolation` 0·콘솔 오류 0 |
+| C-M7 패널 페이드 | 통과 | 라이트·다크, 360/768: 첫 화면 로드 때 패널 페이드 0, `data-motion-ready` 설정됨. 대시보드·내 정보·카테고리 관리·기록·대시보드 진입마다 해당 패널에 `mb-fade-in` **1회**, 150ms, 지연 0, ease-out, fill backwards, 속성 `opacity` 만, 시작 opacity 0. 패널의 transform·translate 모두 none |
+| C-M8 카드 페이드 | 통과 | 220ms ease-out opacity 만. 탭 진입·달 변경: `#kpi`·`#chart-donut`·`#chart-monthly`·`#chart-cat-trend`·`#insights` 5개 전부. 6<->12개월: `#chart-monthly`·`#chart-cat-trend` 만. 지출<->수입: `#chart-donut`·`#chart-cat-trend` 만. 카테고리 목록 변경(`categorieschanged`)·추이 칩 선택: 없음 |
+| C-M9 토스트 슬라이드 | 통과 | 라이트·다크: 저장 영역 안 토스트 `mb-slide-in` 1회, 220ms ease-out, 시작 translate `0px 8px`·opacity 0. 탭 이동으로 자리를 옮겨도, 글자만 `되돌렸어요` 로 바뀌어도 재생 0회. 대시보드에서 새로 나타나는 탭바 위 토스트도 같은 값이고 애니메이션 시작·끝 모두 가로 가운데(+-1px). 2단계 C-S3~C-S10 토스트 e2e 수정 없이 통과 |
+| C-M10 "더 보기" | 통과 | 9개 카테고리에서 누르면 새로 드러난 칸(`기타`, `아홉째`, `접기`)만 `chip--reveal` 슬라이드(220ms ease-out, `0px 8px`). 이후 칩 선택·접기·빠른 입력으로 숨은 칸 자동 펼침 때는 `mb-slide-in` 0개 |
+| C-M11 재사용 | 통과 | 임시 요소(`chip--reveal`)에 `--motion-distance: 100%` 를 주면 keyframe 시작 `translate 0px 100%`, 200px 높이 요소가 시작 위치에서 끝 위치보다 정확히 200px 아래, 끝 translate none. 제품 코드 추가 없음 |
+| C-M12 막대 스태거 | 통과 | 11개 카테고리(7 + 그 외, 막대 8개): 탭 진입·달 변경에서 지연 `[0,30,60,90,120,150,150,150]`ms, 길이 150, ease-in-out, 속성 `transform`, 마지막 막대 `endTime` **정확히 300ms**(상한 이내). 수입 보기(막대 2개) 지연 `[0,30]`, 수입->지출 복귀(8개) 같음. 1행: 지연 0·endTime 150. 끝 상태 너비 최대 금액 = 100%(>0.98), transform none |
+| C-M13 막대 비재생 | 통과 | 6->12개월 전환, 카테고리 목록 변경 때 `mb-grow-x` 0개 |
+| C-M14 회귀 | 통과 | `reducedMotion: 'reduce'` 설정으로 기존 e2e 전체가 mobile-360·tablet-768 에서 통과(764/0/39), `npm test` 322/322 |
+| C-M15 변경 범위 | 통과 | `src/backend/`·`docs/api.md`·`schema.sql`·`tokens.css`·`components.css`·`src/frontend/office/` 변경 0, 변경 파일은 `src/frontend/public/`, `src/frontend/test/`, `e2e/`, `docs/`(+ 기존 untracked `design_handoff_moneybook/`) 안 |
+
+## 관찰 사항
+
+- 처음부터 `#dashboard` 로 열면(주소창·새로고침) 카드·막대는 움직이지 않는다. 계획서 5.3 표의 "탭 진입"은 `tabchange` 만 뜻하고 OQ-M5(첫 화면 정지)와 같은 결정이다. 사용자가 새로고침한 대시보드는 정지, 탭으로 들어가면 움직이는 비대칭이 있다.
+- 토스트가 탭 이동으로 `<main>` 으로 옮겨질 때 `getAnimations().finish()` 로 재생을 끝내 다시 움직이지 않는다(C-M9 로 확인).
+- 768px·라이트·다크에서도 위 항목이 같은 값으로 통과했다. 실제 기기의 체감 부드러움·성능 패널의 프레임 수는 확인하지 못했다.
+
+## 테스트 코드 변경 (소스 수정 없음)
+
+- 신규 `e2e/tests/motion.spec.js`(15개), `e2e/playwright.config.js`(`reducedMotion: 'reduce'` 공통 설정, tablet 대상에 `motion`), `e2e/helpers/ui.js`(`newUiPage` 기본 `reducedMotion: 'reduce'`, 매개변수로 덮어쓰기).
+- `e2e/tests/design.spec.js`: `open()` 이 움직임을 다시 켜던 줄을 `reduce` 로, C-D8/9/10 에서 포인터를 치우고 측정.
+
+## 한계
+
+- 미검증: 실제 휴대폰, 성능 패널의 레이아웃 이동·프레임, 스크린리더. 시간은 `getAnimations()` 메타데이터로 읽었고 실제 화면의 프레임 단위 재생은 확인하지 않았다.
+- C-M3 의 CLS 는 데이터를 받지 않는 패널 전환에서만 측정했다(데이터 로딩이 섞이는 장면은 레이아웃 비교로 대신).
