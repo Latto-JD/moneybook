@@ -7,6 +7,7 @@ import { initCategoryManager } from './category-manager.js';
 import { initThemeToggle } from './lib/theme.js';
 import { userLabel } from './lib/user-label.js';
 import { initAccount } from './account.js';
+import './scroll-spring.js';
 
 initThemeToggle($('theme-toggle'), { status: $('theme-status') });
 

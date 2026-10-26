@@ -410,5 +410,8 @@ html[data-motion-ready] .app-main > section[id^="panel-"].panel--enter:not([hidd
 }
 /* 토스트: transform 이 아니라 translate 속성이라 탭바 위 토스트의 transform: translateX(-50%) 가운데 정렬과 겹치지 않는다 */
 #toast { animation: mb-slide-in var(--motion-base) var(--ease-out) backwards; }
+/* 스크롤 출렁임 유닛(scroll-spring.js 가 속성을 붙인다): 기준 transform 을 상시 걸어 둔다. 스크롤 중 inline transform 값만 바뀌므로 붙이고 떼는 레이아웃이 없다.
+   움직임 줄이기에서는 JS 가 속성을 붙이지 않는다. 유닛은 폼·저장 영역·토스트가 아니며 fixed·sticky 자손이 없다. will-change 는 쓰지 않는다. */
+[data-spring-unit] { transform: translate3d(0, 0, 0); }
 /* "더 보기"를 눌렀을 때 새로 드러난 칸 */
 .chip--reveal { animation: mb-slide-in var(--motion-base) var(--ease-out) backwards; }

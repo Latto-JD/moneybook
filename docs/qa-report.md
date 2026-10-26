@@ -1036,3 +1036,137 @@ frontend 가 만든 폰트 표는 전달받지 못해(메시지에 파일 위치
 
 - 미검증: 실제 휴대폰, 성능 패널의 레이아웃 이동·프레임, 스크린리더. 시간은 `getAnimations()` 메타데이터로 읽었고 실제 화면의 프레임 단위 재생은 확인하지 않았다.
 - C-M3 의 CLS 는 데이터를 받지 않는 패널 전환에서만 측정했다(데이터 로딩이 섞이는 장면은 레이아웃 비교로 대신).
+
+
+---
+
+# 스크롤 출렁임 QA (docs/plan-spring.md C-S1~C-S18, 커밋 전 작업 트리)
+
+## 요약
+
+- 완료 기준 C-S1~C-S18 **18개 중 통과 17 / 실패 1 / 검증 불가 0**. 일부 항목은 아래 "한계"의 범위에서만 확인했다.
+- 문제는 하나다(C-S16). 가장 심각한 문제 순서:
+  1. **C-S16 실패(성능, 중간)**: 출렁임을 켜면 같은 스크롤에서 `LayoutCount` 가 끔보다 **8~102회 더 많다**(기준 <=2). 레이아웃이 많이 나온 실행(7회 중 5회)은 CPU 4배 느림에서 rAF 간격이 나빠졌다(p95 끔 44~53ms -> 켬 71~129ms). 레이아웃이 8회였던 실행은 p95 48ms 로 차이가 없었고, 가장 먼저 돌린 실행은 오히려 켬이 낮았다.
+  2. 같은 조건에서도 실행마다 값이 크게 흔들린다(레이아웃 8~102회). 실제 저사양 폰에서 끊김이 보일 수 있어 U-S1 에서 손으로 확인해야 한다.
+  3. 그 밖에 정확성 결함은 찾지 못했다.
+- 실행
+  - `npm test` **342/342**.
+  - 신규 `e2e/tests/spring.spec.js` 25개 x 2 프로젝트(mobile-360, tablet-768) = 50개: **46 통과 / 2 실패(C-S16, 두 프로젝트) / 2 skip**(768 의 터치 시험과 정적 범위 시험은 360 전용).
+  - e2e 전체(mobile-360 + tablet-768, 시드 사용자 포함, 기본 `reducedMotion: 'reduce'`, 신규 spring 포함): **810 통과 / 2 실패 / 41 skip**(총 853개, 32.1분). 실패 2건은 모두 C-S16. 기존 803개 중 실패 0, skip 41 은 이전과 같은 사유(360 전용·시드 필요 등).
+  - 시드 없이 먼저 돌린 전체 실행(739/2/112)은 시드 의존 테스트가 skip 되어 근거에서 뺐다. 시드(`seed-ui@example.com`, today 2026-10-19)로 임시 PGlite 를 다시 만들어 얻은 810/2/41 만 기록한다.
+- 환경: 임시 PGlite(`DB_DRIVER=pglite QA_TOOLS=true COOKIE_SECURE=false TRUST_PROXY=true PORT=3000`). 끝나고 서버를 끄고 임시 폴더를 지웠다. 소스(`src/`)는 수정하지 않았다.
+
+## 검증 방법
+
+- 페이지 안 기록기가 매 프레임 모든 유닛의 계산된 `transform`(ty, scaleY)·`will-change`, 인라인 `transform` 이 있는 요소, 제외 요소(헤더·탭바·`#toast`·`#save-dock`·`#tx-form` 과 자손·`#account-form`·`#catm-add`·패널·`#main`·`body`·`html`)의 인라인 transform·계산값, `#save-dock`·`#toast` 위치, `scrollHeight`, `html[data-spring]`, 저장 버튼 `elementFromPoint` 를 모은다.
+- 스프링 rAF 는 `requestAnimationFrame` 을 감싸 이름이 `frame` 인 호출만 센다. 리스너는 `addEventListener` 를 감싸 scroll-spring 이 등록한 것만 센다(둘 다 테스트 쪽 코드).
+- 스크롤: 휠은 `page.mouse.move` + `page.mouse.wheel`(마우스 위치가 기준점), 터치는 CDP `Input.dispatchTouchEvent`(touchStart/Move/End). 거래 목록은 360px 에서 폼 아래 약 1370px 에 있으므로 프로그램 스크롤(`window.scrollTo`, 출렁임 없음)로 목록을 화면에 올린 뒤 시험한다.
+- 데이터: 이번 달 거래 44건(메모 `행N`)과 8~10월 카테고리별 거래·수입, 추가 카테고리 8개. 대시보드·카테고리 관리·내 정보도 스크롤이 생기도록 했다(카테고리는 높이 500, 내 정보는 높이 300 으로 뷰포트를 낮춤).
+
+## 항목별 결과
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| C-S1 체감(독립 움직임) | 통과 | 기록 탭 휠 600px(라이트·다크, 360/768): 행 최대 \|ty\| **11.6~11.8px**(>=6), 같은 프레임에 두 유닛의 ty 차이 >=2px 인 프레임 있음. 터치 600px 도 11.75px. 대시보드 카드 최대 **19.45px**, 카테고리 관리 행 **11.82px**(사용 안 함 포함 101유닛), 내 정보 카드 **19.37px** |
+| C-S2 끌림 규칙 | 통과 | 기준점 y=420 에서 휠 100px 한 번: 기준점에서 6px 떨어진 행 \|ty\| 1.4, 53px 8.8, 401~454px 떨어진 행 11.59(상한 근처). 가까울수록 덜 움직임 |
+| C-S3 상한 | 통과 | 모든 프레임에서 행 \|ty\| <=12.5, 카드 <=20.5, scaleY 최대 1.0012(<=1.016). 휠 3000px 연속(10회 x 8ms), 위로 800px, 터치 600px, 터치 플링(5스텝 x 8ms) 모두 상한 안. 동시 인라인 transform 요소 최대 21(CPU 4배에서 28) <=40 |
+| C-S4 수렴 | 통과 | 마지막 스크롤 이벤트 뒤 `data-spring` 소멸까지 휠 **약 495ms**, 터치 476ms, 대시보드 674ms, 카테고리 473ms(<=1000). 정지 뒤 유닛 계산 `transform` none, 인라인 `transform`·`transform-origin`·`will-change` 비어 있음, 이후 500ms 동안 스프링 rAF 0 |
+| C-S5 제외 요소 | 통과 | 모든 시나리오의 모든 프레임에서 제외 요소 인라인 `transform`·`will-change` 0, 유닛 밖 인라인 transform 0, 제외 요소의 계산된 transform·translate 가 프레임 내내 같은 값(토스트의 `translateX(-50%)` 포함) |
+| C-S6 저장 영역·토스트 | 통과 | `#save-dock`·`#toast` bottom·너비 오차 **0.00px**. (A) 위쪽에서 요약 카드(최대 \|ty\| 19.4)가 출렁이는 57프레임 모두 `elementFromPoint(저장 버튼)` 이 저장 버튼, (B) 목록 구간에서 행(11.8)이 출렁여도 저장 영역·토스트 위치 불변. 대시보드 탭바 위 토스트 bottom 오차 0, 가로 가운데 오차 0, 계산 transform 불변. 기록 탭은 폼이 목록 위에 있어 저장 버튼과 행이 동시에 보이는 장면이 없어(관찰) 저장 버튼 hit test 는 (A) 로 했다 |
+| C-S7 스크롤 높이 | 통과 | 기록 탭 600px·3000px 스크롤 동안 `scrollHeight` 가 정지 상태와 같음 |
+| C-S8 구조 | 통과 | 기록·대시보드·카테고리 관리(사용 안 함 펼침)·내 정보 4개 화면에서 유닛끼리 조상·자손 0, 유닛과 그 자손 중 `position: fixed/sticky` 0, 유닛 자체에 CSS transition·animation·translate 0 |
+| C-S9 1차 모션 공존 | 통과 | 대시보드에서 카드가 출렁이는 중 `#dash-prev` 클릭: `mb-fade-in`·`mb-grow-x` 시작(16개), 끝난 뒤 유닛·`#kpi > *`·`#chart-donut > *`·막대의 opacity 1·transform none·translate none, `data-spring` 소멸. 기존 `motion.spec.js` 15개 x 2 가 수정 없이 통과(전체 실행에 포함) |
+| C-S10 누르기 정확도 | 통과 | 기록: 휠 직후 화면 안에서 가장 많이 움직이는 행(\|ty\| 10.7~11.6px)의 그 순간 보이는 중심을 눌러 5회 모두 같은 행(`행36, 17, 16, 36, 17`)이 수정 상태로 열림, 다른 행 0회(360/768). 대시보드: 카드 \|ty\| 16~19.5px 인 동안 "수입"·"지출" 버튼 3회씩, "표로 보기" 1회 모두 동작(360/768) |
+| C-S11 출렁이지 않는 스크롤 | 통과 | PageDown·Space·End·Home(525~5614px 이동)·ArrowDown 5회·Tab 25회(1143px)·`window.scrollTo`·`scrollIntoView`·거래 수정 진입(`scrollIntoView` + `#amount` 포커스, 1099px)·메모 칸 포커스·탭 전환 12가지 모두: 0 아닌 transform 프레임 0, `data-spring` 프레임 0, 스프링 rAF 0. 메모 칸이 저장 영역에 가려지지 않음 |
+| C-S12 입력 중(승인된 읽기) | 통과 | 로드 직후 `#amount` 포커스만 있는 상태의 휠 -> 행 \|ty\| 11.62(출렁임). 키 입력 직후 휠 -> 0 아닌 transform 프레임 0, 스프링 rAF 0. 1초 뒤 같은 포커스에서 휠 -> 11.62(다시 출렁임). 출렁이는 중(직전 최대 9.53px) 키 입력 -> 40ms 뒤 프레임의 모든 \|ty\| 0. 카테고리 이름 바꾸기 입력에서 타이핑 직후 휠 -> 0 |
+| C-S13 끝 튕김 | 통과 | 맨 위에서 위로 휠 600px: 최대 \|ty\| 0(스크롤 이벤트 없음). 맨 아래에서 더 아래로 휠: 0. 범위 밖 `scrollY` 의 끌림 0 은 단위 테스트 `끝 튕김`(`npm test` 342/342 에 포함)으로 확인. 실제 iOS 고무줄은 확인하지 못했다 |
+| C-S14 움직임 줄이기 | 통과 | `reduce` 로 연 페이지(360/768): 휠(+터치) 후 스크롤 위치는 이동, 유닛 transform·will-change 0, `data-spring` 0, 스프링 rAF 0, scroll-spring 리스너 0개. 실행 중 출렁이는 도중(인라인 transform 있음) `emulateMedia({ reducedMotion: 'reduce' })` -> 2프레임 뒤 인라인 transform·will-change 요소 0, `data-spring` 없음, 이후 스크롤에도 rAF 0·transform 0. `no-preference` 로 되돌리면 다시 출렁임(11.79px) |
+| C-S15 스위치 | 통과 | 응답을 가로채 `enabled: true` -> `enabled: false` 로 바꾼 `spring.js`: scroll-spring 리스너 **0개**(켬 10개), 스프링 rAF 0(켬 49), 변위 0, `data-spring` 없음, 스크롤은 정상. 켠 상태의 리스너 10개(scroll·wheel·touchstart·touchmove·touchend·touchcancel·input·keydown·resize·tabchange) 전부 passive. 단위 테스트 정적 검사도 통과 |
+| C-S16 성능 근사 | **실패** | 아래 "실패 항목" 참고. 통과한 하위 기준: 동시 인라인 transform 요소 최대 21(360)·28(768) <=40, 느린 기기 자동 꺼짐 동작(아래) |
+| C-S17 회귀·CSP | 통과 | `npm test` 342/342. 기존 e2e 803개가 수정 없이 통과(전체 810/2/41 의 실패 2건은 신규 C-S16 뿐). `securitypolicyviolation` 0·콘솔 오류 0, `index.html`·`login.html` 에 인라인 `style=`·`<style>`·인라인 script 없음. 탭을 16번 오가도 scroll-spring 리스너 수 10 -> 10(누수 없음), 정지 뒤 인라인 transform 0 |
+| C-S18 변경 범위 | 통과 | `git status`: `src/backend/`·`docs/api.md`·`src/frontend/public/css/`·`src/frontend/office/` 변경 0. 변경·신규: `src/frontend/public/js/app.js`, `lib/spring.js`, `scroll-spring.js`, `src/frontend/test/spring.test.js`, `e2e/`, `docs/`(+ 기존 untracked `design_handoff_moneybook/`). 모두 허용 폴더 안 |
+
+### 추가로 확인한 항목 (팀장 요청)
+
+- 대시보드·카테고리 관리·내 정보 실제 출렁임: 위 C-S1 참고. 라이트에서 확인했고 다크는 기록 탭에서만 확인했다.
+- 다크 모드: 기록 탭 C-S1~S5·S7 이 라이트와 같은 값(행 11.75px, 수렴 약 498ms, scaleY 1.0011)으로 통과.
+- 자동 꺼짐(OQ-S5): 모든 프레임에 40ms 바쁜 루프를 넣어 프레임 간격 중앙값을 25ms 위로 만들고 휠 제스처 4번 -> 제스처 1·2 는 출렁임, **3·4 는 출렁임 없음**. 새로고침 뒤에는 다시 출렁임(11.75px). 360/768 모두 같음.
+- 제외 요소: 모든 시나리오(기록·대시보드·카테고리·내 정보, 라이트·다크, 터치·휠·플링)에서 인라인 transform·will-change 가 단 한 번도 쓰이지 않음.
+
+## 실패 항목
+
+### C-S16 CPU 4배 느림에서 켬/끔 성능 차이
+
+- 재현 절차: 거래가 많은 사용자(이번 달 44건)로 `#record` 를 연다 -> 프로그램 스크롤로 목록을 화면 위쪽에 올린다 -> CDP `Emulation.setCPUThrottlingRate(4)` -> 휠 7스텝 x 6회(+700/-500 번갈아) 동안 `Performance.getMetrics` 의 `LayoutCount`, rAF 간격(p50/p95), `longtask` 를 `reducedMotion: 'reduce'`(끔)와 `'no-preference'`(켬)로 비교. `cd e2e && npx playwright test spring -g "C-S16 성능"`.
+- 기대 결과: `LayoutCount` 차이 <=2, long task 0, rAF 간격 p95 차이 <=2ms.
+- 실제 결과(끔은 앞뒤 2회 값, 실행 순서대로):
+
+| 실행 | LayoutCount 끔 -> 켬 | p50(ms) 끔 -> 켬 | p95(ms) 끔 -> 켬 | long task 켬 |
+|---|---|---|---|---|
+| 360 #1 (단독) | 0 -> 28 | 19/20 -> 21 | 73/76 -> 62 | 0 |
+| 360 #2 (전체 실행 중) | 0 -> 43 | 20/26 -> 23 | 52/53 -> 71 | 0 |
+| 768 #2 (전체 실행 중) | 0 -> 64 | 25/25 -> 34 | 48/47 -> 117 | 1 |
+| 360 #3 | 0 -> 92 | 24/26 -> 40 | 45/47 -> 129 | 0 |
+| 768 #3 | 0 -> 8 | 26/26 -> 27 | 49/46 -> 48 | 0 |
+| 360 #4 | 0 -> 102 | 25/26 -> 33 | 48/45 -> 88 | 0 |
+| 768 #4 | 0 -> 84 | 25/25 -> 39 | 44/46 -> 129 | 0 |
+
+  기준을 만족한 실행은 없다(`LayoutCount` 최소 차이 8). 레이아웃이 많이 나온 실행에서 rAF 간격이 끔보다 크게 나빠졌다. 켬의 스타일 재계산도 17~284회로 끔(0)보다 많다.
+- 원인 추정(소스는 고치지 않고 격리 실험으로 확인): 유닛이 transform 을 새로 받거나 지울 때마다 레이아웃이 1회 생긴다. 페이지에서 행 10개에 인라인 `transform` 을 한 번에 넣으면 `LayoutCount` +1, 지우면 +1, `will-change` 만 넣어도 +1, 이미 transform 이 있는 요소의 값만 바꾸면 +0, `transform-origin` 만 바꿔도 +0 이었다. 스크롤 중 행이 계속 활성으로 들어오고 정지하며 `transform`·`will-change` 가 지워지므로 프레임마다 이 비용이 반복되는 것으로 보인다. 실행마다 8~102회로 크게 다른 것도 같은 이유로 보이나 확정은 아니다. 계획서 5.1 4번(정지하면 `transform`·`will-change` 제거)과 5.6(레이아웃 차이 <=2)이 서로 부딪히는 기준일 수 있다.
+- 영향: 정확성에는 영향이 없다(다른 모든 항목 통과). 저사양 기기에서 스크롤 중 프레임 간격이 늘어날 수 있고, 이때는 자동 꺼짐(중앙값 25ms 초과 2회)이 동작하는 것이 정상이다. 판단은 U-S1 실제 기기 확인으로 넘긴다.
+
+## 관찰 사항
+
+- 기록 탭은 거래 입력 폼이 목록보다 위(360px 에서 목록 시작 약 1370px)에 있어 목록을 스크롤하는 동안 저장 영역이 화면에 남는 장면이 없다. 그래서 C-S6 의 "저장 버튼이 출렁이는 행보다 위에 보임"은 위쪽 구간(요약 카드가 출렁임)에서 확인했다.
+- C-S10 대시보드 시험에서 카드가 상한(약 19~20px) 근처로 움직이는 동안에도 버튼 중심을 눌러 모두 동작했다. 누르는 순간 되돌리지 않는 설계(5.5)대로다.
+- CDP `synthesizeScrollGesture` 는 이 설정에서 스크롤을 만들지 못해(스크롤 위치 불변) `dispatchTouchEvent` 로 바꿨다.
+- 수렴은 `waitForTimeout` 대신 `data-spring` 소멸 시각과 마지막 `scroll` 이벤트 시각의 차로 쟀다(plan 7장 2번).
+
+## 테스트 코드 변경 (소스 수정 없음)
+
+- 신규 `e2e/tests/spring.spec.js`(25개 x 2 프로젝트): C-S1~S16 중심. `reducedMotion: 'no-preference'` 로 열고, 기존 e2e 는 `reduce` 그대로다.
+- `e2e/playwright.config.js`: `tablet-768` 의 `testMatch` 에 `spring` 추가.
+- 시드 실행이 덮어쓴 `docs/qa-shots-*` 스크린샷 5개는 `git checkout` 으로 되돌렸다.
+
+## 한계
+
+- 미검증: 실제 휴대폰(관성·고무줄·체감), iOS Safari, 성능 패널의 프레임/GPU 측정(U-S1), 768px 터치(해당 프로젝트에 터치 입력 없음).
+- 터치 시험은 CDP 합성 입력이라 실제 손가락 관성과 다를 수 있다. 휠은 마우스 휠 이벤트이며 트랙패드 관성은 시험하지 않았다.
+- 다크 모드는 기록 탭 시험만 했다(대시보드·카테고리·내 정보는 라이트).
+- C-S16 의 값은 CPU 4배 에뮬레이션이며 같은 PC 의 다른 부하에 따라 실행마다 크게 달랐다. 위 표는 실행별 원값이다.
+
+
+## 재검증 (C-S16 수정 후: `[data-spring-unit] { transform: translate3d(0,0,0) }` 상시 적용)
+
+### 바뀐 구현과 바뀐 기준 (팀장 승인)
+
+- 구현: `style.css` 에 `[data-spring-unit]` 한 블록 추가, `scroll-spring.js` 가 유닛을 찾을 때 속성을 붙임, `will-change` 미사용, 정지하면 인라인 transform 만 제거, 움직임 줄이기에서는 속성을 붙이지 않음.
+- 이유: 앞 실행에서 유닛이 transform·will-change 를 새로 받고 지울 때마다 레이아웃이 생겼다(켬 8~102회). 기준 transform 을 상시 걸어 두면 스크롤 중 값만 바뀌어 레이아웃 토글이 없다. 대신 4배 느림에서 스타일 재계산 비용이 켬에 남아(약 50~56회, 끔 0) p95 가 약간 늘 수 있어 p95 기준을 +12ms 로 완화했다.
+- 바뀐 기준: C-S1~S5·S7·S9 의 "정지 후 transform none" -> "정지 후 변위 0"(계산된 transform 이 none 또는 항등 행렬, 인라인 transform 비어 있음). C-S18: `style.css` 는 위 블록만 허용(다른 CSS 변경·삭제 있으면 실패). C-S16: LayoutCount 차이 <=2 유지, p95 차이 <=+12ms, long task 켬 쪽 실행당 <=1.
+- 테스트 변경: `spring.spec.js` 에 항등 행렬 판정(`isIdentity`), C-S14 에 `data-spring-unit` 0·상시 transform 없음 확인, C-S16 완화 기준, C-S18 의 `style.css` diff 검사(추가 코드 줄이 정확히 그 한 줄이고 지운 줄 없음), 신규 "재검증 글자 선명도" 시험 추가.
+
+### 결과
+
+- `npm test` **342/342**.
+- `spring.spec.js` 54개(27개 x 2): 단독 실행에서 C-S16 포함 전부 통과(768 의 터치·정적 범위·DPR 3 시험은 360 전용 skip).
+- e2e 전체(mobile-360 + tablet-768, 시드 사용자 포함, 신규 spring 포함): **814 통과 / 0 실패 / 43 skip**(총 857개, 38.5분). skip 43 = 앞 실행의 41 + 768 의 DPR 3 시험 2개.
+
+| 항목 | 재검증 결과 | 근거 |
+|---|---|---|
+| C-S1~S5, S7, S9 | 통과 | 바뀐 기준(항등 행렬)으로 통과. 값은 이전과 같은 수준(행 최대 약 11.8px, 카드 약 19.4px, 수렴 약 0.5초, scaleY <=1.0012) |
+| C-S6 | 통과 | 저장 영역·토스트·탭바 위 토스트 위치 오차 0.00px, 저장 버튼 `elementFromPoint` 가 프레임 내내 저장 버튼 |
+| C-S8 | 통과 | 상시 transform 이 걸린 상태에서 4개 화면의 유닛 중첩 0, 유닛 안 fixed/sticky 0, 유닛 자체 CSS transition·animation·translate 0 |
+| C-S14 | 통과 | `reduce` 로 열면 `data-spring-unit` 0개, 계산된 transform none. 실행 중 reduce 전환 뒤에도 속성 0 |
+| C-S16 | **통과(바뀐 기준)** | CPU 4배, 360: LayoutCount 끔 0 -> 켬 **1**, p95 47/48 -> 51, long task 켬 1. 768: 0 -> **1**, p95 48/49 -> 57, long task 켬 1. 동시 인라인 transform 요소 최대 25(360)·31(768) <=40. 이전 8~102회에서 1회로 줄었다 |
+| C-S18 | 통과 | `style.css` 추가 코드 줄이 `[data-spring-unit] { transform: translate3d(0, 0, 0); }` 한 줄뿐, 지운 줄 0. `tokens.css`·`components.css`·backend·`schema.sql`·`api.md`·office 변경 0 |
+| 글자 선명도(DPR 3) | 통과 | 아래 |
+
+### 글자 선명도 (상시 transform, 360px, DPR 3, `isMobile`)
+
+- 방법: 라이트·다크 각각 기록 행·월 요약 카드·대시보드 KPI 카드·도넛 카드를 `data-spring-unit` 이 있을 때와 없을 때(속성 제거) 요소 스크린샷으로 찍어 비교. 저장: `docs/qa-shots-spring/`(`*-360x3.png` 와 `*-360x3-without-attr.png`).
+- 바이트 비교: 모두 완전히 같지는 않았다(PNG 크기 차이 0~33바이트, 라이트 기록 행 20376 대 20366 등). 화소 단위 차이는 눈에 띄지 않는 수준으로 보인다.
+- 눈으로 판정: 라이트 기록 행(`record-row-light`)과 다크 KPI 카드(`dashboard-kpi-dark`) 두 쌍을 열어 보았다. 두 쌍 모두 숫자·한글 획·아이콘 가장자리의 선명도가 속성 유무에서 같고 번짐이나 회색조 안티앨리어싱 흔적이 보이지 않았다. 나머지 12장(월 요약·도넛, 다크 기록 행 등)은 바이트 차이가 같은 수준이라 같다고 보았으나 눈으로는 열어 보지 않았다. 실제 폰 화면에서의 선명도는 확인하지 못했다.
+
+### 정리
+
+- 서버를 끄고 임시 폴더(`pg.seed2`)를 지웠다. 시드 실행이 덮어쓴 `docs/qa-shots-improvements`·`docs/qa-shots-redesign` 는 `git checkout` 으로 되돌렸다. 소스(`src/`)는 수정하지 않았다.
