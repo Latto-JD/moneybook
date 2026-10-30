@@ -794,6 +794,6 @@ test.describe('정적 검사', () => {
     const names = git('diff', '5a0689d', '--name-only', '--', 'src/backend', 'api').split('\n').filter(Boolean);
     const untracked = git('ls-files', '--others', '--exclude-standard', '--', 'src/backend', 'api').split('\n').filter(Boolean);
     console.log(`BACKEND-CHANGED ${[...names, ...untracked].join(', ')}`);
-    expect([...names, ...untracked].filter((f) => /api\/|routes|handlers?\.js|index\.js|auth|categor|transaction|stats|summary|db\//i.test(f) && !/rules\/routes\.js|test\//.test(f)), '인사이트 외 API/DB 파일 변경').toEqual([]);
+    expect([...names, ...untracked].filter((f) => /api\/|routes|handlers?\.js|index\.js|auth|categor|transaction|stats|summary|db\//i.test(f) && !/rules\/routes\.js|test\/|backend\/history\/|backend\/router\.js/.test(f)), '인사이트 외 API/DB 파일 변경').toEqual([]);
   });
 });

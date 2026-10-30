@@ -1170,3 +1170,141 @@ frontend 가 만든 폰트 표는 전달받지 못해(메시지에 파일 위치
 ### 정리
 
 - 서버를 끄고 임시 폴더(`pg.seed2`)를 지웠다. 시드 실행이 덮어쓴 `docs/qa-shots-improvements`·`docs/qa-shots-redesign` 는 `git checkout` 으로 되돌렸다. 소스(`src/`)는 수정하지 않았다.
+
+
+---
+
+# 카테고리 사용 이력 QA (plan-category-history v1.1, API api.md v4.4)
+
+작성: qa / 2026-10-30 / 대상: 커밋 전 작업 트리(`GET /api/category-history`, `#panel-history`, 정렬 4종), 기준 커밋 `da627b1`
+
+## 요약
+
+| 구분 | 통과 | 실패 | 검증 불가 |
+|---|---|---|---|
+| C-H1~C-H26 (26개) | 25 | 0 | 1 부분(C-H25 의 axe 검사만, 나머지 통과) |
+| `npm test`(루트) | 379/379 | 0 | - |
+| 신규 `category-history.spec.js` | 28개 x 2 프로젝트 = 56개 중 **46 통과**, 10 skip(API 9 + C-H26 의 768 쪽, 의도적 360 전용) | 0 | - |
+| e2e 전체(mobile-360 + tablet-768, 시드 사용자 포함, 첫 실행) | 855 통과 / 5 실패 / 53 skip (총 913, 23.4분) | 5(아래: 이번 기능 결함 0) | - |
+
+- **이번 기능의 결함은 발견하지 못했다.** 5개 실패는 모두 이번 기능 밖이다(아래 "e2e 전체 실패 5건").
+- 가장 중요한 문제 3개(심각도 순):
+  1. (이번 기능 아님, 기존 테스트) `spring.spec.js` C-S18 이 스프링 커밋(`da627b1`) 이후로 항상 실패한다. `style.css` 변경이 "스프링 한 줄뿐"이라고 단정하는데 그 줄은 이미 커밋되어 있다. 이번 기능과 무관하다. 기대값을 고쳐야 하지만 이번 범위가 아니어서 손대지 않았다.
+  2. (불안정 시험, 기능 결함 아님) `spring.spec.js` C-S10 의 768 프로젝트가 전체 실행에서 1회 실패하고(`#chart-donut table` 이 5초 안에 안 보임) 단독 재실행 4회는 모두 통과했다. 이번 기능과 무관하다.
+  3. (검증 한계) axe 가 저장소에 없어 C-H25 의 "axe 위반 0"은 검사하지 못했다. 대신 버튼 이름·랜드마크·제목·인라인 style/script 부분 검사만 했다. 서버 500·더 보기 실패는 응답을 가로채 흉내 냈다.
+
+## 실행 환경
+
+- Node v24.20.0, Playwright chromium. 서버: 임시 PGlite(`DB_DRIVER=pglite QA_TOOLS=true COOKIE_SECURE=false TRUST_PROXY=true PORT=3000`), 기동 전 `migrate.js` 와 `seed.js --email=seed-ui@example.com --today=2026-10-19`(거래 127건). e2e 는 `TRUST_PROXY=true QA_AUX_PORT_BASE=3520 SEED_EMAIL/SEED_PASSWORD/SEED_TODAY` 지정.
+- UI "오늘"은 2026-10-19 12:00 KST 고정(`newUiPage`). 기본은 `reducedMotion: 'reduce'`, C-H24 의 출렁임 시험만 `'no-preference'`.
+- 시험 데이터(한 사용자): 식비 100건(같은 금액 묶음 4500/12000/8000/3000, 같은 날 2건씩, 2024-11~2026-10 + 미래 2026-12-25 1건, 이번 달 7건, 생성 순서는 뒤섞음), "이력75" 75건(금액 3종 25건씩, 같은 날 3건씩), "동시" 12건(병렬 POST), "변동" 40건(쪽 사이 추가·삭제용), 수입·지출 같은 이름 "기타", 급여 3건, 사용 안 함 "옛카페", 이름 `<b>굵게</b>😀`, 15자 이름 + 50자 메모, 곧 지울 "삭제될것". 다른 사용자(같은 이름 "식비")는 격리용으로 따로 만들었다.
+- 종료: 서버(PID 12636)를 끄고 3000 LISTEN 없음 확인, 임시 폴더 삭제. 시드 실행이 덮어쓴 `docs/qa-shots-improvements`·`redesign`·`spring` 는 `git checkout` 으로 되돌렸다.
+
+## 실행한 명령과 결과
+
+| 명령 | 결과 |
+|---|---|
+| `npm test` | 379 통과 / 0 실패 |
+| `node --test src/backend/test/history.test.js` | 통과, `[perf] category-history ms {"date_desc":{"first":5,"last":3},"date_asc":{"first":4,"last":3},"amount_desc":{"first":4,"last":3},"amount_asc":{"first":4,"last":3}}`(5,000건 중 한 카테고리 1,000건) |
+| `npx playwright test category-history`(두 프로젝트) | 46 통과 / 10 skip / 0 실패 (1.2분) |
+| 같은 명령 중 C-H18 만 반복(두 프로젝트 x 12회, 25회) | 시험 코드 경쟁 조건을 고친 뒤 모두 통과(아래 "시험 중 발견한 시험 쪽 문제") |
+| `npx playwright test`(전체, 시드 사용자 포함) | 855 통과 / 5 실패 / 53 skip, 23.4분 |
+| 실패한 정적 범위 시험 3개(C-S23, C-M15, C-R25) 기대값 갱신 후 재실행 | 3 통과 |
+| `npx playwright test spring -g C-S10 --project=tablet-768` 단독 재실행 4회 | 4회 모두 통과 |
+
+## 항목별 결과
+
+### API (C-H1~C-H9, mobile-360)
+
+| ID | 결과 | 근거 |
+|---|---|---|
+| C-H1 | 통과 | sort 없음 시 `sort: "date_desc"`, 식비 100건 중 첫 30건 id 순서가 직접 정렬(date, createdAt, id 내림차순)과 같음. `total`·`count`·`firstDate`·`lastDate`·`months` 가 POST 응답으로 직접 계산한 값과 같음. `count` 는 `GET /api/categories` 의 식비 `usedCount` 와 같음. 헤더 `Cache-Control: no-store`, `nosniff`, JSON UTF-8 |
+| C-H2 | 통과 | 다른 사용자가 같은 이름 "식비"(999,999원 등 2건)를 가져도 내 결과는 100건, 남의 행 0건. 그 사용자의 커서를 내 요청에 써도 내 데이터만 나옴. 지출 "기타" 2건(1,600원)과 수입 "기타" 1건(55,000원)이 섞이지 않음 |
+| C-H3 | 통과(일부 단위 테스트 근거) | 사용 안 함 "옛카페" 200·2건·10,300원. 없는 이름은 `{total:0,count:0,firstDate:null,lastDate:null,months:[],transactions:[],nextCursor:null}` 정확히 일치. 앞 공백 이름은 정규화 없이 0건. 호출 전후 카테고리 수 같음. "카테고리 행 0개인 사용자도 행이 안 생김"은 가입하면 기본 카테고리가 생겨 e2e 로 만들 수 없어, `src/backend/test/history.test.js` 가 `categories` 행을 지운 뒤 호출해 0행 유지를 확인하는 것(통과)으로 갈음했다. 카테고리 목록 밖 이름은 API 로 거래를 만들 수 없어 같은 단위 테스트가 근거다 |
+| C-H4 | 통과 | 400 `fields`: type(없음·`transfer`·`EXPENSE`), category(없음·빈 값·51자·제어문자 2종, 50자는 200), sort(빈 값·`price`·`DATE_DESC`), limit(0·101·1.5·abc·-1·빈 값, 1·100 은 200), cursor(깨짐·`s` 4종 밖·금액순 `a` 없음/0/1억 초과·날짜·UUID 형식 오류·빈 값). 응답에 스택·SQL 없음. 알 수 없는 파라미터 `foo`, `today` 무시. 401(세션 없음). POST/PUT/PATCH/DELETE 405 `Allow: GET` |
+| C-H5 | 통과 | `git diff HEAD -- src/backend/db`·`git status -- src/backend/db src/backend/scripts` 비어 있음(스키마·마이그레이션 변경 0). 성능은 위 `[perf]` 로그: 정렬 4종 첫/마지막 쪽 3~5ms(기준 300ms). 5,000건은 단위 테스트에서 SQL 로 채웠고 e2e 서버로는 만들지 않았다 |
+| C-H6 | 통과 | 이력75(75건)·식비(100건)를 `limit=100` 한 번에 받은 4종 순서가 표의 ORDER BY 로 직접 정렬한 결과와 같음. `date_asc` 는 `date_desc` 의 정확한 역순 |
+| C-H7 | 통과 | 같은 금액은 `amount_desc`·`amount_asc` 모두 날짜, createdAt, id 순으로 최신 먼저. 같은 요청 3번 같은 순서. 병렬 12건 시험은 12건이 모두 다른 밀리초라(로그 `서로 다른 createdAt(ms) 수: 12`) HTTP 로는 같은 밀리초를 만들지 못했고, 대신 `date_desc` 순서에서 파생한 안정 정렬과 4종이 일치함을 확인했다. 같은 밀리초·다른 마이크로초 케이스는 backend 단위 테스트(`history.test.js` 67~73줄, 커서 마이크로초 시험)가 근거다 |
+| C-H8 | 통과 | 정렬 4종 x 이력75: 쪽 30/30/15, 마지막 `nextCursor: null`, id 75개 중복 0, 합친 순서가 전체 순서와 같음(금액 묶음 25건씩이라 경계가 묶음 한가운데). 병렬 데이터 `limit=1,2,5` 로 끝까지 넘겨도 전체 순서와 같음. 쪽 사이에 새 거래(극단 금액·미래 날짜)를 추가하고 이미 받은 첫 행을 삭제한 뒤 이어 받아도 이미 받은 id 가 다시 나오지 않음(4종) |
+| C-H9 | 통과 | `date_desc` 커서를 `amount_desc`·`date_asc`·`amount_asc` 로 보내면 400 `fields.cursor`("정렬이 바뀌어…"), 같은 정렬은 200. sort 없이 받은 커서를 `sort=date_desc` 로 보내면 200. 금액순 커서를 sort 없이 보내면 400. 요약값(`total`·`count`·`firstDate`·`lastDate`·`months`)은 정렬 4종에서 같음 |
+
+### 진입·이동 (C-H10~C-H13, 360/768)
+
+| ID | 결과 | 근거 |
+|---|---|---|
+| C-H10 | 통과 | 지출 막대 버튼 전부 이름이 `"{이름} {금액}원 ({비율}) 사용 이력 보기"` 형식이고 높이 44px 이상. 식비 이름의 금액이 이번 달 식비 합계와 같음. 클릭·Enter·Space 모두 `#history` 로 가고 `h1` 에 포커스, 캡션 "지출 사용 이력" |
+| C-H11 | 통과 | "카테고리별 수입"의 급여 버튼이 수입 이력을 엶. 캡션 "수입 사용 이력", 합계 `+2,500,000원…`, 행 순서가 API 와 같음, 정렬(금액 작은순)도 API 순서와 같음 |
+| C-H12 | 통과 | 뒤로 링크·브라우저 뒤로 모두 기록 탭으로 돌아가고 눌렀던 막대 버튼(식비, 옛카페)에 포커스. 이력 화면에서 `#tab-record` 가 `aria-current="page"`(활성 1개) |
+| C-H13 | 통과 | 새로 `/#history` 를 열면 `#record`, 이력 패널 숨김, 콘솔·페이지 오류 0. 이력 화면에서 새로고침해도 기록 탭 |
+
+### 이력 화면 (C-H14~C-H18)
+
+| ID | 결과 | 근거 |
+|---|---|---|
+| C-H14 | 통과 | 합계(지출 `−` 부호)·"100건"·"2024년 11월 1일 ~ 2026년 12월 25일"이 API 값과 같고, 정렬 4종을 차례로 눌러도 세 값이 그대로 |
+| C-H15 | 통과 | 처음 30행 + `더 보기 (30/100)`, 누를 때마다 30건씩(60, 90, 100), 알림 문구 `30건 더 불러왔어요. 100건 중 60건` 등, 더 보기 클릭 뒤 포커스가 버튼에 남음. 월 묶음 제목 중복 0, 월 머리 소계가 모든 쪽에서 `months` 값과 같음(일부만 불러온 달 포함). 끝까지 부르면 버튼이 사라지고 포커스가 `body` 가 아니라 `.tx-edit` 행. 화면 100행 순서가 API 와 같고 첫 묶음은 "2026년 12월". 요청: 첫 쪽 cursor 없음, 이후 모두 `sort=date_desc`·`limit=30`·cursor 있음 |
+| C-H16 | 통과(일부 가로채기) | 0건: **실제** 흐름(월 요약에 남은 카테고리의 거래를 API 로 지운 뒤 진입)에서 "아직 이 카테고리 기록이 없어요"만 보이고 정렬·요약·목록 숨김. 첫 쪽 500: `role=alert` 오류 문구와 "다시 시도", 정렬 버튼은 계속 눌림, 오류 상태에서 금액 큰순으로 바꾸고 다시 시도하면 `sort=amount_desc`·cursor 없음으로 불러 30행이 API 와 같음. 더 보기 실패: 기존 30행 유지, 오류 문구 `더 불러오지 못했어요.`, 버튼 `aria-disabled=false`, 다시 누르면 60행 성공. 500 은 `page.route` 로 흉내 냈다(서버를 실제로 망가뜨리지 않음) |
+| C-H17 | 통과 | "옛카페": "사용 안 함" 배지, 목록 2건 API 와 같음. 활성 카테고리는 배지 없음. 이름 `<b>굵게</b>😀`·메모 `<i>기울임</i>😀` 가 제목·행·월 요약 버튼에서 글자 그대로(패널 안 `b`·`i` 요소 0) |
+| C-H18 | 통과 | 행 클릭 시 `#record`, 금액 `9,000`·메모·날짜·카테고리 칩 채워짐, 금액 포커스, 저장 버튼에 "수정", "수정 취소" 보임. 저장 PUT 200 후 기록 탭에 남고(자동 복귀 없음), 이력을 다시 열면 `9,500원`·합계 21,500원. 금액순 화면의 행(연도 포함 날짜)에서 메모를 고쳐 저장 200. 사용 안 함 카테고리 거래는 금액만 고쳐 PUT 200, 이력 반영. 서버 값(9500/작년 수정/5000)도 API 로 확인 |
+
+### 정렬 (C-H19~C-H23, 360/768)
+
+| ID | 결과 | 근거 |
+|---|---|---|
+| C-H19 | 통과 | `role=group` `aria-label=정렬`, 버튼 4개 `최신순/오래된순/금액 큰순/금액 작은순`, 들어올 때 `최신순`만 `aria-pressed=true`. 각 버튼 높이 44px 이상, `scrollWidth <= clientWidth`(잘림 없음), 버튼끼리 겹침 없음, 라벨은 모두 한 줄, 우측 끝이 화면 안. 키보드 Enter·Space·Shift+Tab 동작 |
+| C-H20 | 통과 | 오래된순에서 100행 순서가 API(`date_asc`)와 같음, 첫 묶음 "2024년 11월", 마지막 "2026년 12월", 묶음이 시간순, 월 머리 소계가 `months` 와 같음 |
+| C-H21 | 통과 | 금액 큰순·작은순: `.tx-group`·`h3` 0개, 평평한 `li.tx-row` 30개, 모든 날짜가 `YYYY년 M월 D일 (요일)` 형식, 더 보기로 100행까지 붙인 순서가 API 와 같음, 금액 단조 증가/감소, 30번째/31번째 행이 API 와 일치, 서버 쪽 쪽 나눔 id 중복 0 |
+| C-H22 | 통과 | 90건을 불러온 뒤 금액 큰순: 요청 정확히 1개, cursor 없음, `sort=amount_desc`, 목록 30건 + `더 보기 (30/100)`, 포커스는 누른 정렬 버튼, `role=status` "금액 큰순으로 정렬했어요. 100건". 같은 정렬 재클릭은 요청 0. 오래된순(응답 700ms 지연)을 누르자마자 금액 작은순을 눌러도 마지막 정렬 결과만 보이고 `aria-pressed` 도 금액 작은순 하나. 더 보기 응답을 지연시킨 채 정렬을 바꿔도 늦은 응답이 버려져 최신순 30행만 남음. 해당 시험 전부에서 `fields.cursor` 400 **0회** |
+| C-H23 | 통과 | 금액 큰순 후 뒤로, 같은 카테고리 재진입, 다른 카테고리 진입, 새로고침 모두 최신순(`aria-pressed`, 요청 `sort=date_desc`) |
+
+### 모션·접근성·화면·회귀 (C-H24~C-H26)
+
+| ID | 결과 | 근거 |
+|---|---|---|
+| C-H24 | 통과 | `no-preference`, 360/768. 마우스 휠 600px: 행 최대 \|ty\| 11.7~11.9px(<=12.5), 카드 최대 19.3~19.7px(<=20.5), 정지 뒤 변위 0·인라인 transform/will-change 0, 동시 활성 유닛 최대 21~30(<=40). 요약 카드 단독 시험에서 최대 11.8~12.8px. 더 보기로 붙은 마지막 30개 유닛이 최대 11.8~11.9px 움직이고 유닛 수가 75(요약 1 + 월 머리 + 행)로 늘어남. 금액 큰순 평평한 목록은 유닛 31(요약 1 + 행 30)로 출렁임, 정렬 변경(오래된순)으로 바뀐 행도 출렁임. 모든 프레임에서 `#hist-card`·`#hist-sort`·`#hist-more`·`.cat-top`·`#panel-history`·`#hist-list`·탭바·헤더에 인라인 transform/will-change 0, 계산된 transform 불변. `reduce`: 모든 프레임 인라인 transform·will-change 0, `data-spring-unit`·`data-spring` 0, 계산된 transform 항등, 더 보기·정렬 변경 뒤에도 0. CSP 위반 0 |
+| C-H25 | 통과, axe 만 검증 불가 | 360/768 x 라이트/다크, 최신순·금액 큰순·긴 이름 화면: 가로 스크롤 0, 행마다 `.tx-mid` 와 `.tx-side` 겹침 0·행 밖 삐져나옴 0, 금액 한 줄(높이 30px 이하), 행 높이 44px 이상, 15자 이름 제목이 한 줄 안, 50자 메모는 말줄임, 연도 포함 날짜 겹침 0. 접근성 부분 검사: 이름 없는 버튼·링크 0, `aria-labelledby=hist-title`, `h1` 1개, 상태 영역 `role=status`, 패널 안 인라인 `style` 속성·`<style>`·`<script>` 0. 스크린샷 20장(`docs/qa-shots-history/`)을 저장했고 그중 `amount-desc-dark-360.png`, `long-name-light-360.png` 두 장은 눈으로 확인했다(정렬 4칸 한 줄, 금액 우측 정렬, 긴 이름 말줄임). 나머지 18장은 눈으로 열어 보지 않았다. 저장소에 axe 가 없어 axe 위반 0 은 확인하지 못했다 |
+| C-H26 | 통과 | `npm test` 379/379. 신규 시험과 기존 e2e 회귀는 아래 "e2e 전체". 변경 파일은 `src/backend/`(history·router·test)·`src/frontend/public/`·`src/frontend/test/`·`e2e/`·`docs/` 안에만 있고(`git diff`·`ls-files --others`), `tokens.css`·`components.css`·`schema.sql`·`src/frontend/office/` 변경 0. 인라인 스크립트·`<style>`·인라인 style 속성 없음, 콘솔 CSP 위반 0(C-H10·C-H24·C-H25 에서 감시). 단 기존 e2e 중 실패 5건은 아래 표 |
+
+## e2e 전체 실패 5건 (이번 기능 결함 아님)
+
+| 시험 | 원인 | 조치 |
+|---|---|---|
+| `followup-2.spec.js` C-S23, `motion.spec.js` C-M15, `redesign.spec.js` C-R25 (모두 mobile-360) | 이전 라운드의 "변경 범위" 정적 검사가 backend·`docs/api.md` 변경 0 을 단정하는데, 이번 기능이 `src/backend/history/`·`router.js`·`docs/api.md` 를 의도적으로 바꿈 | 기대값에 이번 기능 파일만 허용하도록 갱신(아래 "테스트 코드 변경"). 갱신 뒤 3개 통과 |
+| `spring.spec.js` C-S18 (mobile-360) | 스프링 커밋 `da627b1` 이후 `git diff` 에 스프링 CSS 줄이 없는데, 시험은 "추가된 코드 줄이 `[data-spring-unit]…` 한 줄뿐"이라고 단정함. 지금 `style.css` diff 는 이력 화면 규칙뿐이라 실패. 이번 기능 이전부터 어떤 작업 트리에서도 실패하는 낡은 시험이다(diff 내용으로 추론, 커밋 전 트리에서 확인) | 이번 범위가 아니라고 보아 고치지 않았다. 담당 판단 필요 |
+| `spring.spec.js` C-S10 (tablet-768) | 전체 실행 중 1회 `#chart-donut table` 이 5초 안에 보이지 않음. 단독 재실행 4회(두 프로젝트) 모두 통과. 이번 기능과 무관한 대시보드 시험의 불안정으로 보이나 원인은 확정하지 못했다 | 조치 없음 |
+
+기존 e2e 중 막대 행이 버튼이 된 것 때문에 깨진 것은 없었다(`li`·기존 클래스 유지).
+
+## 시험 중 발견한 시험 쪽 문제 (제품 결함 아님)
+
+- `location.hash` 로 이동하면 URL 은 즉시 바뀌지만 `hashchange` 처리(탭 전환·`hist-list` 비우기)는 그 뒤에 일어난다. 처음 `enterHistory` 가 URL 만 보고 목록을 읽어, 숨겨진 패널에 남아 있던 이전 방문의 행(수정 전 9,000원)을 읽는 불안정이 약 20%로 나왔다. 앱은 패널을 보이는 같은 순간에 목록을 비우므로 사용자에게 옛 행이 보이는 것은 아니다. 시험을 "패널 보임 + `h1` 포커스"까지 기다리도록 고쳤고 이후 C-H18 을 두 프로젝트로 12회, 25회 반복해 모두 통과했다.
+- 쿼리 문자열 헬퍼가 `undefined` 값을 문자열 "undefined" 로 보내 C-H4 첫 실행이 실패했다(시험 버그). `undefined` 를 빼도록 고쳤다.
+
+## 관찰 사항
+
+- 화면 쪽 `more()` 는 받은 행 중 이미 가진 id 를 조용히 걸러 낸다. 그래서 화면만으로는 서버의 중복을 볼 수 없어, 중복·누락 0 은 API 쪽 쪽 나눔(C-H8, C-H21 의 `allPages`)과 화면 순서가 API 와 같은지로 이중 확인했다.
+- 병렬 12건 POST 가 모두 다른 밀리초로 저장돼 HTTP 만으로는 "같은 밀리초 createdAt"을 재현하지 못했다. 이 경계는 backend 단위 테스트만 근거다.
+- 기록 탭에서 오래된 거래(2025-02)를 수정해 저장하면 기록 탭 월이 그 달로 이동한다(기존 동작). 이어서 이번 달 막대 버튼을 누르려면 월을 되돌려야 한다.
+- 정렬 그룹 라벨 "금액 작은순"이 360px 에서 오른쪽 끝 가까이에 있으나 잘림·겹침은 없다(`scrollWidth <= clientWidth`).
+
+## 테스트 코드 변경 (소스 수정 없음)
+
+- 신규 `e2e/tests/category-history.spec.js`(28개 x 2 프로젝트): API 9개(C-H1~C-H9, 360 전용), UI(C-H10~C-H25), C-H26(360 전용).
+- `e2e/playwright.config.js`: `tablet-768` 의 `testMatch` 에 `category-history` 추가.
+- 이번 변경으로 기대값이 바뀐 기존 시험 3개 갱신: `e2e/tests/motion.spec.js` C-M15, `e2e/tests/redesign.spec.js` C-R25, `e2e/tests/followup-2.spec.js` C-S23(허용 파일에 `src/backend/history/`·`src/backend/router.js`·`src/backend/test/history.test.js` 추가, 금지 pathspec 은 `src/backend/db`·`rules`·`transactions` 등으로 좁히고 `docs/api.md` 는 제외). C-S18 은 위 이유로 되돌려 두었다(`git checkout`).
+- 스크린샷 20장 신규: `docs/qa-shots-history/`.
+
+## 한계
+
+- 미검증: 실제 휴대폰(스크롤 체감·터치 관성), iOS Safari, axe 자동 접근성 검사, 실제 서버 500(가로채기로 흉내), 이력 화면의 401 처리, 768 터치 입력.
+- 스크린샷 20장 중 2장만 눈으로 확인했다. 레이아웃은 숫자 검사(겹침·줄바꿈·가로 스크롤)로 판정했다.
+- 5,000건 성능은 단위 테스트 기록이며 e2e 서버에서 재측정하지 않았다.
+- 다크 모드의 출렁임은 시험하지 않았다(C-H24 는 라이트).
+
+
+## 후속 조치 (팀장 요청: C-S18 기준 고정, C-S10 기록)
+
+- **C-S18 수정(테스트 코드만)**: 비교 기준을 작업 트리와 HEAD 에서 고정 커밋 `6fd78dd`(스프링 직전)..`da627b1`(스프링)로 바꿨다. 그 사이 `style.css` 변경이 `[data-spring-unit] { transform: translate3d(0, 0, 0); }` 한 줄(주석 제외)뿐이고 지운 줄이 없는지, `src/backend`·`docs/api.md`·`tokens.css`·`components.css`·`office` 변경 0, 변경 파일이 허용 폴더 안인지를 본다. 이후 다른 기능이 `style.css` 를 고쳐도 이 시험은 깨지지 않는다. 앞 절에서 "낡은 시험이라 실패"로 적은 C-S18 은 이로써 통과한다.
+- **재실행**: `spring.spec.js` 를 mobile-360 + tablet-768 로 실행해 **50 통과 / 4 skip(360 전용 시험의 768 쪽) / 0 실패**(4.4분). 이 실행에서는 C-S10 768 도 통과했다.
+- **불안정 시험으로 기록**: `spring.spec.js` C-S10 (tablet-768)은 e2e 전체 실행 1회에서 실패(`#chart-donut table` 이 5초 안에 안 보임)했고 단독 재실행 4회는 모두 통과, 위 spring 전체 실행에서도 통과했다. 원인은 조사하지 않았다.
+- 정리: 임시 서버·폴더 삭제(3000 LISTEN 없음), `docs/qa-shots-spring` 변경 없음. `src/` 수정·커밋·푸시 없음. 변경 파일: `e2e/tests/spring.spec.js`, `docs/qa-report.md`.

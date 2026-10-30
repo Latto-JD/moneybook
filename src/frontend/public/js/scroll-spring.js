@@ -10,6 +10,9 @@ export const UNITS = [
   ['#quick-section', 'card'],
   ['#tx-list .tx-date', 'row'],
   ['#tx-list .tx-row', 'row'],
+  ['#hist-summary', 'card'],
+  ['#hist-list .tx-date', 'row'],
+  ['#hist-list .tx-row', 'row'],
   ['#kpi', 'card'],
   ['.donut-card', 'card'],
   ['.insights-card', 'card'],
@@ -21,7 +24,7 @@ export const UNITS = [
 ];
 
 /** 안쪽 내용이 다시 그려지는 컨테이너 (유닛 추가·제거 감시) */
-const WATCH = ['#tx-list', '#catm-active', '#catm-inactive', '#kpi', '#chart-donut', '#insights', '#chart-monthly', '#chart-cat-trend'];
+const WATCH = ['#tx-list', '#hist-list', '#hist-summary', '#catm-active', '#catm-inactive', '#kpi', '#chart-donut', '#insights', '#chart-monthly', '#chart-cat-trend'];
 
 const REDUCED = '(prefers-reduced-motion: reduce)';
 const root = () => document.documentElement;

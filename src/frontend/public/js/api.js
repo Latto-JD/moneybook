@@ -100,6 +100,8 @@ export function createApi({ fetchImpl, onUnauthorized = () => {} } = {}) {
     updateTransaction: (id, tx) => request('PUT', `/api/transactions/${encodeURIComponent(id)}`, { body: tx }),
     deleteTransaction: (id) => request('DELETE', `/api/transactions/${encodeURIComponent(id)}`),
     summary: (month) => request('GET', '/api/summary', { query: { month } }),
+    // 카테고리 사용 이력 (전 기간, 키셋 커서)
+    categoryHistory: (type, category, { sort, cursor, limit } = {}) => request('GET', '/api/category-history', { query: { type, category, sort, cursor, limit } }),
     // 추천/인사이트
     quick: (type, today) => request('GET', '/api/recommendations/quick', { query: { type, today } }),
     autocomplete: (q, type, today) => request('GET', '/api/recommendations/autocomplete', { query: { q, type, today } }),

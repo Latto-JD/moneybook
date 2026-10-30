@@ -187,6 +187,45 @@
       </div>
     </section>
 
+    <!-- 카테고리 사용 이력 (하단 탭 없음, 기록 탭이 활성) -->
+    <section id="panel-history" aria-labelledby="hist-title" hidden>
+      <div class="cat-top">
+        <a class="back-link" href="#record" id="hist-back" aria-label="뒤로"><span class="icon icon--back" aria-hidden="true"></span>뒤로</a>
+        <h1 id="hist-title" tabindex="-1"></h1>
+        <p class="hist-caption" id="hist-caption"></p>
+      </div>
+      <p class="hint" id="hist-loading">불러오는 중이에요</p>
+      <div id="hist-error" hidden>
+        <p class="error-text" id="hist-error-text" role="alert"></p>
+        <button type="button" class="btn btn--ghost btn--sm" id="hist-retry">다시 시도</button>
+      </div>
+      <p class="hint empty-line" id="hist-empty" hidden>아직 이 카테고리 기록이 없어요</p>
+      <section class="card sum-card hist-summary" id="hist-summary" aria-label="전체 기간 요약" hidden>
+        <div class="sum-balance">
+          <span class="sum-balance__label">전체 합계</span>
+          <span class="sum-balance__value" id="hist-total"></span>
+        </div>
+        <div class="sum-divider"></div>
+        <div class="sum-line">
+          <span class="sum-label" id="hist-count"></span>
+          <span class="sum-amount hist-period" id="hist-period"></span>
+        </div>
+      </section>
+      <div class="segmented hist-sort" id="hist-sort" role="group" aria-label="정렬" hidden>
+        <button type="button" class="segmented__item" data-sort="date_desc" aria-pressed="true">최신순</button>
+        <button type="button" class="segmented__item" data-sort="date_asc" aria-pressed="false">오래된순</button>
+        <button type="button" class="segmented__item" data-sort="amount_desc" aria-pressed="false">금액 큰순</button>
+        <button type="button" class="segmented__item" data-sort="amount_asc" aria-pressed="false">금액 작은순</button>
+      </div>
+      <section class="card hist-card" id="hist-card" aria-labelledby="hist-list-title" hidden>
+        <h2 class="visually-hidden" id="hist-list-title">기록 목록</h2>
+        <ul id="hist-list" class="list"></ul>
+        <button type="button" class="btn btn--ghost btn--block hist-more" id="hist-more" hidden>더 보기</button>
+        <p class="error-text" id="hist-more-error" role="alert"></p>
+      </section>
+      <p class="visually-hidden" id="hist-status" role="status" aria-live="polite"></p>
+    </section>
+
     <!-- 내 정보 (하단 탭 없음, 기록 탭이 활성) -->
     <section id="panel-account" aria-labelledby="account-title" hidden>
       <div class="cat-top">

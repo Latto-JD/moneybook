@@ -6,6 +6,7 @@ import { initDashboard } from './dashboard.js';
 import { initCategoryManager } from './category-manager.js';
 import { initThemeToggle } from './lib/theme.js';
 import { userLabel } from './lib/user-label.js';
+import { initHistory } from './history.js';
 import { initAccount } from './account.js';
 import './scroll-spring.js';
 
@@ -37,6 +38,7 @@ async function main() {
   initRecord();
   initDashboard();
   initCategoryManager();
+  initHistory();
   initAccount(currentUser, showUser);
 }
 main();

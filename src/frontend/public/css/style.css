@@ -202,7 +202,7 @@ a.btn { text-decoration: none; }
 .month-nav .month-title { flex: 1; text-align: center; }
 .month-nav .btn { flex: none; padding: 0; }
 .month-nav .icon { width: 22px; height: 22px; }
-#tx-list, .tx-rows { list-style: none; margin: 0; padding: 0; }
+#tx-list, #hist-list, .tx-rows { list-style: none; margin: 0; padding: 0; }
 .tx-date { font-weight: var(--fw-regular); }
 .tx-date .tx-day-sum { text-align: right; }
 .tx-row { min-height: 64px; padding: var(--space-1) 0; }
@@ -415,3 +415,29 @@ html[data-motion-ready] .app-main > section[id^="panel-"].panel--enter:not([hidd
 [data-spring-unit] { transform: translate3d(0, 0, 0); }
 /* "더 보기"를 눌렀을 때 새로 드러난 칸 */
 .chip--reveal { animation: mb-slide-in var(--motion-base) var(--ease-out) backwards; }
+
+/* ── 카테고리 사용 이력 ───────────────── */
+/* 기록 탭의 카테고리 막대 행: 행 전체가 버튼 하나(44px 이상), 막대는 장식 */
+.cat-bar-btn { display: block; width: 100%; min-height: var(--touch-min); padding: var(--space-1) 0; border: 0; border-radius: var(--radius-sm); background: none; text-align: left; cursor: pointer; }
+.cat-bar-btn .cat-bar-head { align-items: center; }
+.cat-bar-btn .cat-bar-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cat-bar-btn .icon { width: 16px; height: 16px; margin-left: calc(var(--space-1) * -1); color: var(--color-text-muted); }
+/* 이력 머리: 이름 아래 한 줄 캡션(견본 + 지출/수입 + 사용 안 함 배지) */
+.hist-caption { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-1); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--color-text-muted); }
+.hist-caption .swatch { width: 12px; height: 12px; border-radius: 3px; }
+.hist-inactive { background: var(--color-surface-sunken); color: var(--color-text-muted); }
+#panel-history #hist-loading, #panel-history #hist-error { margin-bottom: var(--space-3); }
+.hist-summary { margin-bottom: var(--space-3); }
+.hist-period { min-width: 0; text-align: right; font-size: var(--fs-caption); color: var(--color-text-muted); }
+.hist-sort { margin-bottom: var(--space-3); }
+/* 정렬 4칸: 360px 에서 한 칸 약 76px, 네 글자 라벨이 한 줄에 들어가도록 한 단계 작게 */
+.hist-sort .segmented__item { padding: 0 var(--space-1); font-size: var(--fs-caption); white-space: nowrap; }
+.hist-card { padding-top: var(--space-2); padding-bottom: var(--space-2); }
+/* 행: 날짜(작게) 위, 메모 아래 한 줄 말줄임, 오른쪽 금액. 금액순 날짜에는 연도가 붙어 길어서 두 줄로 둔다 */
+.hist-date { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--color-text-muted); white-space: nowrap; }
+.hist-memo { font-size: var(--fs-body); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-memo--none { font-weight: var(--fw-regular); color: var(--color-text-muted); }
+.hist-edit, #hist-list .tx-edit { min-height: var(--touch-min); }
+.hist-more { margin: var(--space-2) 0; }
+.hist-more[aria-disabled="true"] { opacity: .6; cursor: progress; }
+#hist-more-error { margin-bottom: var(--space-2); }

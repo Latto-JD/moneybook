@@ -1,6 +1,13 @@
-# API 계약 (v4.3)
+# API 계약 (v4.4)
 
-작성: backend / 기준: `docs/plan.md` v2.1 + `docs/plan-categories.md` + `docs/plan-theme-name.md` / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+작성: backend / 기준: `docs/plan.md` v2.1 + `docs/plan-categories.md` + `docs/plan-theme-name.md` + `docs/plan-category-history.md` v1.1 / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+
+## 0E. v4.4 변경 요약 (추가 전용, 스키마·인덱스 변경 없음)
+
+| 구분 | 변경 | 호환 |
+|---|---|---|
+| 추가 | `GET /api/category-history` (4.5): 카테고리 하나의 전 기간 거래 이력. 정렬 4종(`sort`), 정렬별 키셋 커서, 전체 합계·건수·기간·월별 소계 | 추가 전용 (신규) |
+| 불변 | 기존 API 응답, 에러 코드, DB 스키마, 인덱스, 마이그레이션, 1.5 인증 목록(새 API 도 세션 필수) | - |
 
 ## 0D. v4.3 변경 요약 (응답 모양·스키마 변경 없음)
 
@@ -388,6 +395,54 @@ month 필수(형식 오류/누락 400). 응답: date 내림차순, 같은 날은
 
 ### 4.4 DELETE /api/transactions/:id
 204 (본문 없음). 404 규칙은 PUT과 동일.
+
+### 4.5 GET /api/category-history?type=&category=&sort=&limit=&cursor= (v4.4 신규)
+
+세션 필수. 읽기 전용(쓰기·카테고리 지연 생성 없음). POST/PUT/PATCH/DELETE 는 405 `Allow: GET`. 경로는 `/api/transactions/:id` 와 겹치지 않는다.
+
+| 파라미터 | 규칙 | 오류 |
+|---|---|---|
+| `type` | 필수, `expense` \| `income` | 400 `fields.type` |
+| `category` | 필수, 1~50 코드포인트, 제어문자 없음. 정규화·대소문자 무시 없이 거래의 `category` 와 정확히 같은 것만 | 400 `fields.category` |
+| `sort` | 선택, `date_desc`(기본) \| `date_asc` \| `amount_desc` \| `amount_asc`. `sort=` 빈 값도 400 | 400 `fields.sort` |
+| `limit` | 선택, 10진 정수 1~100, 기본 30 | 400 `fields.limit` |
+| `cursor` | 선택, **같은 `sort`** 로 받은 직전 응답의 `nextCursor` 그대로(불투명 문자열) | 400 `fields.cursor` |
+
+- 알 수 없는 파라미터는 무시. `today` 는 받지 않는다.
+- 카테고리 목록 존재 여부를 확인하지 않는다. 사용 안 함·목록 밖 이름도 200, 거래가 없으면 빈 결과(404 아님).
+- 검증 순서: type, category, sort, limit, cursor. 오류가 여러 개면 `fields` 에 모두 담기고 `message` 는 그중 첫 번째다.
+
+**정렬 (항상 전순서)**
+
+| `sort` | ORDER BY |
+|---|---|
+| `date_desc` | `date desc, created_at desc, id desc` |
+| `date_asc` | `date asc, created_at asc, id asc` (date_desc 의 정확한 역순) |
+| `amount_desc` | `amount desc, date desc, created_at desc, id desc` |
+| `amount_asc` | `amount asc, date desc, created_at desc, id desc` (같은 금액은 두 금액순 모두 최신 먼저) |
+
+**200**
+```json
+{
+  "type": "expense", "category": "식비", "sort": "date_desc",
+  "total": 1190000, "count": 58, "firstDate": "2026-03-02", "lastDate": "2026-10-28",
+  "months": [ { "month": "2026-10", "total": 400000, "count": 21 }, { "month": "2026-09", "total": 410000, "count": 20 } ],
+  "transactions": [ { "id": "uuid", "type": "expense", "amount": 12000, "category": "식비", "memo": "점심", "date": "2026-10-28", "createdAt": "2026-10-28T03:12:45.123Z" } ],
+  "nextCursor": "eyJz..."
+}
+```
+
+- `total`/`count`: 세션 사용자의 같은 type·category 거래 **전 기간**(미래 날짜 포함) 합계·건수. 정렬·커서와 무관. `count` 는 `GET /api/categories` 의 `usedCount` 와 같다.
+- `firstDate`/`lastDate`: 가장 이른/늦은 날짜, 없으면 `null`.
+- `months`: 거래가 있는 달만, 항상 최신 달 먼저(정렬 무관).
+- `transactions`: 거래 객체(4장) 최대 `limit` 개. `nextCursor`: 다음 쪽이 있으면 문자열, 없으면 `null`.
+- 요약 필드는 매 요청마다 같은 방식으로 계산해 돌려준다(커서가 있어도).
+- 빈 결과: `total: 0, count: 0, firstDate: null, lastDate: null, months: [], transactions: [], nextCursor: null` (`sort` 는 적용된 값).
+
+**커서**: 불투명 문자열(base64url JSON). OFFSET 을 쓰지 않는 키셋 방식이라 쪽 사이에 거래가 추가·삭제되어도 이미 받은 행이 다시 나오거나 빠지지 않는다. `created_at` 은 DB 마이크로초 값 그대로 담는다(응답 `createdAt` 은 밀리초라 커서에 쓰지 않는다).
+- 커서가 만들어진 `sort` 와 요청의 `sort`(없으면 `date_desc`)가 다르면 400 `fields.cursor` = "정렬이 바뀌어 목록 위치를 쓸 수 없어요. 처음부터 다시 불러와 주세요." 정렬을 바꾸면 반드시 커서 없이 처음부터 부른다.
+- 해독 실패, 형식 오류 등은 400 `fields.cursor` = "목록 위치가 올바르지 않아요."
+- 커서는 사용자·카테고리를 담지 않고 위치 비교 값으로만 쓰인다. 모든 쿼리는 세션 사용자 조건을 가져 다른 사용자의 데이터는 보이지 않는다.
 
 ## 5. 요약 / 대시보드 집계
 

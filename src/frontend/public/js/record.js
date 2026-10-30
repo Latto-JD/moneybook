@@ -15,6 +15,7 @@ import { renderSummaryCard } from './summary-card.js';
 import { balanceLabel } from './lib/dashboard-data.js';
 import { shouldShowReset } from './lib/reset.js';
 import { txBody, undoPlan, undoFailText, pausedAfterMove } from './lib/undo.js';
+import { openHistory } from './history.js';
 
 const today = () => todayLocal();
 const state = {
@@ -449,15 +450,24 @@ function renderCategoryBlock(title, list, kind) {
   const ul = el('ul', { class: 'cat-bars' });
   for (const c of list) {
     const li = el('li');
+    // 행 전체가 버튼 하나: 누르면 그 카테고리의 전 기간 사용 이력으로 간다. 막대는 장식이다.
+    const pct = formatPercent(c.ratio || 0);
+    const btn = el('button', {
+      type: 'button', class: 'cat-bar-btn', 'data-hist-type': kind, 'data-hist-cat': c.category,
+      'aria-label': `${c.category} ${formatWon(c.total)} (${pct}) 사용 이력 보기`,
+    });
     const head = el('div', { class: 'cat-bar-head' });
     head.appendChild(el('span', { class: 'cat-bar-name' }, c.category));
-    head.appendChild(el('span', { class: 'cat-bar-amount' }, `${formatWon(c.total)} (${formatPercent(c.ratio || 0)})`));
-    li.appendChild(head);
+    head.appendChild(el('span', { class: 'cat-bar-amount' }, `${formatWon(c.total)} (${pct})`));
+    head.appendChild(el('span', { class: 'icon icon--chevron', 'aria-hidden': 'true' }));
+    btn.appendChild(head);
     const track = el('div', { class: 'bar-track', 'aria-hidden': 'true' });
     const fill = el('div', { class: `bar-fill ${kind}` });
     fill.style.width = `${Math.min(100, Math.max(0, (c.ratio || 0) * 100)).toFixed(1)}%`;
     track.appendChild(fill);
-    li.appendChild(track);
+    btn.appendChild(track);
+    btn.addEventListener('click', () => openHistory(kind, c.category));
+    li.appendChild(btn);
     ul.appendChild(li);
   }
   parts.push(ul);
@@ -658,6 +668,8 @@ export function initRecord() {
   $('month-next').addEventListener('click', () => moveMonth(1));
 
   document.addEventListener('categorieschanged', onCategoriesChanged);
+  // 이력 화면에서 행을 눌렀다: 기록 탭이 보인 뒤 기존 수정 흐름으로 (history.js 가 알린다)
+  document.addEventListener('edittx', (ev) => startEdit(ev.detail));
   renderTypeButtons();
   renderCategoryChips();
   renderDateSummary();

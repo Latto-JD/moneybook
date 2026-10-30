@@ -977,11 +977,14 @@ test('C-S17 CSP 위반·콘솔 오류 0, 인라인 <style>·<script>·style 속�
   await a.ctx.close();
 });
 
-test('C-S18 변경 범위: style.css·tokens.css·components.css·backend·schema.sql·api.md·office 변경 없음, 변경 파일은 허용 폴더 안', async ({}, testInfo) => {
+// 비교 기준은 고정 커밋이다: 스프링 직전 6fd78dd 와 스프링 커밋 da627b1. 이후 다른 기능이 파일을 고쳐도 이 시험은 깨지지 않는다.
+test('C-S18 변경 범위(6fd78dd..da627b1): style.css 는 [data-spring-unit] 한 블록만, tokens·components·backend·schema·api.md·office 변경 없음, 변경 파일은 허용 폴더 안', async ({}, testInfo) => {
   onlyMobile(testInfo);
   const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-  expect(git('status', '--porcelain', '--', 'src/backend', 'docs/api.md', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office').trim()).toBe('');
-  const diff = git('diff', '-U0', '--', 'src/frontend/public/css/style.css');
+  const FROM = '6fd78dd';
+  const TO = 'da627b1';
+  expect(git('diff', '--name-only', FROM, TO, '--', 'src/backend', 'docs/api.md', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office').trim()).toBe('');
+  const diff = git('diff', '-U0', FROM, TO, '--', 'src/frontend/public/css/style.css');
   const lines = diff.split(String.fromCharCode(10)).map((l) => l.replace(String.fromCharCode(13), ''));
   const added = lines.filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1).trim()).filter(Boolean);
   const removed = lines.filter((l) => l.startsWith('-') && !l.startsWith('---'));
@@ -989,9 +992,8 @@ test('C-S18 변경 범위: style.css·tokens.css·components.css·backend·schem
   const code = added.filter((l) => !l.startsWith('/*') && !l.startsWith('*') && !/\*\/$/.test(l));
   console.log('C-S18 style.css 추가 코드 줄: ' + JSON.stringify(code));
   expect(code, 'style.css 변경은 [data-spring-unit] 한 블록만').toEqual(['[data-spring-unit] { transform: translate3d(0, 0, 0); }']);
-  const changed = git('status', '--porcelain', '-uall').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));
+  const changed = git('diff', '--name-only', FROM, TO).split(String.fromCharCode(10)).filter(Boolean);
   const allowed = /^(src\/frontend\/public\/js\/|src\/frontend\/public\/css\/style\.css$|src\/frontend\/test\/|e2e\/|docs\/|design_handoff_moneybook\/)/;
-  console.log('C-S18 변경 파일: ' + changed.filter((f) => !f.startsWith('design_handoff_moneybook/') && !f.startsWith('e2e/test-results') && !f.startsWith('e2e/playwright-report')).join(', '));
   expect(changed.filter((f) => !allowed.test(f)), '허용 폴더 밖 변경').toEqual([]);
 });
 

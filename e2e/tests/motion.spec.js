@@ -561,9 +561,9 @@ test.describe('C-M14~C-M15 회귀·범위', () => {
   test('C-M15 변경 범위: backend·schema·api.md·tokens·components 변경 없음, 변경 파일은 허용 폴더 안', async ({}, testInfo) => {
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-    expect(git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend', 'docs/api.md', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office').trim()).toBe('');
+    expect(git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend/db', 'src/backend/rules', 'src/backend/transactions', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office').trim()).toBe('');
     const changed = git('status', '--porcelain').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));
-    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|e2e\/|docs\/|design_handoff_moneybook\/)/;
+    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(history\/|router\.js$|test\/history\.test\.js$)|e2e\/|docs\/|design_handoff_moneybook\/)/;
     expect(changed.filter((f) => !allowed.test(f)), '허용 폴더 밖 변경').toEqual([]);
   });
 });

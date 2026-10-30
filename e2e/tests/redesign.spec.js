@@ -808,7 +808,7 @@ test.describe('C-R24~C-R26 회귀·범위·스크린샷', () => {
     expect(tracked, `금지 파일 변경: ${tracked}`).toBe('');
     expect(git('ls-files', '--others', '--exclude-standard', '--', 'src/backend/db', 'src/frontend/office').trim(), '금지 폴더의 새 파일').toBe('');
     const changed = git('status', '--porcelain').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));
-    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(rules|test)\/|e2e\/|docs\/|design_handoff_moneybook\/)/; // 개선 작업(B4, A11)으로 backend rules 가 의도적으로 바뀜
+    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(rules|test|history)\/|src\/backend\/router\.js$|e2e\/|docs\/|design_handoff_moneybook\/)/; // 개선 작업(B4, A11)으로 backend rules 가 의도적으로 바뀜
     const outside = changed.filter((f) => !allowed.test(f));
     expect(outside, `허용 폴더 밖 변경: ${outside}`).toEqual([]);
   });
