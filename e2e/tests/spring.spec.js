@@ -1044,3 +1044,64 @@ for (const scheme of ['light', 'dark']) {
     await ctx.close();
   });
 }
+
+// ====================================================================== 튠업 T3 (docs/plan-tuneup.md): 느린 스크롤은 안 움직이고, 큰 스크롤은 되튐이 거의 없다
+test('T3-2 느린 스크롤(휠 5px x 20회, 50ms 간격): 모든 유닛 모든 프레임에서 |ty| <= 0.5px', async ({ browser }, testInfo) => {
+  test.setTimeout(60_000);
+  const a = await open(browser, testInfo);
+  const { page } = a;
+  await expect(page.locator('#tx-list .tx-row').first()).toBeVisible();
+  await page.waitForTimeout(400);
+  await toList(page);
+  const vw = page.viewportSize();
+  await page.mouse.move(vw.width / 2, 500);
+  await startRec(page);
+  await page.waitForTimeout(100);
+  const t0 = Date.now();
+  for (let i = 0; i < 20; i++) { await page.mouse.wheel(0, 5); await page.waitForTimeout(50); }
+  const elapsed = Date.now() - t0;
+  await page.waitForTimeout(600);
+  const fr = await frames(page);
+  const all = fr.flatMap((f) => f.u.map((x) => x.ty));
+  const sy0 = fr[0].sy; const sy1 = fr.at(-1).sy;
+  // 입력 속도: 5px / (50ms + 호출 오버헤드) 로 300px/s 이하여야 문턱(600) 아래
+  console.log(`T3-2 프레임 ${fr.length}, 유닛 ${fr[5].u.length}, 스크롤 ${sy0}->${sy1}, 경과 ${elapsed}ms(${(100 / (elapsed / 1000)).toFixed(0)}px/s), 최대 |ty| ${maxAbs(all).toFixed(3)}`);
+  expect(sy1 - sy0, '실제로 스크롤됨').toBeGreaterThan(50);
+  expect(fr[5].u.length).toBeGreaterThan(5);
+  expect(maxAbs(all), 'T3-2 최대 |ty|').toBeLessThanOrEqual(0.5);
+  expect(a.problems).toEqual([]);
+  await a.ctx.close();
+});
+
+test('T3-4 되튐: 600px 빠른 휠 뒤 정지까지, 유닛마다 반대 부호로 넘어간 최대치가 그 유닛 최대 |ty| 의 5% 이하', async ({ browser }, testInfo) => {
+  test.setTimeout(60_000);
+  const a = await open(browser, testInfo);
+  const { page } = a;
+  await expect(page.locator('#tx-list .tx-row').first()).toBeVisible();
+  await page.waitForTimeout(400);
+  await toList(page);
+  const vw = page.viewportSize();
+  await page.mouse.move(vw.width / 2, 500);
+  await startRec(page);
+  await page.waitForTimeout(100);
+  await wheel(page, vw.width / 2, 500, 600, 6, 16);
+  const ms = await settleAfterScroll(page);
+  const fr = await frames(page);
+  const n = Math.min(...fr.map((f) => f.u.length));
+  const stats = [];
+  for (let i = 0; i < n; i++) {
+    const seq = fr.map((f) => f.u[i].ty);
+    const m = maxAbs(seq);
+    if (m < 3) continue; // 거의 안 움직인 유닛(화면 밖·먼 유닛)은 제외
+    const peak = seq.find((v) => Math.abs(v) === m);
+    const over = Math.max(...seq.map((v) => -Math.sign(peak) * v));
+    stats.push({ i, m, over: Math.max(over, 0) });
+  }
+  const worst = stats.reduce((w, s) => (s.over / s.m > (w ? w.over / w.m : -1) ? s : w), null);
+  console.log(`T3-4 600px: 유닛 ${n}, 비교 대상 ${stats.length}, 정지 ${Math.round(ms)}ms, 최악 되튐 ${worst ? (worst.over / worst.m * 100).toFixed(2) : '-'}% (최대 ${worst?.m.toFixed(2)}px, 반대쪽 ${worst?.over.toFixed(3)}px)`);
+  expect(stats.length, '비교 대상 유닛').toBeGreaterThanOrEqual(3);
+  expect(Math.max(...stats.map((s) => s.m)), '빠른 휠은 여전히 6px 이상 움직임').toBeGreaterThanOrEqual(6);
+  for (const s of stats) expect(s.over, `유닛 ${s.i} 되튐`).toBeLessThanOrEqual(s.m * 0.05);
+  expect(ms, '정지 시간').toBeLessThanOrEqual(1000);
+  await a.ctx.close();
+});

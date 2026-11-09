@@ -15,16 +15,47 @@ const KIND_TEXT = { expense: '지출', income: '수입' };
 let selection = null; // { type, category }: 메모리에만 둔다 (새로고침하면 기록 탭으로)
 let pendingEdit = null; // 행을 눌러 기록 탭으로 가는 중인 거래
 let wasOpen = false;
+let from = 'record'; // 어느 화면에서 열었나: 'record' | 'dashboard' | 'categories'
+let returning = null; // 돌아온 직후 포커스를 돌려줄 대상 { from, type, category } (한 번만 꺼낸다)
+const FROMS = ['record', 'dashboard', 'categories'];
 
 const store = createHistoryStore(
   (q) => api.categoryHistory(q.type, q.category, { sort: q.sort, cursor: q.cursor, limit: q.limit }),
   (state, event) => render(state, event),
 );
 
-/** 기록 탭의 막대 행에서 부른다. 돌아올 때 포커스를 되돌릴 버튼은 data-hist-* 로 다시 찾는다 */
-export function openHistory(type, category) {
+/**
+ * 기록 탭 막대·대시보드 도넛 범례·카테고리 관리 행에서 부른다. 돌아올 때 포커스를 되돌릴 버튼은 data-hist-* 로 다시 찾는다.
+ * origin 은 뒤로 링크·탭바 활성·포커스 복귀의 기준이 되는 출발 화면이다.
+ */
+export function openHistory(type, category, origin = 'record') {
   selection = { type, category };
+  from = FROMS.includes(origin) ? origin : 'record';
+  returning = null;
+  $('panel-history').dataset.from = from;
+  $('hist-back').setAttribute('href', `#${from}`);
   location.hash = 'history';
+}
+
+/** 이력에서 tab 으로 돌아오는 중이면 그때 열었던 { type, category }, 아니면 null (꺼내지 않고 본다) */
+export function returnTarget(tab) {
+  const t = wasOpen ? (from === tab ? store.state.sel : null) : (returning && returning.from === tab ? returning : null);
+  return t ? { type: t.type, category: t.category } : null;
+}
+
+/**
+ * 돌아온 화면이 다시 그려진 다음에 부른다. 돌려줄 대상이 있으면 한 번만 꺼내
+ * { type, category, find(scope) } 를 준다. find 는 scope(선택자) 안의 같은 data-hist-* 버튼 또는 null.
+ */
+export function takeHistoryFocus(tab) {
+  if (wasOpen || !returning || returning.from !== tab) return null;
+  const r = returning;
+  returning = null;
+  return {
+    type: r.type, category: r.category,
+    find: (scope) => [...document.querySelectorAll(`${scope} [data-hist-cat]`)]
+      .find((b) => b.dataset.histType === r.type && b.dataset.histCat === r.category) || null,
+  };
 }
 
 function inactive(sel) {
@@ -105,7 +136,8 @@ function render(s, event) {
   const moreBtn = $('hist-more');
   const hadMoreFocus = document.activeElement === moreBtn;
 
-  if (event === 'error') $('hist-list').replaceChildren();
+  // 정렬 변경·다시 시도로 첫 쪽을 다시 받는 동안에는 이전 목록을 남기지 않는다
+  if (event === 'error' || event === 'loading') $('hist-list').replaceChildren();
   if (s.status === 'ready' && !empty && (event === 'open' || event === 'sort' || event === 'retry' || event === 'load' || event === 'more')) {
     renderSummary(s);
     renderList(s);
@@ -166,10 +198,12 @@ function onTab(tab) {
     store.invalidate(); // 늦게 오는 응답은 버린다
     const tx = pendingEdit;
     pendingEdit = null;
+    returning = null;
     if (tab === 'record') {
       if (tx) document.dispatchEvent(new CustomEvent('edittx', { detail: tx }));
-      else returnFocus();
+      else if (from === 'record') returnFocus();
     }
+    if (!tx && tab === from && from !== 'record' && store.state.sel) returning = { from, ...store.state.sel };
   }
   wasOpen = open;
 }

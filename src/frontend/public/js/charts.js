@@ -143,13 +143,14 @@ function legendItem(marker, label, extra) {
 
 /**
  * 도넛. opts: { title, periodLabel, items:[{label,value}], centerLabel='총 지출', noun='지출', vizMap }
+ * onItem(label) 을 주면 묶음이 아닌 범례 행 안쪽이 버튼 하나가 되어 누를 때 부른다 (histType 은 data-hist-type 으로 붙는다).
  * 조각 순서 = 범례 순서 = 금액 내림차순 (12시 방향 시계방향).
  * 색·무늬 번호는 vizMap(이름 -> 1..8, lib/viz.js)의 고정 번호를 우선 쓰고, 없거나 겹치면 남은 가장 작은 번호.
  * items 에 { members:[{label,value}], pinLast:true } 인 "그 외 N개" 묶음이 있으면 마지막 조각(중립 단색)으로 그리고,
  * 범례에 묶인 이름을 나열하며, 표 대체에는 묶지 않은 전체 행을 싣는다.
  */
 export function renderDonut(container, opts) {
-  const { title, periodLabel = '', items, centerLabel = '총 지출', noun = '지출', vizMap = null } = opts;
+  const { title, periodLabel = '', items, centerLabel = '총 지출', noun = '지출', vizMap = null, onItem = null, histType = '' } = opts;
   const segs = donutSegments(items, { cx: 100, cy: 100, outerR: DONUT_OUTER, innerR: DONUT_INNER });
   if (segs.length === 0) return emptyState(container);
   const total = segs.reduce((a, x) => a + x.value, 0);
@@ -185,6 +186,17 @@ export function renderDonut(container, opts) {
     }
     bar.appendChild(fill);
     li.appendChild(bar);
+    if (onItem && !Array.isArray(seg.members)) {
+      // 행 안쪽을 버튼 하나로 감싼다 (li 는 그대로). 막대는 장식이라 버튼 이름에서 빠진다
+      const btn = h('button', {
+        type: 'button', class: 'legend-btn', 'data-hist-type': histType, 'data-hist-cat': seg.label,
+        'aria-label': `${seg.label} ${formatWon(seg.value)} (${formatPercent(seg.ratio)}) 사용 이력 보기`,
+      });
+      while (li.firstChild) btn.appendChild(li.firstChild);
+      btn.addEventListener('click', () => onItem(seg.label));
+      li.classList.add('legend-li--btn');
+      li.appendChild(btn);
+    }
     if (Array.isArray(seg.members)) {
       // 묶음 행: 같은 이름의 실제 카테고리와 글자만으로 구분되지 않으므로 보이지 않는 설명을 붙인다
       const descId = nextId('lg');

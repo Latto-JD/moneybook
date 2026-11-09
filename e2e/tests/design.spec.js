@@ -1178,7 +1178,7 @@ test.describe('11.6 카테고리 관리', () => {
     await ctx.close();
   });
 
-  test('C-D35/C-D37 행: 견본 28px(1~8번째 data-viz 1..8, 9번째부터 none), 이름·"기록 N건"·버튼 2개, 마지막 행 아래 구분선 없음; 사용 안 함이어도 다른 견본 번호 불변, 다시 사용하면 원래 번호', async ({ browser }, testInfo) => {
+  test('C-D35/C-D37 행: 견본 28px(1~8번째 data-viz 1..8, 9번째부터 none), 이름·"기록 N건"·버튼 2개(기록 있는 행은 이력 버튼 포함 3개), 마지막 행 아래 구분선 없음; 사용 안 함이어도 다른 견본 번호 불변, 다시 사용하면 원래 번호', async ({ browser }, testInfo) => {
     const { api } = await createLoggedInUser('drow');
     for (let i = 0; i < 3; i++) { const r = await json(api, 'POST', '/api/categories', { type: 'expense', name: `추가${i}` }); expect(r.status()).toBe(201); }
     await addTx(api, { category: '교통', amount: 3000, date: '2026-10-05' });
@@ -1189,7 +1189,7 @@ test.describe('11.6 카테고리 관리', () => {
     const rowsInfo = () => page.locator('#catm-active .cat-row').evaluateAll((els) => els.map((r) => { const s = r.querySelector('.swatch'); const bs = [...r.querySelectorAll('button')]; return { name: r.querySelector('.cat-name').textContent, viz: s.getAttribute('data-viz'), size: s.getBoundingClientRect().width, used: r.querySelector('.cat-used').textContent, btns: bs.map((b) => b.getAttribute('aria-label')), lastBorder: getComputedStyle(r.closest('li') || r).borderBottomWidth }; }));
     const before = await rowsInfo();
     expect(before.map((r) => r.viz)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', 'none', 'none', 'none']);
-    for (const r of before) { expect(r.size).toBe(28); expect(r.used).toMatch(/^기록 \d+건$/); expect(r.btns).toEqual([`${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`]); }
+    for (const r of before) { expect(r.size).toBe(28); expect(r.used).toMatch(/^기록 \d+건$/); expect(r.btns).toEqual(r.used === '기록 0건' ? [`${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`] : [`${r.name} 사용 이력 보기, ${r.used}`, `${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`]); } // 튠업 T2: 기록 있는 행은 이름/기록 N건 이 이력 버튼
     expect(before.find((r) => r.name === '교통').used).toBe('기록 1건');
     const last = await page.locator('#catm-active > li').last().evaluate((li) => { const cs = getComputedStyle(li); return { b: cs.borderBottomWidth, bs: cs.borderBottomStyle, inner: li.querySelector('.cat-row') ? getComputedStyle(li.querySelector('.cat-row')).borderBottomWidth : null }; });
     const first = await page.locator('#catm-active > li').first().evaluate((li) => getComputedStyle(li).borderBottomWidth);

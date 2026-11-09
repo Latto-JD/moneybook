@@ -236,3 +236,5 @@ CSS 변경은 없다(유닛 선택자에 스타일을 더하지 않는다). U-S1
 - 계획서: `docs/plan-spring.md`
 - 유닛(카드·목록 행)에만 CSSOM `transform` 을 쓰고 폼·저장 영역·토스트·탭바·패널은 제외한다. 스프링 값은 `lib/spring.js` 한 곳, 구동은 `scroll-spring.js` 의 rAF(스크롤 없으면 정지). 사용자 스크롤일 때만 출렁이고 입력 중·프로그램 스크롤·움직임 줄이기에서는 돌지 않는다.
 - 기존 e2e 는 `reduce` 그대로 두고, 새 `spring.spec.js` 에서 상한·수렴·누르기·제외 요소·성능 차이를 검증한다.
+
+- 튠업(2026-11-09): SPRING k 170->90, c 14->15(되튐 약 13% -> 1% 미만), 스크롤 속도 문턱 VMIN 600 / VFULL 2000 px/s(`speedGain`, smoothstep)로 느린 스크롤에는 끌림 주입 안 함. 상세는 `docs/plan-tuneup.md` T3.

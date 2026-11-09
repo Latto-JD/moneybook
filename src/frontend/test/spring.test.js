@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   SPRING, ymaxFor, clampScroll, scrollDelta, dragRatio, clampY, inject, advance, isSettled,
-  scaleYFor, transformFor, isRecentTyping, median, originFor,
+  scaleYFor, speedGain, pushSample, windowSpeed, transformFor, isRecentTyping, median, originFor,
 } from '../public/js/lib/spring.js';
 import { UNITS } from '../public/js/scroll-spring.js';
 
@@ -25,8 +25,10 @@ function release(y0, frameMs = 1000 / 60) {
 test('상한 값: 카드 20px, 행 12px', () => {
   assert.equal(ymaxFor('card'), 20);
   assert.equal(ymaxFor('row'), 12);
-  assert.equal(SPRING.k, 170);
-  assert.equal(SPRING.c, 14);
+  assert.equal(SPRING.k, 90);
+  assert.equal(SPRING.c, 15);
+  assert.equal(SPRING.VMIN, 600);
+  assert.equal(SPRING.VFULL, 2000);
 });
 
 test('수렴: 20px 에서 놓으면 800ms 안에 멈춘다 (60Hz·120Hz·30Hz 모두)', () => {
@@ -37,9 +39,58 @@ test('수렴: 20px 에서 놓으면 800ms 안에 멈춘다 (60Hz·120Hz·30Hz �
   assert.ok(release(-12).t <= 800);
 });
 
-test('되튐: 한 번 약 13% (5~20%)', () => {
-  const { overshoot } = release(20, 1000 / 240);
-  assert.ok(overshoot > 0.05 && overshoot < 0.2, `되튐 ${overshoot}`);
+test('되튐: 4% 미만 (거의 없음)', () => {
+  for (const ms of [1000 / 240, 1000 / 120, 1000 / 60, 1000 / 30]) {
+    const { overshoot } = release(20, ms);
+    assert.ok(overshoot < 0.04, `${ms.toFixed(1)}ms 되튐 ${overshoot}`);
+  }
+});
+
+test('speedGain: 문턱 이하 0, 이상 1, 사이는 단조 증가', () => {
+  assert.equal(speedGain(0), 0);
+  assert.equal(speedGain(600), 0);
+  assert.equal(speedGain(300), 0);
+  assert.equal(speedGain(2000), 1);
+  assert.equal(speedGain(9000), 1);
+  assert.equal(speedGain(-9000), 1);
+  assert.ok(Math.abs(speedGain(1300) - 0.5) < 1e-9);
+  let prev = 0;
+  for (let v = 600; v <= 2000; v += 50) {
+    const g = speedGain(v);
+    assert.ok(g >= prev, `v=${v}`);
+    prev = g;
+  }
+});
+
+test('windowSpeed: 이벤트 시각으로 재므로 늦은 프레임에 몰려도 느린 휠은 gain 0, 빠른 휠은 gain>0', () => {
+  // 느린 휠: 5px 씩 50ms 간격 20번 (약 100px/s). 처리 시점(프레임)과 무관하게 같은 값이어야 한다
+  const slow = [];
+  for (let i = 0; i < 20; i++) {
+    pushSample(slow, 1000 + i * 50, 5);
+    assert.equal(speedGain(windowSpeed(slow)), 0, `i=${i}`);
+  }
+  // 빠른 휠: 100px 씩 16ms 간격. 첫 프레임이 170ms 늦어 4개가 한꺼번에 처리돼도 (같은 버퍼) 빠름
+  const fast = [];
+  for (let i = 0; i < 4; i++) pushSample(fast, 2000 + i * 16, 100);
+  assert.ok(windowSpeed(fast) > 2000, `${windowSpeed(fast)}`);
+  assert.ok(speedGain(windowSpeed(fast)) > 0);
+  assert.equal(windowSpeed([]), 0);
+  // 오래 쉰 뒤(직전 샘플이 몇 초 전)에도 경과시간은 창 길이로 잘린다
+  const rest = (...ds) => { const b = [{ t: 0, d: 1 }]; ds.forEach((d, i) => pushSample(b, 5000 + i * 16, d)); return b; };
+  assert.ok(speedGain(windowSpeed(rest(100, 100, 100))) > 0.5);
+  const one = speedGain(windowSpeed(rest(100)));
+  assert.ok(one > 0 && one < 0.5, `${one}`);
+  assert.equal(speedGain(windowSpeed(rest(5))), 0);
+  // 링버퍼는 무한히 커지지 않는다
+  const big = [];
+  for (let i = 0; i < 100; i++) pushSample(big, i, 1);
+  assert.ok(big.length <= 32);
+});
+
+test('inject: gain 0 이면 변위 그대로, gain 은 비율에 곱해진다', () => {
+  assert.deepEqual(inject({ y: 3, v: 7 }, 50, 1000, 20, 0), { y: 3, v: 7 });
+  assert.equal(inject({ y: 0, v: 0 }, 10, 1000, 20, 0.5).y, 5);
+  assert.equal(inject({ y: 0, v: 0 }, 10, 1000, 20).y, 10);
 });
 
 test('정지 판정: 작은 변위·속도만 정지, 이동 중이면 아님', () => {

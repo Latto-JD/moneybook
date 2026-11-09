@@ -1177,3 +1177,329 @@ test('C-H26 변경 파일 범위, 금지 파일 불변, 인라인 스크립트·
   const html = git('show', 'HEAD:src/frontend/public/index.html').length;
   expect(html).toBeGreaterThan(0);
 });
+
+// ================================================================== 튠업 (docs/plan-tuneup.md T1, T2)
+// T1: 정렬 전환 중 이전 목록이 남지 않는다. T2: 대시보드 범례·카테고리 관리에서 이력 열기, 돌아가기.
+let tuWorld = null;
+async function getTuWorld() {
+  if (tuWorld) return tuWorld;
+  const u = await createLoggedInUser('tuneup');
+  const { api } = u;
+  for (const [type, name] of [['expense', '추가1'], ['expense', '추가2'], ['expense', '무기록'], ['expense', '옛카페2'], ['income', '용돈2']]) {
+    expect((await json(api, 'POST', '/api/categories', { type, name })).status(), name).toBe(201);
+  }
+  const cats = ['식비', '카페/간식', '교통', '쇼핑', '주거/통신', '의료/건강', '문화/여가', '기타', '추가1', '추가2'];
+  await postSeq(api, cats.map((c, i) => ({ category: c, amount: 50_000 - i * 3_000, date: `2026-10-${String((i % 9) + 1).padStart(2, '0')}`, memo: `m${i}` })));
+  await postSeq(api, [{ category: '옛카페2', amount: 4_000, date: '2026-10-05', memo: '옛' }, { type: 'income', category: '급여', amount: 2_500_000, date: '2026-10-02', memo: '월급' }, { type: 'income', category: '용돈2', amount: 30_000, date: '2026-10-03', memo: '' }]);
+  const all = (await (await get(api, '/api/categories')).json()).items;
+  const old = all.find((c) => c.type === 'expense' && c.name === '옛카페2');
+  expect((await json(api, 'PATCH', `/api/categories/${old.id}`, { active: false })).status()).toBe(200);
+  tuWorld = u;
+  return u;
+}
+const legendBtn = (page, type, cat) => page.locator(`#chart-donut button.legend-btn[data-hist-type="${type}"][data-hist-cat="${cat}"]`);
+const catBtn = (page, type, cat) => page.locator(`#panel-categories button.cat-hist-btn[data-hist-type="${type}"][data-hist-cat="${cat}"]`);
+async function openDashboard(page) {
+  await page.evaluate(() => { location.hash = 'dashboard'; });
+  await expect(page.locator('#panel-dashboard')).toBeVisible();
+  await expect(page.locator('#chart-donut .legend li').first()).toBeVisible();
+}
+async function histOpened(page, cat) {
+  await expect(page).toHaveURL(/#history$/);
+  await expect(page.locator('#panel-history')).toBeVisible();
+  await expect(page.locator('#hist-title')).toBeFocused();
+  await expect(page.locator('#hist-title')).toHaveText(cat);
+}
+const listCount = (page) => page.locator('#hist-list').evaluate((e) => e.children.length);
+
+test('T1-1,T1-2 정렬 응답 대기 중 목록은 비고 로딩 문구만, 응답 뒤 새 정렬만, 빠른 두 번 변경도 이전 행이 안 보인다', async ({ browser }, testInfo) => {
+  test.setTimeout(90_000);
+  const w = await getWorld();
+  const a = await openUi(browser, testInfo);
+  const { page } = a;
+  await enterHistory(page, 'expense', '식비');
+  await waitRows(page, 30);
+  await page.route('**/api/category-history*', async (route) => {
+    const sp = new URL(route.request().url()).searchParams;
+    if (sp.get('sort') === 'amount_desc' || sp.get('sort') === 'date_asc') await sleep(1000);
+    return route.continue();
+  });
+  const btn = page.locator('#hist-sort [data-sort="amount_desc"]');
+  await btn.click();
+  // 응답 전(1초 지연) 상태
+  await expect(page.locator('#hist-loading')).toBeVisible();
+  await expect(page.locator('#hist-loading')).toHaveText('불러오는 중이에요');
+  expect(await listCount(page), '#hist-list 자식').toBe(0);
+  await expect(page.locator('#hist-card')).toBeHidden();
+  await expect(page.locator('#hist-summary')).toBeVisible();
+  await expect(page.locator('#hist-sort')).toBeVisible();
+  await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  await expect(btn).toBeFocused();
+  await expect(more(page)).toBeHidden();
+  // 응답 뒤
+  await waitRows(page, 30);
+  await expect(page.locator('#hist-loading')).toBeHidden();
+  const exp = await apiRows(w, '식비', 'amount_desc');
+  expect(await rowLabels(page)).toEqual(exp.transactions.slice(0, 30).map((t) => rowLabel(t, 'amount_desc')));
+  // 빠른 두 번 변경: 지연되는 date_asc 를 누르고 곧바로 amount_asc. 클릭은 동기라 직후 상태를 바로 기록하고, 이후 목록이 바뀔 때마다(MutationObserver) 기록한다
+  await page.evaluate(() => {
+    window.__tl = { samples: [], stop: false };
+    const list = document.getElementById('hist-list');
+    const snap = () => window.__tl.samples.push({ n: list.children.length, first: list.querySelector('.tx-edit')?.getAttribute('aria-label') || '' });
+    document.querySelector('#hist-sort [data-sort="date_asc"]').click();
+    document.querySelector('#hist-sort [data-sort="amount_asc"]').click();
+    snap();
+    new MutationObserver(snap).observe(list, { childList: true });
+  });
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => { window.__tl.stop = true; });
+  const samples = await page.evaluate(() => window.__tl.samples);
+  const exp2 = await apiRows(w, '식비', 'amount_asc');
+  const lastFirst = rowLabel(exp2.transactions[0], 'amount_asc');
+  const prevFirst = rowLabel(exp.transactions[0], 'amount_desc');
+  const bad = samples.filter((s) => s.n > 0 && s.first === prevFirst);
+  console.log(`T1-2 기록 ${samples.length}회(클릭 직후 목록 ${samples[0].n}개), 이전 정렬 첫 행이 보인 기록 ${bad.length}`);
+  expect(bad, '이전 정렬(금액 큰순) 행이 보인 프레임').toEqual([]);
+  expect(samples[0].n, '클릭 직후 목록 자식 수').toBe(0);
+  expect(samples.filter((s) => s.n > 0 && s.first !== lastFirst), '마지막 정렬 첫 행이 아닌 행이 보인 프레임').toEqual([]);
+  expect(await pressed(page)).toEqual(['금액 작은순']);
+  expect(await rowLabels(page)).toEqual(exp2.transactions.slice(0, 30).map((t) => rowLabel(t, 'amount_asc')));
+  expect(a.cursor400).toEqual([]);
+  expect(a.problems).toEqual([]);
+  await a.ctx.close();
+});
+
+test('T1-3 정렬 변경 첫 쪽 실패는 오류 + 다시 시도(로딩 표시), 더 보기 실패는 불러온 행을 지우지 않는다', async ({ browser }, testInfo) => {
+  test.setTimeout(60_000);
+  const a = await openUi(browser, testInfo);
+  const { page } = a;
+  await enterHistory(page, 'expense', '식비');
+  await waitRows(page, 30);
+  // 더 보기 실패: 행 유지
+  await page.route('**/api/category-history*', async (route) => {
+    const sp = new URL(route.request().url()).searchParams;
+    if (sp.get('cursor')) return route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"x"}' });
+    return route.continue();
+  });
+  await more(page).click();
+  await expect(page.locator('#hist-more-error')).not.toBeEmpty();
+  await waitRows(page, 30);
+  await page.unroute('**/api/category-history*');
+  // 정렬 변경 첫 쪽 실패 후 다시 시도 (재시도 응답은 1초 늦춰 로딩 상태를 본다)
+  let n = 0;
+  await page.route('**/api/category-history*', async (route) => {
+    const sp = new URL(route.request().url()).searchParams;
+    if (sp.get('sort') === 'amount_asc') {
+      n += 1;
+      if (n === 1) return route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"x"}' });
+      await sleep(1000);
+    }
+    return route.continue();
+  });
+  await page.locator('#hist-sort [data-sort="amount_asc"]').click();
+  await expect(page.locator('#hist-error')).toBeVisible();
+  await expect(page.locator('#hist-retry')).toBeVisible();
+  expect(await listCount(page)).toBe(0);
+  await page.locator('#hist-retry').click();
+  await expect(page.locator('#hist-loading')).toBeVisible();
+  expect(await listCount(page), '재시도 중 목록').toBe(0);
+  await expect(page.locator('#hist-card')).toBeHidden();
+  await waitRows(page, 30);
+  await expect(page.locator('#hist-loading')).toBeHidden();
+  await a.ctx.close();
+});
+
+test('T2-1 대시보드 지출 범례: 묶음 제외 행이 44px 이상 버튼, 클릭·Enter·Space 로 지출 이력, 수입 보기는 수입 이력', async ({ browser }, testInfo) => {
+  test.setTimeout(60_000);
+  const u = await getTuWorld();
+  const a = await openUi(browser, testInfo, { user: u });
+  const { page } = a;
+  await openDashboard(page);
+  const info = await page.locator('#chart-donut .legend li').evaluateAll((lis) => lis.map((li) => ({ label: li.querySelector('.legend-label').textContent.trim(), btns: li.querySelectorAll('button').length, btnH: li.querySelector('button') ? li.querySelector('button').getBoundingClientRect().height : 0, aria: li.querySelector('button')?.getAttribute('aria-label') || '', type: li.querySelector('button')?.dataset.histType || '', amount: li.querySelector('.legend-amount').textContent.trim(), ratio: li.querySelector('.legend-ratio').textContent.trim() })));
+  console.log('T2-1 범례: ' + JSON.stringify(info.map((x) => [x.label, x.btns, Math.round(x.btnH)])));
+  const other = info.filter((x) => x.label.startsWith('그 외'));
+  expect(other.length, '그 외 N개 행').toBe(1);
+  expect(other[0].btns).toBe(0);
+  for (const x of info.filter((y) => !y.label.startsWith('그 외'))) {
+    expect(x.btns, x.label).toBe(1);
+    expect(x.btnH, `${x.label} 높이`).toBeGreaterThanOrEqual(44);
+    expect(x.type).toBe('expense');
+    expect(x.aria).toBe(`${x.label} ${x.amount} (${x.ratio}) 사용 이력 보기`);
+  }
+  const first = info[0].label;
+  const n0 = a.reqs.length;
+  await legendBtn(page, 'expense', first).click();
+  await histOpened(page, first);
+  expect(a.reqs.slice(n0).some((q) => q.get('type') === 'expense' && q.get('category') === first)).toBe(true);
+  await page.goBack();
+  await expect(legendBtn(page, 'expense', first)).toBeFocused();
+  // 키보드: Enter
+  await page.keyboard.press('Enter');
+  await histOpened(page, first);
+  await page.goBack();
+  // 키보드: Space (둘째 항목)
+  const second = info[1].label;
+  await legendBtn(page, 'expense', second).focus();
+  await page.keyboard.press('Space');
+  await histOpened(page, second);
+  await page.goBack();
+  await expect(legendBtn(page, 'expense', second)).toBeFocused();
+  // Tab 순서로 닿는다
+  await legendBtn(page, 'expense', first).focus();
+  await page.keyboard.press('Tab');
+  await expect(legendBtn(page, 'expense', second)).toBeFocused();
+  // 수입 보기
+  await page.locator('#catview-income').click();
+  await expect(page.locator('#chart-donut .legend-label').first()).toHaveText('급여');
+  const n1 = a.reqs.length;
+  await expect(legendBtn(page, 'income', '급여')).toHaveAttribute('data-hist-type', 'income');
+  await legendBtn(page, 'income', '급여').click();
+  await histOpened(page, '급여');
+  expect(a.reqs.slice(n1).some((q) => q.get('type') === 'income' && q.get('category') === '급여')).toBe(true);
+  expect(a.problems).toEqual([]);
+  expect(await page.evaluate(() => window.__csp)).toEqual([]);
+  await a.ctx.close();
+});
+
+test('T2-2 카테고리 관리: 이름/기록 N건 버튼이 이력을 열고(사용 안 함 배지 포함), 0건 행은 버튼 없음, 이름 바꾸기·사용 안 함은 그대로', async ({ browser }, testInfo) => {
+  test.setTimeout(60_000);
+  const u = await getTuWorld();
+  const a = await openUi(browser, testInfo, { user: u });
+  const { page } = a;
+  await page.locator('a.cat-edit-link').click();
+  await expect(page.locator('#catm-active .cat-row').first()).toBeVisible();
+  await page.locator('#catm-inactive-details summary').click();
+  const rows = await page.locator('#panel-categories .cat-row').evaluateAll((rs) => rs.map((r) => ({ name: r.querySelector('.cat-name').textContent, used: r.querySelector('.cat-used').textContent, btn: !!r.querySelector('button.cat-hist-btn'), h: r.querySelector('button.cat-hist-btn')?.getBoundingClientRect().height || 0, aria: r.querySelector('button.cat-hist-btn')?.getAttribute('aria-label') || '', inactive: !!r.closest('#catm-inactive') })));
+  console.log('T2-2 행: ' + JSON.stringify(rows.map((r) => [r.name, r.used, r.btn, Math.round(r.h), r.inactive])));
+  for (const r of rows) {
+    if (r.used === '기록 0건') expect(r.btn, `${r.name} 0건`).toBe(false);
+    else { expect(r.btn, r.name).toBe(true); expect(r.h).toBeGreaterThanOrEqual(44); expect(r.aria).toBe(`${r.name} 사용 이력 보기, ${r.used}`); }
+  }
+  expect(rows.find((r) => r.name === '무기록')?.btn).toBe(false);
+  expect(rows.find((r) => r.name === '옛카페2')?.inactive).toBe(true);
+  // 사용 중
+  await catBtn(page, 'expense', '식비').click();
+  await histOpened(page, '식비');
+  await expect(page.locator('#hist-caption .hist-inactive')).toHaveCount(0);
+  await page.locator('#hist-back').click();
+  await expect(page).toHaveURL(/#categories$/);
+  // 사용 안 함
+  if (!(await page.locator('#catm-inactive-details').evaluate((d) => d.open))) await page.locator('#catm-inactive-details summary').click();
+  await expect(catBtn(page, 'expense', '옛카페2')).toBeVisible();
+  await catBtn(page, 'expense', '옛카페2').click();
+  await histOpened(page, '옛카페2');
+  await expect(page.locator('#hist-caption .hist-inactive')).toHaveText('사용 안 함');
+  await page.locator('#hist-back').click();
+  await expect(page).toHaveURL(/#categories$/);
+  // 이름 바꾸기 중에는 버튼이 없다
+  const row = page.locator('#catm-active .cat-row', { has: page.locator('.cat-name', { hasText: /^교통$/ }) });
+  await row.getByRole('button', { name: /이름 바꾸기/ }).click();
+  const renaming = page.locator('#catm-active .cat-row', { has: page.locator('input') });
+  await expect(renaming).toHaveCount(1);
+  expect(await renaming.locator('button.cat-hist-btn').count()).toBe(0);
+  await page.keyboard.press('Escape');
+  // 사용 안 함 버튼: 무기록 행
+  page.removeAllListeners('dialog');
+  page.on('dialog', (d) => d.accept());
+  const emp = page.locator('#catm-active .cat-row', { has: page.locator('.cat-name', { hasText: /^무기록$/ }) });
+  await emp.getByRole('button', { name: /사용 안 함/ }).click();
+  await expect(page.locator('#catm-active .cat-row', { has: page.locator('.cat-name', { hasText: /^무기록$/ }) })).toHaveCount(0);
+  expect(a.problems).toEqual([]);
+  await a.ctx.close();
+});
+
+test('T2-3 돌아가기: 대시보드에서 연 이력은 #dashboard 로 + 같은 범례 버튼 포커스, 카테고리 관리는 #categories + 같은 유형·행 버튼 포커스, 기록은 #record', async ({ browser }, testInfo) => {
+  test.setTimeout(90_000);
+  const u = await getTuWorld();
+  const a = await openUi(browser, testInfo, { user: u });
+  const { page } = a;
+  // 대시보드 (달·지출/수입 선택은 그대로)
+  await openDashboard(page);
+  const title0 = await page.locator('#donut-title').textContent();
+  const cat = (await page.locator('#chart-donut .legend-label').first().textContent()).trim();
+  await legendBtn(page, 'expense', cat).click();
+  await histOpened(page, cat);
+  await expect(page.locator('#hist-back')).toHaveAttribute('href', '#dashboard');
+  await page.locator('#hist-back').click();
+  await expect(page).toHaveURL(/#dashboard$/);
+  await expect(legendBtn(page, 'expense', cat)).toBeFocused();
+  expect(await page.locator('#donut-title').textContent()).toBe(title0);
+  // 브라우저 뒤로 (수입 보기에서)
+  await page.locator('#catview-income').click();
+  await legendBtn(page, 'income', '급여').click();
+  await histOpened(page, '급여');
+  await page.goBack();
+  await expect(page).toHaveURL(/#dashboard$/);
+  await expect(page.locator('#catview-income')).toHaveAttribute('aria-pressed', 'true');
+  await expect(legendBtn(page, 'income', '급여')).toBeFocused();
+  expect(a.problems).toEqual([]);
+  await a.ctx.close();
+});
+
+test('T2-3b 돌아가기(카테고리 관리): #categories, 같은 유형 목록, 같은 행 버튼에 포커스가 남는다', async ({ browser }, testInfo) => {
+  test.setTimeout(90_000);
+  const u = await getTuWorld();
+  const a = await openUi(browser, testInfo, { user: u });
+  const { page } = a;
+  await page.locator('a.cat-edit-link').click();
+  await expect(page.locator('#catm-active .cat-row').first()).toBeVisible();
+  await page.locator('#catm-income').click();
+  await expect(catBtn(page, 'income', '급여')).toBeVisible();
+  await catBtn(page, 'income', '급여').click();
+  await histOpened(page, '급여');
+  await expect(page.locator('#hist-back')).toHaveAttribute('href', '#categories');
+  await page.locator('#hist-back').click();
+  await expect(page).toHaveURL(/#categories$/);
+  await expect(page.locator('#catm-income')).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(500); // 들어올 때 목록을 다시 받아 다시 그리는 시간
+  await expect.soft(catBtn(page, 'income', '급여'), '돌아온 뒤 같은 행 버튼 포커스(수입)').toBeFocused();
+  // 브라우저 뒤로로도 같다 (지출 목록, 식비)
+  await page.locator('#catm-expense').click();
+  await catBtn(page, 'expense', '식비').click();
+  await histOpened(page, '식비');
+  await page.goBack();
+  await expect(page).toHaveURL(/#categories$/);
+  await expect(page.locator('#catm-expense')).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(500);
+  await expect.soft(catBtn(page, 'expense', '식비'), '돌아온 뒤 같은 행 버튼 포커스(지출, 브라우저 뒤로)').toBeFocused();
+  // 카테고리 관리의 뒤로는 이력을 거쳐도 원래 출발 화면(기록)
+  await page.locator('#catm-back').click();
+  await expect(page).toHaveURL(/#record$/);
+  // 기록 탭 진입은 기존대로
+  await enterHistory(page, 'expense', '식비');
+  await expect(page.locator('#hist-back')).toHaveAttribute('href', '#record');
+  await page.locator('#hist-back').click();
+  await expect(page).toHaveURL(/#record$/);
+  await expect(barBtn(page, 'expense', '식비')).toBeFocused();
+  expect(a.problems).toEqual([]);
+  await a.ctx.close();
+});
+
+test('T2-4 탭바: 대시보드·카테고리 관리에서 연 이력은 대시보드가, 기록에서 연 이력은 기록이 aria-current', async ({ browser }, testInfo) => {
+  test.setTimeout(60_000);
+  const u = await getTuWorld();
+  const a = await openUi(browser, testInfo, { user: u });
+  const { page } = a;
+  const cur = () => page.locator('.tabbar [aria-current="page"]').evaluateAll((els) => els.map((e) => e.id));
+  await openDashboard(page);
+  await legendBtn(page, 'expense', (await page.locator('#chart-donut .legend-label').first().textContent()).trim()).click();
+  await expect(page.locator('#panel-history')).toBeVisible();
+  expect(await cur()).toEqual(['tab-dashboard']);
+  await page.locator('#hist-back').click();
+  expect(await cur()).toEqual(['tab-dashboard']);
+  await page.evaluate(() => { location.hash = 'record'; });
+  await page.locator('a.cat-edit-link').click();
+  await catBtn(page, 'expense', '식비').click();
+  await expect(page.locator('#panel-history')).toBeVisible();
+  expect(await cur()).toEqual(['tab-dashboard']);
+  await page.locator('#hist-back').click();
+  await page.locator('#catm-back').click();
+  await expect(page).toHaveURL(/#record$/);
+  await enterHistory(page, 'expense', '식비');
+  expect(await cur()).toEqual(['tab-record']);
+  await page.locator('#hist-back').click();
+  await openDashboard(page);
+  await legendBtn(page, 'expense', (await page.locator('#chart-donut .legend-label').first().textContent()).trim()).click();
+  expect(await cur()).toEqual(['tab-dashboard']);
+  await a.ctx.close();
+});

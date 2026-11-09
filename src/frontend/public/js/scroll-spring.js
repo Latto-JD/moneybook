@@ -2,7 +2,7 @@
 // 물리는 lib/spring.js. 여기서는 유닛(아래 UNITS)의 inline transform 만 CSSOM 으로 쓴다.
 // 폼·저장 영역·토스트·탭바·헤더·패널·#main 에는 transform 을 넣지 않는다 (조상 transform 은 fixed/sticky 기준을 바꾼다).
 // JS 가 쓰는 inline transform 은 전역 prefers-reduced-motion CSS 규칙으로 꺼지지 않으므로 여기서 직접 끈다.
-import { SPRING, isRecentTyping, ymaxFor, scrollDelta, inject, advance, isSettled, transformFor, median, originFor } from './lib/spring.js';
+import { SPRING, isRecentTyping, ymaxFor, scrollDelta, inject, speedGain, pushSample, windowSpeed, clampScroll, advance, isSettled, transformFor, median, originFor } from './lib/spring.js';
 
 /** 출렁이는 유닛 선택자 [선택자, 종류]. 유닛끼리는 조상·자손이 아니어야 한다. 이 목록 한 곳에만 둔다. */
 export const UNITS = [
@@ -153,11 +153,12 @@ function frame(ts) {
     for (const u of list.slice(SPRING.MAX_ACTIVE)) clearUnit(u);
     list = list.slice(0, SPRING.MAX_ACTIVE);
   }
+  const gain = delta !== 0 ? speedGain(windowSpeed(S.vel)) : 0;
   const hardStop = ts - S.lastInjectTs > SPRING.HARD_STOP_MS;
   let moving = false;
   for (const u of list) {
     let st = { y: u.y, v: u.v };
-    if (delta !== 0 && u.inView) st = inject(st, delta, center(u) - refY, ymaxFor(u.kind));
+    if (delta !== 0 && u.inView) st = inject(st, delta, center(u) - refY, ymaxFor(u.kind), gain);
     if (st.y !== 0 || st.v !== 0) st = advance(st, dt);
     if (hardStop || isSettled(st)) st = { y: 0, v: 0 };
     else moving = true;
@@ -188,7 +189,7 @@ function setup() {
   S = {
     units: new Map(), raf: 0, prevTs: 0, prevScroll: window.scrollY, refY: null,
     touching: false, inertia: false, lastScrollAt: 0, lastWheelAt: -1e9, lastTypeAt: -1e9, lastInjectTs: 0,
-    gestureOpen: false, samples: [], off: [], io: null, mo: null, ro: null,
+    gestureOpen: false, samples: [], vel: [], velY: window.scrollY, off: [], io: null, mo: null, ro: null,
   };
   const on = (target, type, fn) => {
     target.addEventListener(type, fn, { passive: true });
@@ -218,6 +219,13 @@ function setup() {
     const now = performance.now();
     if (S.inertia && now - S.lastScrollAt >= SPRING.TOUCH_GAP_MS) S.inertia = false;
     S.lastScrollAt = now;
+    // 휠이 아닌 스크롤(터치 드래그·관성)은 스크롤 위치 변화를 속도 샘플로 쓴다. 휠은 wheel 이벤트가 낸다.
+    const sy = window.scrollY;
+    if (now - S.lastWheelAt >= SPRING.WHEEL_GAP_MS) {
+      const max = document.scrollingElement.scrollHeight - window.innerHeight;
+      pushSample(S.vel, now, clampScroll(sy, max) - clampScroll(S.velY, max));
+    }
+    S.velY = sy;
     const user = S.touching || S.inertia || now - S.lastWheelAt < SPRING.WHEEL_GAP_MS;
     if (user && !isRecentTyping(now, S.lastTypeAt)) schedule();
     else if (!S.raf) S.prevScroll = window.scrollY; // 키보드·프로그램 스크롤: 위치만 갱신
@@ -225,6 +233,8 @@ function setup() {
   on(window, 'wheel', (e) => {
     if (e.ctrlKey) return;
     S.lastWheelAt = performance.now();
+    // 이벤트 시각(timeStamp)과 이동량으로 속도를 잰다: 늦은 프레임에 몰려도 달라지지 않는다
+    pushSample(S.vel, e.timeStamp, e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1));
     S.refY = e.clientY;
     if (!isRecentTyping(S.lastWheelAt, S.lastTypeAt)) schedule();
   });

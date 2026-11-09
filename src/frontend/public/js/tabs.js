@@ -1,7 +1,7 @@
 // 하단 탭: 해시(#record / #dashboard)로 화면 전환. 새로고침/뒤로가기 유지.
 // #categories 는 하단 탭 없이 기록/대시보드에서 링크로 들어가는 패널이다 (탭바에서는 대시보드가 활성).
 // #account(내 정보)도 헤더 링크로 들어가는 패널이며 탭바에서는 기록이 활성이다.
-// #history(카테고리 사용 이력)도 기록 탭에서 들어가는 패널이며 탭바에서는 기록이 활성이다.
+// #history(카테고리 사용 이력)는 기록·대시보드·카테고리 관리에서 들어가는 패널이며, 탭바는 출발 화면(data-from)을 따른다 (기록이면 기록, 나머지는 대시보드).
 const TABS = ['record', 'dashboard', 'categories', 'account', 'history'];
 const TAB_LINK = { record: 'record', dashboard: 'dashboard', categories: 'dashboard', account: 'record', history: 'record' };
 
@@ -14,6 +14,12 @@ function currentTab() {
 // 이미 보이는 패널에 클래스를 나중에 붙이면 그 순간 애니메이션이 시작되므로, 숨겨져 있던 패널을 보이게 하는 같은 순간에만 붙인다.
 let ready = false;
 
+function linkFor(active) {
+  if (active !== 'history') return TAB_LINK[active];
+  const from = document.getElementById('panel-history')?.dataset.from;
+  return TAB_LINK[from] || 'record';
+}
+
 function apply() {
   const active = currentTab();
   for (const name of TABS) {
@@ -25,7 +31,7 @@ function apply() {
       panel.hidden = !show;
     }
     if (link) {
-      if (name === TAB_LINK[active]) link.setAttribute('aria-current', 'page');
+      if (name === linkFor(active)) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     }
   }

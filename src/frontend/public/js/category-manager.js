@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { el, $, swatch } from './dom.js';
 import { currentFormType } from './record.js';
+import { openHistory, returnTarget, takeHistoryFocus } from './history.js';
 import { stableVizMap, vizOf } from './lib/viz.js';
 import { loadCategories, categoryResponse, categoryStatus, categoryError } from './categories.js';
 import {
@@ -45,15 +46,30 @@ function rowErrorEl(id) {
 
 let vizMap = new Map(); // 렌더마다 유형별 목록 순서(비활성 포함)로 다시 만든다
 
+/** 이름 + "기록 N건". 기록이 있으면 버튼 하나가 되어 그 카테고리의 사용 이력을 연다 */
+function infoBlock(item) {
+  const n = item.usedCount || 0;
+  const parts = [el('span', { class: 'cat-name' }, item.name), el('span', { class: 'cat-used' }, `기록 ${n}건`)];
+  if (n === 0) {
+    const info = el('div', { class: 'cat-info' });
+    info.append(...parts);
+    return info;
+  }
+  const btn = el('button', {
+    type: 'button', class: 'cat-info cat-hist-btn', 'data-hist-type': item.type, 'data-hist-cat': item.name,
+    'aria-label': `${item.name} 사용 이력 보기, 기록 ${n}건`,
+  });
+  btn.append(...parts);
+  btn.addEventListener('click', () => openHistory(item.type, item.name, 'categories'));
+  return btn;
+}
+
 function activeRow(item) {
   const li = el('li', { class: 'cat-row', 'data-id': item.id });
   if (ui.renamingId === item.id) return renameRow(li, item);
   const line = el('div', { class: 'cat-line' });
   line.appendChild(swatch(vizOf(vizMap, item.name), 'lg'));
-  const info = el('div', { class: 'cat-info' });
-  info.appendChild(el('span', { class: 'cat-name' }, item.name));
-  info.appendChild(el('span', { class: 'cat-used' }, `기록 ${item.usedCount || 0}건`));
-  line.appendChild(info);
+  line.appendChild(infoBlock(item));
   const actions = el('div', { class: 'cat-actions' });
   actions.appendChild(actionButton('이름 바꾸기', item.name, () => startRename(item)));
   actions.appendChild(actionButton('사용 안 함', item.name, () => disable(item)));
@@ -68,10 +84,7 @@ function inactiveRow(item) {
   if (ui.renamingId === item.id) return renameRow(li, item);
   const line = el('div', { class: 'cat-line' });
   line.appendChild(swatch(vizOf(vizMap, item.name), 'lg'));
-  const info = el('div', { class: 'cat-info' });
-  info.appendChild(el('span', { class: 'cat-name' }, item.name));
-  info.appendChild(el('span', { class: 'cat-used' }, `기록 ${item.usedCount || 0}건`));
-  line.appendChild(info);
+  line.appendChild(infoBlock(item));
   const actions = el('div', { class: 'cat-actions' });
   actions.appendChild(actionButton('이름 바꾸기', item.name, () => startRename(item)));
   actions.appendChild(actionButton('다시 사용', item.name, () => enable(item)));
@@ -307,6 +320,13 @@ function setType(type) {
   render();
 }
 
+/** 이력에서 돌아왔으면 다시 그린 행의 같은 버튼으로 포커스를 돌려준다 (없으면 제목에 그대로) */
+function restoreHistoryFocus() {
+  if ($('panel-categories').hidden) return;
+  const f = takeHistoryFocus('categories');
+  if (f) (f.find('#panel-categories') || $('cat-title')).focus();
+}
+
 export function initCategoryManager() {
   $('catm-expense').addEventListener('click', () => setType('expense'));
   $('catm-income').addEventListener('click', () => setType('income'));
@@ -328,7 +348,8 @@ export function initCategoryManager() {
   let wasOpen = false;
   const onTab = (open) => {
     if (open && !wasOpen) {
-      ui.type = currentFormType();
+      const back = returnTarget('categories'); // 이력에서 돌아오면 보던 유형 그대로
+      ui.type = back ? back.type : currentFormType();
       ui.renamingId = null;
       ui.rowError = null;
       ui.restoreId = null;
@@ -338,7 +359,8 @@ export function initCategoryManager() {
       render();
       $('cat-title').focus();
       // 거래 저장·삭제로 usedCount 가 바뀌었을 수 있으니 들어올 때마다 다시 받는다 (끝나면 'categorieschanged' 로 다시 그려진다)
-      loadCategories();
+      // 이력에서 돌아왔으면 이 다시 그리기가 끝난 뒤(버튼이 새로 만들어진 다음)에 포커스를 돌려준다
+      loadCategories().then(restoreHistoryFocus, restoreHistoryFocus);
     }
     wasOpen = open;
   };

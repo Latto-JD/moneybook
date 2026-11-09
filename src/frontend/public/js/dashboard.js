@@ -7,6 +7,7 @@ import { motionFor, applyMotion } from './lib/motion.js';
 import { categoryResponse } from './categories.js';
 import { stableVizMap } from './lib/viz.js';
 import { todayLocal, monthOf, shiftMonth, monthTitle, trailingRange } from './lib/date.js';
+import { openHistory, takeHistoryFocus } from './history.js';
 import { renderDonut, renderGroupedBars, renderBars } from './charts.js';
 import {
   buildKpi, balanceRate, balanceLabel, summaryLabel, NO_PREV_TEXT, NO_PREV_ALL_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
@@ -87,6 +88,14 @@ async function loadMonthly(reason) {
   }
 }
 
+/** 이력에서 돌아왔으면 도넛을 다시 그린 뒤 눌렀던 범례 버튼으로 포커스를 돌려준다 (없으면 도넛 제목) */
+function restoreHistoryFocus() {
+  if ($('panel-dashboard').hidden) return;
+  const f = takeHistoryFocus('dashboard');
+  if (!f) return;
+  (f.find('#chart-donut') || $('donut-title')).focus();
+}
+
 /** 카테고리 응답을 돌려준다(추이의 기본 선택에 쓴다). 실패하면 null */
 async function loadCat(reason) {
   const my = ++seqs.cat;
@@ -100,7 +109,9 @@ async function loadCat(reason) {
     renderDonut($('chart-donut'), {
       title: v.donutTitle, periodLabel: monthTitle(base), items: groupDonutItems(donutItemsFrom(cat)),
       centerLabel: v.centerLabel, noun: v.noun, vizMap: catVizMap(),
+      histType: state.catType, onItem: (label) => openHistory(state.catType, label, 'dashboard'),
     });
+    restoreHistoryFocus();
     return cat;
   } catch (e) {
     if (my === seqs.cat) showError(e);

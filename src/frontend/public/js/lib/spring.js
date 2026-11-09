@@ -4,8 +4,10 @@
 /** 모든 조정값은 여기 한 곳. enabled 가 false 면 scroll-spring.js 는 리스너를 하나도 붙이지 않는다. */
 export const SPRING = {
   enabled: true,
-  k: 170, // 강성 (/s²), 고유 진동수 약 2.1Hz
-  c: 14, // 감쇠 (/s), ζ ≈ 0.54 -> 한 번 약 13% 되튐
+  k: 90, // 강성 (/s²), 고유 진동수 약 1.5Hz (묵직)
+  c: 15, // 감쇠 (/s), ζ ≈ 0.79 -> 되튐 거의 없음 (약 2%)
+  VMIN: 600, // 이 스크롤 속도(px/s) 이하에서는 끌림을 주입하지 않음
+  VFULL: 2000, // 이 속도 이상에서 끌림 100%
   R: 500, // 끌림 거리 (px): 기준점에서 이만큼 떨어지면 스크롤 변화량을 그대로 받음
   YMAX_CARD: 20, // 카드 변위 상한 (px)
   YMAX_ROW: 12, // 행 변위 상한 (px)
@@ -47,9 +49,41 @@ export function clampY(y, ymax) {
   return Math.min(Math.max(y, -ymax), ymax);
 }
 
-/** 끌림 주입: y += Δ × r, 상한을 넘으면 자르고 속도는 0 */
-export function inject(state, delta, d, ymax) {
-  const y = state.y + delta * dragRatio(d);
+/** 속도 창: 최근 이 시간(ms) 안의 입력 샘플로 속도를 구한다 */
+export const VEL_WINDOW_MS = 100;
+const VEL_MAX_SAMPLES = 32;
+
+/** 입력 샘플 { t(ms, 이벤트 시각), d(px, 그 입력으로 움직인 양) } 를 링버퍼에 넣는다 */
+export function pushSample(buf, t, d) {
+  buf.push({ t, d });
+  if (buf.length > VEL_MAX_SAMPLES) buf.shift();
+}
+
+/**
+ * 최근 VEL_WINDOW_MS 창의 속도 px/s = (창 안 d 합) / (마지막 샘플 시각 - 창 직전 샘플 시각).
+ * 이벤트 시각으로 재므로 프레임이 늦어 여러 입력이 한 프레임에 몰려도 속도가 변하지 않는다.
+ * 창 직전 샘플이 없으면 1/60s 로 본다. 경과시간은 1/240s ~ 창 길이(100ms)로 자른다: 오래 쉰 뒤의 빠른 휠이 분모 때문에 묻히지 않게.
+ */
+export function windowSpeed(buf) {
+  const n = buf.length;
+  if (!n) return 0;
+  const last = buf[n - 1].t;
+  let i = n - 1;
+  let sum = 0;
+  while (i >= 0 && last - buf[i].t <= VEL_WINDOW_MS) { sum += buf[i].d; i--; }
+  const t0 = i >= 0 ? buf[i].t : buf[i + 1].t - 1000 / 60;
+  return (sum / Math.min(Math.max(last - t0, 1000 / 240), VEL_WINDOW_MS)) * 1000;
+}
+
+/** 스크롤 속도(px/s, 절댓값)에 따른 끌림 배율 0..1: VMIN 이하 0, VFULL 이상 1, 사이는 smoothstep */
+export function speedGain(speed) {
+  const t = Math.min(Math.max((Math.abs(speed) - SPRING.VMIN) / (SPRING.VFULL - SPRING.VMIN), 0), 1);
+  return t * t * (3 - 2 * t);
+}
+
+/** 끌림 주입: y += Δ × r × gain, 상한을 넘으면 자르고 속도는 0 */
+export function inject(state, delta, d, ymax, gain = 1) {
+  const y = state.y + delta * dragRatio(d) * gain;
   if (Math.abs(y) > ymax) return { y: clampY(y, ymax), v: 0 };
   return { y, v: state.v };
 }

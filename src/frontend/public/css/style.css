@@ -297,6 +297,7 @@ a.btn { text-decoration: none; }
 .cat-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); min-height: 60px; }
 .cat-info { flex: 1 1 8rem; min-width: 0; display: flex; flex-direction: column; }
 .cat-name { font-size: var(--fs-body); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
+.cat-hist-btn { flex: 1 1 8rem; min-width: 0; min-height: var(--touch-min); display: flex; flex-direction: column; justify-content: center; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .cat-used { font-size: var(--fs-micro); line-height: var(--lh-micro); color: var(--color-text-muted); }
 .cat-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-left: auto; }
 .cat-rename { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
@@ -366,6 +367,12 @@ html:has(#save-dock #flash:not(:empty)) { --save-clearance: calc(52px + 52px + v
 .legend-list li {
   display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 48px; column-gap: var(--space-2); row-gap: var(--space-1);
   align-items: center; min-height: 0; padding: var(--space-2) 0; border-bottom: 0; font-size: var(--fs-label);
+}
+.legend-list li.legend-li--btn { display: block; padding: 0; }
+.legend-btn {
+  display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 48px; column-gap: var(--space-2); row-gap: var(--space-1); align-items: center;
+  width: 100%; min-height: var(--touch-min); padding: var(--space-2) 0; border: 0; border-radius: var(--radius-sm);
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .legend-list .swatch { width: 10px; height: 10px; border-radius: 3px; }
 .legend-list .legend-label { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
