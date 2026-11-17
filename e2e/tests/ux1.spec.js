@@ -595,27 +595,23 @@ test.describe('U6 다시 시도', () => {
 
 test.describe('U4 manifest / U9 이메일', () => {
   const pngSize = (buf) => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) });
-  test('UX-27 manifest.json, 아이콘 200 image/png 실제 크기, 두 HTML 의 link/meta', async ({ browser, request }, testInfo) => {
+  test('UX-27 (manifest 되돌림 후) manifest 링크·manifest.json 없음, 앱 아이콘 PNG 200 실제 크기, apple-touch-icon·theme-color 유지', async ({ browser, request }, testInfo) => {
     onlyMobile(testInfo);
+    // 사용자 요청으로 U4 의 manifest 만 되돌렸다: /manifest.json 은 200 이 아니고 두 HTML 에 링크가 없다
     const res = await request.get('/manifest.json');
-    expect(res.status()).toBe(200);
-    const m = await res.json();
-    expect(m.display).toBe('standalone');
-    expect(m.start_url).toBe('/');
-    expect(m.name).toBe('가계부');
-    const want = [['192x192', 'any'], ['512x512', 'any'], ['512x512', 'maskable']];
-    for (const [sz, purpose] of want) {
-      const ic = m.icons.find((i) => i.sizes === sz && (i.purpose || 'any') === purpose);
-      expect(ic, `${sz} ${purpose}`).toBeTruthy();
-      const r = await request.get(new URL(ic.src, 'http://x/').pathname);
-      expect(r.status(), ic.src).toBe(200);
+    expect(res.status(), '/manifest.json').not.toBe(200);
+    // 앱 아이콘 PNG 는 그대로 둔다(홈 화면 아이콘·apple-touch-icon 용)
+    for (const [file, size] of [['app-192.png', '192x192'], ['app-512.png', '512x512'], ['app-maskable-512.png', '512x512']]) {
+      const r = await request.get('/app-icons/' + file);
+      expect(r.status(), file).toBe(200);
       expect(r.headers()['content-type']).toContain('image/png');
       const { w, h } = pngSize(await r.body());
-      expect(`${w}x${h}`, ic.src).toBe(sz);
+      expect(`${w}x${h}`, file).toBe(size);
     }
     for (const path of ['/index.html', '/login.html']) {
       const html = await (await request.get(path)).text();
-      expect(html, path).toMatch(/<link rel="manifest" href="manifest\.json">/);
+      expect(html, path).not.toMatch(/rel="manifest"/);
+      expect(html, path).not.toMatch(/manifest\.json/);
       expect(html, path).toMatch(/<meta name="theme-color" content="#[0-9a-fA-F]{3,8}">/);
       const ap = html.match(/<link rel="apple-touch-icon" href="([^"]+)">/);
       expect(ap, path).toBeTruthy();
@@ -623,7 +619,6 @@ test.describe('U4 manifest / U9 이메일', () => {
       expect(r.status()).toBe(200);
       expect(r.headers()['content-type']).toContain('image/png');
       expect(pngSize(await r.body())).toEqual({ w: 180, h: 180 });
-      // 상대 경로로 login.html 에서도 같은 위치
     }
   });
 

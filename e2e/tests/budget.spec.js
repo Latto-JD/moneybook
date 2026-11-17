@@ -291,7 +291,7 @@ test.describe('BG-20 범위', () => {
     const hit = all.filter((f) => forbidden.some((p) => f === p || f.startsWith(`${p}/`)));
     expect(hit, '금지 경로 변경').toEqual([]);
     // 프론트 코드에서 새 API 엔드포인트가 늘지 않았다(budget-data/budget-card/dashboard/category-manager 에 /api/ 문자열 추가 없음)
-    const added = git(['diff', BASE_COMMIT, '--', 'src/frontend/public/js']).split('\n').filter((l) => l.startsWith('+') && /\/api\//.test(l));
+    const added = git(['diff', BASE_COMMIT, '--', 'src/frontend/public/js']).split('\n').filter((l) => l.startsWith('+') && /\/api\//.test(l) && !/^\+\s*(\*|\/\/|\/\*)/.test(l)); // 주석 줄은 제외(budget-data.js 설명 주석이 경로를 언급)
     expect(added).toEqual([]);
   });
 });

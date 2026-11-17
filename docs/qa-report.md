@@ -1697,3 +1697,15 @@ frontend 가 예산 초과 표시를 `--color-error` 에서 `--color-expense` �
 통과 20 / 실패 0 / 검증 불가 0 (BG-01~BG-20). 열린 예산 결함 없음. 참고 이슈 1건: C-H24(이력 요약 카드 출렁임)는 기존부터 불안정해 `08d1502` 에서도 실패하는 별도 이슈. 위 장에서 "BG-19 실패"와 "범위 가드 3건 실패(.claude/agents/qa.md)"라고 쓴 부분은 이 재검증으로 해소됐고, C-C36 갱신 설명(오류색 허용 추가)도 이 재검증에서 되돌렸다.
 
 정리: 서버(3645)는 PID 로만 종료·포트 비움 확인, 임시 PGlite 삭제, 덮어쓴 기존 `docs/qa-shots-*` PNG 는 `git checkout` 으로 되돌림. 커밋·푸시 없음.
+
+
+## U4 manifest 되돌림 확인 (UX-27 갱신)
+
+사용자 요청으로 `<link rel="manifest">` 두 개와 `src/frontend/public/manifest.json` 을 지웠다. 앱 아이콘 PNG, apple-touch-icon, theme-color 는 그대로다.
+
+- `e2e/tests/ux1.spec.js` UX-27 을 새 상태로 고쳤다: `/manifest.json` 이 200 이 아님, `index.html`·`login.html` 에 `rel="manifest"`·`manifest.json` 문자열 없음, 앱 아이콘 PNG 3개(192, 512, maskable 512) 200 `image/png` 실제 크기, apple-touch-icon 180x180 200 과 theme-color 메타는 유지.
+- `e2e/tests/budget.spec.js` BG-20 의 "프론트 JS 에 `/api/` 가 추가되지 않음" 검사가 주석 줄(budget-data.js 설명 주석)에 걸려 실패했다. 예산 코드가 커밋되어 `08d1502` 대비 diff 에 그 파일이 처음 잡힌 탓이다(코드 문자열이 아니라 주석). 주석 줄을 제외하도록 고쳤다. 새 엔드포인트 호출은 없다.
+
+결과(mobile-360·tablet-768, 서버 3646 임시 PGlite): UX-27, UX-28, UX-31, C-M15, C-R25, C-R5, C-D1, BG-20 **16 통과 / 0 실패 / 6 skip**(skip 은 360 전용 시험의 768 쪽). `npm test` 427 통과. 범위 가드는 이 변경으로 깨지지 않았다. 전체 e2e 는 다시 돌리지 않았다.
+
+정리: 서버는 PID 로 종료·포트 비움 확인, 임시 폴더 삭제. 커밋·푸시 없음.
