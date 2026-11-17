@@ -18,6 +18,16 @@ export function saveTheme(storage, mode) {
   } catch { /* 무시 */ }
 }
 
+/** 상단 막대(theme-color) 색을 지금 모드의 배경색(--color-bg 계산값)으로 맞춘다. meta·문서가 없거나 값을 못 읽으면 아무것도 하지 않는다 */
+export function syncThemeColor(root) {
+  try {
+    const doc = root.ownerDocument;
+    const meta = doc.querySelector('meta[name="theme-color"]');
+    const color = doc.defaultView.getComputedStyle(root).getPropertyValue('--color-bg').trim();
+    if (meta && color) meta.setAttribute('content', color);
+  } catch { /* 무시 */ }
+}
+
 export function applyTheme(root, mode) {
   if (mode === 'light' || mode === 'dark') root.setAttribute('data-theme', mode);
   else root.removeAttribute('data-theme');
@@ -63,6 +73,7 @@ export function initThemeToggle(button, { status = null, storage = window.localS
     button.setAttribute('aria-label', toggleLabel(mode));
     if (text) text.textContent = MODE_LABEL[mode];
     if (icon) icon.className = `icon icon--theme-${mode}`;
+    syncThemeColor(root);
   }
   show();
 

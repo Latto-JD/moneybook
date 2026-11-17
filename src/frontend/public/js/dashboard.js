@@ -10,7 +10,7 @@ import { todayLocal, monthOf, shiftMonth, monthTitle, trailingRange } from './li
 import { openHistory, takeHistoryFocus } from './history.js';
 import { renderDonut, renderGroupedBars, renderBars } from './charts.js';
 import {
-  buildKpi, balanceRate, balanceLabel, summaryLabel, NO_PREV_TEXT, NO_PREV_ALL_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
+  dashErrorText, buildKpi, balanceRate, balanceLabel, summaryLabel, NO_PREV_TEXT, NO_PREV_ALL_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
 } from './lib/dashboard-data.js';
 
 // 카테고리 보기(도넛·추이) 유형별 문구. 지출과 수입은 같은 구조의 문장을 쓴다.
@@ -71,7 +71,18 @@ function renderTrend(motion = motionFor('chip', 'trend')) {
 // 요청 종류별 순서 번호: 더 최근 요청이 있으면 오래된 응답을 버린다.
 // 달 변경·탭 진입은 전부(loadAll), 기간(6/12개월) 변경은 월별·추이만, 보기(지출/수입) 변경은 카테고리·추이만 다시 받는다.
 const seqs = { monthly: 0, cat: 0, trend: 0 };
-const showError = (e) => { $('dash-error').textContent = (e && e.message) || '데이터를 불러오지 못했어요.'; };
+// 실패한 요청 모음(종류 -> 문구). 같은 종류의 최신 요청이 성공하면 지우고, 달 이동·탭 진입(loadAll)은 비우고 새로 시작한다. 오래된 응답은 손대지 않는다.
+const failures = new Map();
+const failText = (e) => (e && e.message) || '데이터를 불러오지 못했어요.';
+function renderErrors() {
+  const retry = $('dash-retry');
+  const text = dashErrorText([...failures.values()]);
+  $('dash-error').textContent = text;
+  if (!text && !retry.hidden && document.activeElement === retry) $('donut-title').focus(); // 포커스가 body 로 가지 않게
+  retry.hidden = !text;
+}
+const fail = (kind, e) => { failures.set(kind, failText(e)); renderErrors(); };
+const succeed = (kind) => { if (failures.delete(kind)) renderErrors(); };
 
 async function loadMonthly(reason) {
   const my = ++seqs.monthly;
@@ -83,8 +94,9 @@ async function loadMonthly(reason) {
     renderKpi(buildKpi(monthly.months, base), base, motionFor(reason, 'kpi'));
     applyMotion($('chart-monthly'), motionFor(reason, 'monthly'));
     renderGroupedBars($('chart-monthly'), { title: '월별 수입 대 지출', months: monthly.months });
+    succeed('monthly');
   } catch (e) {
-    if (my === seqs.monthly) showError(e);
+    if (my === seqs.monthly) fail('monthly', e);
   }
 }
 
@@ -112,9 +124,10 @@ async function loadCat(reason) {
       histType: state.catType, onItem: (label) => openHistory(state.catType, label, 'dashboard'),
     });
     restoreHistoryFocus();
+    succeed('cat');
     return cat;
   } catch (e) {
-    if (my === seqs.cat) showError(e);
+    if (my === seqs.cat) fail('cat', e);
     return null;
   }
 }
@@ -129,18 +142,39 @@ async function loadTrend(reason, catPromise = Promise.resolve(state.catResp)) {
     const keep = trendCategories(trend).some((c) => c.category === state.selected);
     if (!keep) state.selected = defaultTrendCategory(cat, trend);
     renderTrend(motionFor(reason, 'trend'));
+    succeed('trend');
   } catch (e) {
-    if (my === seqs.trend) showError(e);
+    if (my === seqs.trend) fail('trend', e);
   }
 }
 
 /** reason: 'month' | 'tab' | 'catchange' (lib/motion.js) */
 function loadAll(reason) {
   $('dash-month').textContent = monthTitle(state.base);
-  $('dash-error').textContent = '';
-  loadInsights(state.base, { fade: motionFor(reason, 'insights').fade }); // 인사이트는 달이 바뀔 때와 탭에 들어올 때만
+  failures.clear();
+  renderErrors();
+  loadInsightsTracked(motionFor(reason, 'insights').fade); // 인사이트는 달이 바뀔 때와 탭에 들어올 때만
   loadMonthly(reason);
   loadTrend(reason, loadCat(reason));
+}
+
+async function loadInsightsTracked(fade) {
+  const r = await loadInsights(state.base, { fade });
+  if (r.status === 'ok') succeed('insights');
+  else if (r.status === 'fail') fail('insights', { message: r.error });
+}
+
+/** 다시 시도: 실패한 것만 다시 받는다. 이유 'retry' 는 모션이 없다(lib/motion.js 표에 없음). 카테고리가 실패했으면 추이와 같이 부른다 */
+async function onRetry() {
+  const b = $('dash-retry');
+  if (b.getAttribute('aria-disabled') === 'true') return;
+  b.setAttribute('aria-disabled', 'true');
+  const jobs = [];
+  if (failures.has('insights')) jobs.push(loadInsightsTracked(false));
+  if (failures.has('monthly')) jobs.push(loadMonthly('retry'));
+  if (failures.has('cat')) jobs.push(loadTrend('retry', loadCat('retry')));
+  else if (failures.has('trend')) jobs.push(loadTrend('retry'));
+  try { await Promise.allSettled(jobs); } finally { b.removeAttribute('aria-disabled'); }
 }
 
 function renderCatView() {
@@ -175,6 +209,7 @@ export function initDashboard() {
   $('catview-expense').addEventListener('click', () => setCatType('expense'));
   $('catview-income').addEventListener('click', () => setCatType('income'));
   renderCatView();
+  $('dash-retry').addEventListener('click', onRetry);
   $('range-6').addEventListener('click', () => setRange(6));
   $('range-12').addEventListener('click', () => setRange(12));
   // 탭 전환 시 재조회 (저장/수정/삭제 후에도 최신)

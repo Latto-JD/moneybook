@@ -10,18 +10,21 @@ const ICON_CLASS = { '↗': 'expense', '▲': 'expense', '⏳': 'chart', '⏰': 
 const errMsg = (e) => (e && e.message) || '요청을 처리하지 못했어요.';
 let seq = 0;
 
-/** month: 'YYYY-MM'. 오래된 응답은 버린다. fade: 그릴 때 페이드 인(대시보드가 이유에 따라 정한다) */
+/**
+ * month: 'YYYY-MM'. 오래된 응답은 버린다. fade: 그릴 때 페이드 인(대시보드가 이유에 따라 정한다)
+ * 결과: { status: 'ok' | 'fail' | 'stale', error } (stale: 더 최근 요청이 있어 버림). 긴 오류 문구는 대시보드 상단 한 곳에만 둔다.
+ */
 export async function loadInsights(month, { fade = false } = {}) {
   const my = ++seq;
   const box = $('insights');
   try {
     const data = await api.insights(month, todayLocal());
-    if (my !== seq) return;
+    if (my !== seq) return { status: 'stale' };
     applyMotion(box, { fade });
     const sections = buildInsightSections(data);
     if (!sections.length) {
       box.replaceChildren(el('p', { class: 'hint' }, INSIGHT_EMPTY_TEXT));
-      return;
+      return { status: 'ok' };
     }
     box.replaceChildren(...sections.map((sec) => {
       const wrap = el('div', { class: `insight-section insight-${sec.key}` });
@@ -37,7 +40,10 @@ export async function loadInsights(month, { fade = false } = {}) {
       wrap.appendChild(ul);
       return wrap;
     }));
+    return { status: 'ok' };
   } catch (e) {
-    if (my === seq) box.replaceChildren(el('p', { class: 'error-text' }, errMsg(e)));
+    if (my !== seq) return { status: 'stale' };
+    box.replaceChildren(el('p', { class: 'error-text' }, '불러오지 못했어요'));
+    return { status: 'fail', error: errMsg(e) };
   }
 }

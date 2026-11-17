@@ -6,6 +6,10 @@
   <meta name="color-scheme" content="light dark">
   <title>가계부</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="app-icons/apple-touch-icon-180.png">
+  <meta name="theme-color" content="#F7F5F0">
+  <meta name="apple-mobile-web-app-title" content="가계부">
   <script src="js/theme-init.js"></script>
   <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/tokens.css">
@@ -72,6 +76,10 @@
           <p class="error-text" id="memo-error"></p>
           <ul class="chips" id="memo-suggestions" aria-label="메모 제안"></ul>
         </div>
+        <div class="segmented segmented--sm date-quick" role="group" aria-label="날짜 빠른 선택">
+          <button type="button" class="segmented__item" id="date-today" aria-pressed="true">오늘</button>
+          <button type="button" class="segmented__item" id="date-yesterday" aria-pressed="false">어제</button>
+        </div>
         <details class="field" id="date-details">
           <summary>날짜: <span id="date-summary">오늘</span></summary>
           <label for="date">날짜 변경</label>
@@ -96,8 +104,14 @@
           <h2 class="month-title" id="month-title-h" tabindex="-1">이번 달</h2>
           <button type="button" class="btn btn--ghost btn--sm" id="month-next" aria-label="다음 달"><span class="icon icon--chevron" aria-hidden="true"></span></button>
         </div>
-        <p class="error-text" id="month-error" role="alert"></p>
-        <div id="month-summary"></div>
+        <div class="month-error-row">
+          <p class="error-text" id="month-error" role="alert"></p>
+          <button type="button" class="btn btn--ghost btn--sm" id="month-retry" hidden>다시 시도</button>
+        </div>
+        <details class="month-cats" id="month-cats">
+          <summary>카테고리별 수입·지출</summary>
+          <div id="month-summary"></div>
+        </details>
         <ul id="tx-list" class="list"></ul>
       </section>
 
@@ -113,7 +127,10 @@
           <button type="button" class="btn btn--ghost btn--sm" id="dash-next" aria-label="다음 달"><span class="icon icon--chevron" aria-hidden="true"></span></button>
         </div>
       </div>
-      <p class="error-text" id="dash-error" role="alert"></p>
+      <div class="dash-error-row">
+        <p class="error-text" id="dash-error" role="alert"></p>
+        <button type="button" class="btn btn--ghost btn--sm" id="dash-retry" hidden>다시 시도</button>
+      </div>
       <section class="card balance-card sum-card" id="kpi" aria-label="이번 달 요약" aria-live="polite"></section>
       <div class="card chart-card donut-card">
         <div class="card-head catview-head">

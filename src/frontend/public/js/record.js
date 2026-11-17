@@ -2,7 +2,8 @@
 import { api } from './api.js';
 import { el, $, chipItem, keepFocus, swatch } from './dom.js';
 import { formatWon, formatAmountInput, parseAmount, addToAmount, formatSignedWon } from './lib/money.js';
-import { todayLocal, monthOf, shiftMonth, monthTitle, dayLabel, longDayLabel } from './lib/date.js';
+import { todayLocal, monthOf, shiftMonth, monthTitle, dayLabel, longDayLabel, shiftDay, dateSummaryLabel } from './lib/date.js';
+import { isTouchType } from './lib/input-mode.js';
 import { validateTransaction, AMOUNT_RANGE_TEXT } from './lib/validate.js';
 import { stableVizMap, vizOf } from './lib/viz.js';
 import { loadCategories, activeCategories, categoryStatus, categoryError, categoryResponse } from './categories.js';
@@ -41,10 +42,35 @@ const errMsg = (e) => (e && e.message) || '요청을 처리하지 못했어요.'
 // 토스트: #flash 는 글자 전용, 되돌리기 버튼은 형제 #flash-undo. 되돌리기는 직전 저장·수정 1건만.
 const FLASH_MS = 4000;
 const UNDO_MS = 5000;
+const CATS_KEY = 'mb-month-cats';
 let flashTimer = null;
 let undo = null; // { plan, label } | null
 let undoing = false;
 let toastPaused = false; // 포인터가 위에 있거나 포커스가 안에 있음
+// 마지막 포인터 입력이 터치·펜이면 true (initRecord 의 pointerdown 리스너가 갱신). 키보드만 쓰면 false 로 시작한다.
+let touchMode = false;
+/**
+ * 저장·되돌리기가 끝난 뒤 포커스를 둘 곳. 터치 모드면 저장 버튼(숫자 패드가 내려간다, 화면은 안 움직인다), 아니면 금액 칸.
+ * 금액 칸이 아직 포커스를 갖고 있으면 blur 도 한다(iOS 에서 버튼으로 옮겨도 키보드가 남는 경우 대비).
+ */
+function focusEntry() {
+  if (!touchMode) { $('amount').focus(); return; }
+  const a = document.activeElement;
+  if (a && a !== $('save-btn') && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) a.blur();
+  $('save-btn').focus({ preventScroll: true });
+}
+const LANDED_MS = 1200;
+/** 거래 행의 수정 버튼으로 돌아간다(가운데로 스크롤 + 포커스 + 잠깐 강조). 행이 없으면 월 제목. 코드 스크롤이라 출렁임은 없다 */
+function landOnRow(id) {
+  const row = id === null || id === undefined ? null : [...$('tx-list').querySelectorAll('.tx-row')].find((li) => li.dataset.id === String(id));
+  const target = (row && row.querySelector('.tx-edit')) || $('month-title-h');
+  target.scrollIntoView({ block: row ? 'center' : 'start' });
+  target.focus({ preventScroll: true });
+  if (row) {
+    row.classList.add('tx-row--landed');
+    setTimeout(() => row.classList.remove('tx-row--landed'), LANDED_MS);
+  }
+}
 function armFlashTimer() {
   clearTimeout(flashTimer);
   if (undo && toastPaused) return;
@@ -58,7 +84,7 @@ function hideUndo() {
   b.hidden = true;
   b.disabled = false;
   b.removeAttribute('aria-label');
-  if (hadFocus) $('amount').focus(); // 포커스가 body 로 가지 않게
+  if (hadFocus) focusEntry(); // 포커스가 body 로 가지 않게
 }
 function flash(text, undoInfo = null) {
   const f = $('flash');
@@ -85,20 +111,23 @@ async function onUndo() {
   b.disabled = true;
   clearTimeout(flashTimer);
   try {
+    let created = null;
     try {
       if (plan.method === 'DELETE') await api.deleteTransaction(plan.id);
+      else if (plan.method === 'POST') created = await api.createTransaction(plan.body); // 삭제 되돌리기: 새 id 로 다시 만든다
       else await api.updateTransaction(plan.id, plan.body);
     } catch (e) {
       if (!(plan.method === 'DELETE' && e.status === 404)) throw e; // 이미 지워진 생성 기록은 되돌린 것과 같다
     }
     if (plan.month) state.month = plan.month;
     flash('되돌렸어요');
-    if (hadFocus) $('amount').focus();
+    if (hadFocus && !created) focusEntry();
     await refreshAll();
     notifyChanged();
+    if (hadFocus && created) landOnRow(created.id); // 되살린 행으로
   } catch (e) {
-    flash(undoFailText(e));
-    if (hadFocus) $('amount').focus();
+    flash(undoFailText(e, plan.method));
+    if (hadFocus) focusEntry();
   } finally {
     undoing = false;
   }
@@ -260,8 +289,21 @@ function onCategoriesChanged(ev) {
   if (dataChanged) refreshAll(); // 이름이 바뀐 거래·집계·추천을 다시 받는다
   else if (state.txs.length) renderTxList(state.txs); // 목록 행의 견본 번호만 다시
 }
+/** 날짜 요약 글자와 빠른 선택 버튼의 눌림 상태를 state.date 에 맞춘다 (날짜가 바뀌는 모든 곳에서 부른다) */
 function renderDateSummary() {
-  $('date-summary').textContent = state.date === today() ? '오늘' : (dayLabel(state.date, today()) || state.date);
+  const t = today();
+  $('date-summary').textContent = dateSummaryLabel(state.date, t) || state.date;
+  $('date-today').setAttribute('aria-pressed', String(state.date === t));
+  $('date-yesterday').setAttribute('aria-pressed', String(state.date === shiftDay(t, -1)));
+}
+/** 빠른 선택(오늘·어제): 열린 달력 영역은 닫지 않는다 */
+function setQuickDate(date) {
+  if (!date) return;
+  state.date = date;
+  $('date').value = date;
+  $('date-error').textContent = '';
+  renderDateSummary();
+  updateResetBtn();
 }
 
 /** 빠른 금액 칩: 눌렀을 때 입력 값에 더한다. 1억을 넘으면 1억에서 멈추고 오류 문구를 보인다. */
@@ -332,6 +374,7 @@ async function onSubmit(ev) {
   submitting = true;
   btn.disabled = true;
   clearUndo();
+  let after = null; // 저장 뒤 포커스: 'entry'(터치 모드의 새 기록) | { row: id }(수정)
   try {
     const editing = state.editingId;
     const before = state.origTx;
@@ -341,7 +384,10 @@ async function onSubmit(ev) {
       : await api.createTransaction(v.value);
     const savedMonth = monthOf(saved && saved.date ? saved.date : v.value.date);
     state.month = savedMonth;
-    resetForm({ keepCategory: !editing });
+    // 마우스·키보드의 새 기록은 지금처럼 금액 칸. 터치는 저장 버튼이 다시 켜진 뒤(finally)에 옮긴다. 수정은 고친 행으로 간다
+    resetForm({ keepCategory: !editing, keepFocus: !editing && !touchMode });
+    if (editing) after = { row: editing };
+    else if (touchMode) after = 'entry';
     const plan = undoPlan(editing ? 'update' : 'create', before, saved, legacyBefore);
     flash(editing ? '수정했어요' : '저장했어요', plan && { plan, label: editing ? '방금 수정한 내용 되돌리기' : '방금 저장한 기록 되돌리기' });
     await refreshAll();
@@ -353,6 +399,8 @@ async function onSubmit(ev) {
     submitting = false;
     btn.disabled = false;
     updateSaveLabel();
+    if (after === 'entry') focusEntry();
+    else if (after) landOnRow(after.row);
   }
 }
 
@@ -533,7 +581,7 @@ function daySum(list) {
 
 function txRow(t, map) {
   const kind = KIND_TEXT[t.type];
-  const li = el('li', { class: 'tx-row row' });
+  const li = el('li', { class: 'tx-row row', 'data-id': String(t.id) });
   const edit = el('button', {
     type: 'button', class: 'tx-edit',
     'aria-label': `${kind} ${t.category} ${t.memo || ''} ${formatWon(t.amount)} 수정`.replace(/\s+/g, ' '),
@@ -565,13 +613,16 @@ let deleting = false;
 async function onDelete(t) {
   if (deleting || undoing) return;
   const label = `${t.category}${t.memo ? ` ${t.memo}` : ''} ${formatWon(t.amount)}`;
+  // 지금 활성인 카테고리의 거래만 확인창 없이 지우고 되돌리기를 준다. 사용 안 함 카테고리는 다시 만들 수 없어(POST 검증) 확인창을 묻고 되돌리기가 없다
+  const active = (activeCategories()[t.type] || []).includes(t.category);
   deleting = true;
   try {
-    if (!window.confirm(`${label} 기록을 삭제할까요?`)) return;
+    if (!active && !window.confirm(`${label} 기록을 삭제할까요?`)) return;
     clearUndo();
     await api.deleteTransaction(t.id);
     if (state.editingId === t.id) resetForm({ keepFocus: false });
-    flash('삭제했어요');
+    const plan = active ? undoPlan('delete', t) : null;
+    flash('삭제했어요', plan && { plan, label: '방금 삭제한 기록 되돌리기' });
     const rows = [...$('tx-list').querySelectorAll('.tx-edit')];
     const at = rows.findIndex((b) => b.closest('.tx-row') === document.activeElement.closest('.tx-row'));
     await refreshAll();
@@ -588,11 +639,18 @@ async function onDelete(t) {
 }
 
 let monthSeq = 0;
-async function loadMonth() {
+/** 월 카드 "다시 시도" 숨김: 포커스가 거기 있었으면 월 제목으로 (body 로 가지 않게) */
+function hideMonthRetry() {
+  const b = $('month-retry');
+  if (!b.hidden && document.activeElement === b) $('month-title-h').focus();
+  b.hidden = true;
+}
+async function loadMonth({ fromRetry = false } = {}) {
   const seq = ++monthSeq;
   const month = state.month;
   $('month-title-h').textContent = monthTitle(month) + (month === monthOf(today()) ? ' (이번 달)' : '');
   $('month-error').textContent = '';
+  if (!fromRetry) hideMonthRetry();
   try {
     const [txRes, sum, inc] = await Promise.all([
       api.listTransactions(month), api.summary(month), api.statsCategories(month, month, 'income'),
@@ -601,9 +659,16 @@ async function loadMonth() {
     state.txs = txRes.transactions || [];
     renderMonthSummary(sum, inc && inc.items);
     renderTxList(state.txs);
+    hideMonthRetry();
   } catch (e) {
-    if (seq === monthSeq) $('month-error').textContent = errMsg(e);
+    if (seq === monthSeq) { $('month-error').textContent = errMsg(e); $('month-retry').hidden = false; }
   }
+}
+async function onMonthRetry() {
+  const b = $('month-retry');
+  if (b.getAttribute('aria-disabled') === 'true') return;
+  b.setAttribute('aria-disabled', 'true'); // 진행 중에도 포커스는 유지
+  try { await loadMonth({ fromRetry: true }); } finally { b.removeAttribute('aria-disabled'); }
 }
 
 async function refreshAll() {
@@ -645,6 +710,8 @@ export function initRecord() {
   $('reset-btn').addEventListener('click', onResetInput);
   $('memo').addEventListener('keydown', (ev) => { if (ev.key === 'Escape') clearSuggestions(); });
   $('date').value = state.date;
+  $('date-today').addEventListener('click', () => setQuickDate(today()));
+  $('date-yesterday').addEventListener('click', () => setQuickDate(shiftDay(today(), -1)));
   $('date').addEventListener('change', (ev) => {
     if (ev.target.value) state.date = ev.target.value;
     renderDateSummary();
@@ -663,7 +730,20 @@ export function initRecord() {
   toast.addEventListener('pointerleave', () => { toastPaused = toast.contains(document.activeElement); armFlashTimer(); });
   toast.addEventListener('focusin', () => { toastPaused = true; if (undo) clearTimeout(flashTimer); });
   toast.addEventListener('focusout', (ev) => { if (!toast.contains(ev.relatedTarget)) { toastPaused = toast.matches(':hover'); armFlashTimer(); } });
-  $('cancel-edit-btn').addEventListener('click', () => resetForm());
+  $('cancel-edit-btn').addEventListener('click', () => {
+    const id = state.editingId;
+    resetForm({ keepFocus: false });
+    landOnRow(id); // 수정하던 행으로 (목록은 다시 받지 않는다)
+  });
+  $('month-retry').addEventListener('click', onMonthRetry);
+  // 카테고리 막대 블록: 기본 접힘, 펼침만 기억한다 (저장소 접근은 실패해도 접힘으로 둔다)
+  const catsBox = $('month-cats');
+  try { if (window.localStorage.getItem(CATS_KEY) === 'open') catsBox.open = true; } catch { /* 접힘 */ }
+  catsBox.addEventListener('toggle', () => {
+    try { if (catsBox.open) window.localStorage.setItem(CATS_KEY, 'open'); else window.localStorage.removeItem(CATS_KEY); } catch { /* 무시 */ }
+  });
+  // 마지막 포인터 입력의 종류(터치면 저장 뒤 숫자 패드를 내린다)
+  document.addEventListener('pointerdown', (ev) => { touchMode = isTouchType(ev.pointerType); }, true);
   $('month-prev').addEventListener('click', () => moveMonth(-1));
   $('month-next').addEventListener('click', () => moveMonth(1));
 

@@ -247,8 +247,9 @@ test.describe('C-R6~C-R7 헤더·내 정보', () => {
     expect(card.text).not.toMatch(/가입/);
     expect(card.val).toBe(account.email);
     expect(card.title).toBe(account.email);
-    expect(card.ell).toBe('ellipsis');
-    expect(card.nowrap).toBe('nowrap');
+    // UX 묶음 1(U9): 긴 이메일을 말줄임 없이 줄바꿈으로 전부 보인다 (64자 경우는 ux1.spec.js UX-29)
+    expect(card.ell).not.toBe('ellipsis');
+    expect(card.nowrap).not.toBe('nowrap');
     expect(near(card.rowH, 52)).toBe(true);
     // 이름 줄
     const nameRow = await page.evaluate(() => { const i = document.querySelector('#account-name').getBoundingClientRect(); const s = document.querySelector('#account-save').getBoundingClientRect(); return { sameRow: Math.abs(i.top - s.top) < 1.5 && Math.abs(i.height - s.height) < 1.5, gap: s.left - i.right, sRight: s.right }; });
@@ -804,7 +805,7 @@ test.describe('C-R24~C-R26 회귀·범위·스크린샷', () => {
   test('C-R25 변경 범위: src/backend·schema.sql·docs/api.md·tokens.css·components.css 변경 없음, 변경 파일은 허용 폴더 안', async ({}, testInfo) => {
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-    const tracked = git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend/db', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office', 'src/frontend/public/js/theme-init.js').trim();
+    const tracked = git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend/db', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office').trim(); // UX 묶음 1(U4): theme-init.js 는 theme-color 때문에 의도적으로 바뀐다(plan-ux1 4.7) -> 금지 목록에서 뺐다
     expect(tracked, `금지 파일 변경: ${tracked}`).toBe('');
     expect(git('ls-files', '--others', '--exclude-standard', '--', 'src/backend/db', 'src/frontend/office').trim(), '금지 폴더의 새 파일').toBe('');
     const changed = git('status', '--porcelain').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));

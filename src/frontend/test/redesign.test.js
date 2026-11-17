@@ -140,9 +140,10 @@ test('개선 A6·A7·A8: 세그먼트 선택 테두리, 격자선 중립색, 제
 
 test('개선 A9: 대시보드는 요청 종류별로 필요한 것만 다시 받는다', () => {
   const js = read('js/dashboard.js');
-  assert.equal((js.match(/loadInsights\(/g) || []).length, 1); // 호출은 loadAll 안 한 곳뿐
+  assert.equal((js.match(/loadInsights\(/g) || []).length, 1); // 실제 호출은 loadInsightsTracked 안 한 곳뿐 (U6: 결과를 실패 모음에 기록)
+  assert.equal((js.match(/loadInsightsTracked\(/g) || []).length, 3); // 정의 1 + loadAll 1 + 다시 시도 1
   const loadAll = js.match(/function loadAll\(reason\) \{[\s\S]*?\n\}/)[0];
-  assert.match(loadAll, /loadInsights\(state\.base, /);
+  assert.match(loadAll, /loadInsightsTracked\(motionFor\(reason, 'insights'\)\.fade\)/);
   const setRange = js.match(/function setRange\(n\) \{[\s\S]*?\n\}/)[0];
   assert.doesNotMatch(setRange, /loadInsights|loadCat\(/);
   assert.match(setRange, /loadMonthly\('range'\);\s*loadTrend\('range'\);/);

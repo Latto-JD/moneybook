@@ -138,3 +138,10 @@ export function balanceRate(income, balance) {
   if (bal < 0) return { direction: 'over', percent: pct, text: `지출이 수입보다 ${percentText(pct)}% 많아요` };
   return { direction: 'left', percent: pct, text: `수입의 ${percentText(pct)}%가 남았어요` };
 }
+
+/** 대시보드 상단 오류 문구: 실패 0개 '', 1개 그 문구, 2개 이상 "일부 내용을 불러오지 못했어요. " + 첫 실패 문구 */
+export function dashErrorText(messages) {
+  const list = (messages || []).filter(Boolean);
+  if (!list.length) return '';
+  return list.length === 1 ? list[0] : `일부 내용을 불러오지 못했어요. ${list[0]}`;
+}

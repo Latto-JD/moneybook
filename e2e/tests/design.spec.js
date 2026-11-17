@@ -941,16 +941,14 @@ test.describe('11.4 기록', () => {
     await expect(page.locator('#save-btn')).toHaveText('수정 저장 · 12,500원');
     await expect(page.locator('#memo')).toHaveValue('점심');
     await page.locator('#cancel-edit-btn').click();
-    // 삭제: confirm 취소 -> 유지, 확인 -> 삭제
+    // 삭제(UX 묶음 1 U3): 활성 카테고리 거래는 확인창 없이 바로 삭제 + [되돌리기] (사용 안 함 카테고리의 확인창은 ux1.spec.js UX-14)
     let msg = '';
     page.removeAllListeners('dialog');
-    page.once('dialog', async (d) => { msg = d.message(); await d.dismiss(); });
-    await page.locator('.tx-row', { hasText: '양말' }).locator('.tx-del').click();
-    await expect(page.locator('#tx-list .tx-row')).toHaveCount(4);
-    expect(msg).toContain('삭제할까요');
-    page.once('dialog', (d) => d.accept());
+    page.on('dialog', async (d) => { msg = d.message(); await d.dismiss(); });
     await page.locator('.tx-row', { hasText: '양말' }).locator('.tx-del').click();
     await expect(page.locator('#flash')).toHaveText('삭제했어요');
+    await expect(page.locator('#flash-undo')).toBeVisible();
+    expect(msg).toBe('');
     await expect(page.locator('#tx-list .tx-row')).toHaveCount(3);
     await ctx.close();
   });

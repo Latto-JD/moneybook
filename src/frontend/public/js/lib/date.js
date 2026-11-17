@@ -71,6 +71,24 @@ export function monthShort(ym) {
   return `${Number(ym.slice(5, 7))}월`;
 }
 
+/** 날짜 이동: shiftDay('2026-03-01', -1) -> '2026-02-28'. 잘못된 입력이면 null. */
+export function shiftDay(dateStr, n) {
+  if (!isValidDate(dateStr) || !Number.isInteger(n)) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  const yy = t.getUTCFullYear();
+  if (yy < 1 || yy > 9999) return null;
+  return `${pad(yy, 4)}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
+}
+
+/** 날짜 입력 요약 글자: 오늘 '오늘', 어제 '어제', 그 밖은 '10월 19일 (월)'. 잘못된 날짜면 ''. (목록 머리줄의 dayLabel 과 별개) */
+export function dateSummaryLabel(dateStr, today) {
+  if (!isValidDate(dateStr)) return '';
+  if (dateStr === today) return '오늘';
+  if (dateStr === shiftDay(today, -1)) return '어제';
+  return dayLabel(dateStr, today);
+}
+
 /** '2026-10-19' -> '10월 19일 (월)'. 오늘이면 '오늘'. */
 export function dayLabel(dateStr, today) {
   if (!isValidDate(dateStr)) return '';

@@ -274,14 +274,14 @@ test.describe('C-S3~S10 저장·수정 되돌리기', () => {
     await a.ctx.close();
   });
 
-  test('C-S6 삭제 뒤에는 "삭제했어요" 만, 되돌리기 버튼 없음', async ({ browser }, testInfo) => {
+  test('C-S6 삭제 뒤에는 "삭제했어요" + 삭제 되돌리기 버튼 (UX 묶음 1 U3 로 갱신: 활성 카테고리 거래는 삭제도 되돌릴 수 있다)', async ({ browser }, testInfo) => {
     const a = await openApp(browser, testInfo, { prepare: async (api) => { await expense(api, '식비', 3000, FIXED_TODAY, '지울것'); } });
     const { page } = a;
     await expect(page.locator('#tx-list')).toContainText('지울것');
     await page.locator('#tx-list .tx-del').first().click();
     await expect(flashText(page)).toHaveText('삭제했어요');
-    await expect(page.locator(UNDO)).toBeHidden();
-    expect(await page.locator(UNDO).evaluate((e) => e.hidden)).toBe(true);
+    await expect(page.locator(UNDO)).toBeVisible();
+    await expect(page.locator(UNDO)).toHaveAccessibleName('방금 삭제한 기록 되돌리기');
     await a.ctx.close();
   });
 
@@ -376,7 +376,8 @@ test.describe('C-S3~S10 저장·수정 되돌리기', () => {
     await expect(page.locator(UNDO)).toBeVisible();
     await page.locator('#tx-list .tx-del', { hasText: '삭제' }).first().click();
     await expect(flashText(page)).toHaveText('삭제했어요');
-    await expect(page.locator(UNDO)).toBeHidden();
+    // UX 묶음 1: 삭제도 되돌리기를 주므로 '사라짐'이 아니라 이전 저장의 버튼이 삭제 되돌리기로 바뀐다
+    await expect(page.locator(UNDO)).toHaveAccessibleName('방금 삭제한 기록 되돌리기');
     // 5) 다른 탭(API)에서 먼저 지운 거래: 생성 되돌리기는 성공(404 허용)
     const txE = await saveExpense(page, { amount: '5555', memo: '저장E' });
     expect((await json(api, 'DELETE', `/api/transactions/${txE.id}`)).status()).toBe(204);
@@ -772,7 +773,8 @@ test.describe('정적 검사', () => {
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
     // tokens.css·components.css 는 재검증 4(사용자 요청: 다크 금색 선, 초기화 아이콘)에서 의도적으로 바뀜 - design.spec C-D1 이 허용 차이를 줄 단위로 검사한다
-    const forbidden = ['src/backend/db/schema.sql', 'src/frontend/public/js/theme-init.js', 'src/frontend/office', 'docs/plan.md'];
+    // UX 묶음 1(U4): theme-init.js 는 theme-color 를 맞추도록 의도적으로 바뀐다(plan-ux1 4.7) -> 금지 목록에서 뺀다
+    const forbidden = ['src/backend/db/schema.sql', 'src/frontend/office', 'docs/plan.md'];
     const existing = forbidden.filter((p) => existsSync(join(ROOT, p)));
     expect(git('status', '--porcelain', '--', ...existing).trim(), `금지 파일 변경: ${existing}`).toBe('');
     expect(git('diff', '--name-only', '5a0689d', '--', ...existing).trim(), `1단계 커밋 이후 금지 파일 변경: ${existing}`).toBe('');

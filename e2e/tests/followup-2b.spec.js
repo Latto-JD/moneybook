@@ -198,7 +198,8 @@ test.describe('재검증 3 저장 버튼 포커스', () => {
     expect(m.fv).toBe(true);
     expect(m.shadow, '포커스 링 box-shadow 에 --color-focus(라이트)').toContain('rgb(6, 88, 171)');
     expect(m.y - before, '저장 버튼 포커스로 페이지가 크게 튀지 않음').toBeLessThan(m.max - before - 20 > 0 ? 400 : 400);
-    expect(m.y, '문서 끝까지 튀지 않음').toBeLessThan(Math.max(m.max - 20, 1));
+    // UX 묶음 1(U1): 날짜 빠른 선택 버튼 줄이 늘어 폼이 길어졌다. 저장 버튼 보이려는 정상 스크롤이 문서 끝 근처가 되므로 여유를 20px -> 5px 로 줄인다
+    expect(m.y, '문서 끝까지 튀지 않음').toBeLessThan(Math.max(m.max - 5, 1));
     const b = await rect(page, '#save-btn'); const tb = await rect(page, '.tabbar');
     expect(b.b).toBeLessThanOrEqual(tb.t + 0.5);
     await page.screenshot({ path: join(testInfo.outputDir, `save-focus-${w}.png`) });

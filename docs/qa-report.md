@@ -1407,3 +1407,101 @@ frontend 가 만든 폰트 표는 전달받지 못해(메시지에 파일 위치
 - T3-2 tablet-768 단독 8회: 모두 최대 |ty| 0.000.
 - CPU 부하(코어 수만큼 점유 프로세스) 아래 mobile-360 C-S2 + T3-2 + T3-4 3회 반복: 9건 모두 통과.
 - 정리: 임시 서버·폴더 삭제, 스크린샷 PNG 되돌림, 소스 수정·커밋 없음.
+
+
+---
+
+# UX 묶음 1 QA (plan-ux1: U1·U2·U3·U4·U5·U6·U9·U14)
+
+검증일 2026-11-17 / 대상: 커밋 전 작업 트리(`af0e339` 위 변경) / 환경: 임시 PGlite dev 서버(`DB_DRIVER=pglite QA_TOOLS=true COOKIE_SECURE=false TRUST_PROXY=true`, 포트 3000), 시드 사용자 포함, Playwright chromium, mobile-360(hasTouch)·tablet-768.
+
+## 요약
+
+| 구분 | 통과 | 실패 | 사용자 확인 |
+|---|---|---|---|
+| UX-01~UX-31 (자동) | 31 | 0 | - |
+| 그 중 실제 폰 확인이 추가로 필요 | - | - | 2건(아래) |
+| 구현 결함 | - | 0 | - |
+
+- 새 e2e `e2e/tests/ux1.spec.js` 31개 시험: mobile-360 31 통과, tablet-768 28 통과 + 3 skip(UX-23·27·31 은 360 전용). 터치 시험은 tablet 에서도 hasTouch 컨텍스트를 따로 만들어 `tap()` 을 쓴다.
+- 전체 e2e(최종 실행): 936 통과, 56 skip, 1 실패. 실패 1건은 C-H24 출렁임(no-preference)이고 단독 재실행에서 통과했다(타이밍에 민감한 기존 불안정 시험, UX 묶음 1 과 무관). 갱신 전 1차 실행은 815 통과 / 63 실패(아래 갱신 표의 원인).
+- 단위 `npm test`: 391 통과, 0 실패.
+- 구현 결함: 발견하지 못했다. 시험 설계로 확인한 관찰 사항 3건은 "참고"에 적었다.
+
+## 사용자 확인 필요 (자동 시험 불가)
+
+| 항목 | 확인할 것 |
+|---|---|
+| UX-01/02 의 "숫자 패드가 내려감" | 자동 시험은 포커스가 `#save-btn` 으로 가고 입력 요소 포커스가 없음까지만 확인했다. 실제 iOS Safari·Android Chrome 에서 가상 키보드가 내려가는지는 폰에서 확인 필요(plan 7.4). |
+| UX-27 홈 화면 실행 | manifest·아이콘 파일·크기·태그는 자동 확인. 홈 화면에 추가했을 때 아이콘·이름 "가계부"·주소창 없는 화면, 다크 모드 상단 막대 색은 폰에서 확인 필요. |
+
+## 기준별 결과 (모두 실행해 확인, ux1.spec.js)
+
+| ID | 결과 | 근거 요약 |
+|---|---|---|
+| UX-01 | 통과 | 터치 tap 입력·저장 후 activeElement=`#save-btn`, input/textarea 아님, scrollY 차 ≤2px |
+| UX-02 | 통과 | 금액 칸 tap 뒤 Enter 저장도 `#save-btn` |
+| UX-03 | 통과 | 마우스 클릭 저장, 키보드만 저장 모두 `#amount` |
+| UX-04 | 통과 | "저장했어요", 접근 이름 "방금 저장한 기록 되돌리기", Shift+Tab 1회로 `#flash-undo`, 포커스 없으면 약 5초 뒤 숨김, 포커스 중 6.5초 후에도 유지 |
+| UX-05 | 통과 | 터치 되돌리기 -> `#save-btn`, 마우스·키보드 -> `#amount` |
+| UX-06 | 통과 | 터치 저장 뒤 `:focus-visible` false. 키보드 Tab 도착 시 true + box-shadow 링(이 앱 링은 outline 이 아니라 box-shadow) |
+| UX-07 | 통과 | 터치로 금액 없이 저장(save-btn 은 aria-disabled 라 `tap({force:true})`) -> 오류 문구 + `#amount` 포커스 |
+| UX-08 | 통과 | 마우스·터치 모두: 20건 달의 맨 아래쪽 행(`m0`) 수정 저장 -> 같은 `data-id` 행 `.tx-edit` 포커스, 탭바에 가리지 않음, 저장 영역과 겹침 없음, "7,777원" 표시 |
+| UX-09 | 통과 | 수정 취소 -> 같은 행 포커스, 취소 뒤 API 요청 0건 |
+| UX-10 | 통과 | 다른 달(9월)로 옮겨 저장 -> 9월 목록 + 그 행 포커스. 9월 응답을 빈 목록으로 가로채면 `#month-title-h`. body 로 가지 않음 |
+| UX-11 | 통과 | 이력(막대 -> 이력 행)에서 연 수정도 같은 행으로. reduce 모션에서 행이 화면 안, 강조 클래스는 3초 안에 제거 |
+| UX-12 | 통과 | dialog 0회, 행 사라짐, "삭제했어요" + 되돌리기(접근 이름 "방금 삭제한 기록 되돌리기"), 포커스는 같은 자리 다음 행. 마지막 행은 새 마지막 행, 목록이 비면 `#month-title-h`(이 규칙은 기존 동작 그대로) |
+| UX-13 | 통과 | 되돌리기 더블클릭에도 POST 1회, 같은 type·amount·category·memo·date 1건 복원, 건수·`/api/summary` 삭제 전과 동일, 포커스는 되살린 행 `.tx-edit`, "되돌렸어요", 대시보드 KPI 지출 합계 반영 |
+| UX-14 | 통과 | 사용 안 함 카테고리 거래: confirm 뜸, 취소 시 유지, 확인 시 삭제 + 되돌리기 없음 |
+| UX-15 | 통과 | POST 400 가로채기 -> "되살리지 못했어요. 다시 입력해 주세요"(재검증: 문구 변경 반영), 목록 그대로, 더블클릭에도 POST 1회 |
+| UX-16 | 통과 | 9월 거래 삭제 후 10월로 이동해 되돌리기 -> 9월로 이동해 목록에 복원 |
+| UX-17 | 통과 | 처음 오늘 pressed + "날짜: 오늘". 어제 누르면 pressed 교체 + "날짜: 어제", 저장 date=2026-10-18. 시계 고정 경계: 2027-03-01 -> 02-28, 2028-03-01 -> 02-29(윤년), 2027-01-01 -> 2026-12-31, 저장 date 도 확인 |
+| UX-18 | 통과 | `#date` 로 어제·오늘·다른 날 선택 시 pressed 상태 맞음, 다른 날 요약 "10월 14일 (수)", 빠른 선택은 열린 details 를 닫지 않음, 목록 머리줄 형식 그대로(`dayLabel` 은 diff 에서 추가만 있음) |
+| UX-19 | 통과 | 어제 선택 시 초기화 아이콘 표시, 초기화하면 오늘, 수정 시작 시 거래 날짜에 맞게 어제/둘 다 false, 수정 취소 후 오늘. 버튼 높이 ≥44, 접근 이름·묶음 이름 확인 |
+| UX-20 | 통과 | 새 저장소에서 `#month-cats` 닫힘, 막대 숨김. 거래 12건, 첫 행 문서 위치: **360px 접힘 1045 / 펼침 1262, 768px 접힘 1036 / 펼침 1252**(접으면 약 215px 위). 접힘이어도 첫 행은 360x740 첫 화면 밖(1045px)이다 |
+| UX-21 | 통과 | 펼침 -> `localStorage['mb-month-cats']==='open'`(토글 이벤트를 poll 로 기다림), 새로고침 후 펼침. 접으면 키 삭제, 새로고침 후 접힘 |
+| UX-22 | 통과 | 요약 줄 높이 ≥44, Enter·Space 로 여닫힘, 펼친 채 막대 -> 이력 -> 뒤로 시 같은 막대(`data-hist-cat`)에 포커스 |
+| UX-23 | 부분 통과 | 펼치고 접은 뒤 터치 스크롤 시 콘솔 오류 0, 행 transform 형태 정상(자체 시험). 기존 `spring.spec.js` 전부 통과(전체 실행). 펼침·접힘 직후 행 출렁임 위치 어긋남 자체를 재는 시험은 만들지 못했다(필요하면 후속) |
+| UX-24 | 통과 | 월 목록 500 가로채기 -> `#month-error` + `#month-retry`, 풀고 누르면 목록, 버튼 숨김, 포커스 `#month-title-h` |
+| UX-25 | 통과 | insights·monthly 실패 -> "일부 내용을 불러오지 못했어요. …" 1개 + `#dash-retry`, 누르면 요청 증가분 insights 1·monthly 1·categories 0·category-monthly 0, 성공하면 문구·버튼 숨김 |
+| UX-26 | 통과 | 실패 1개는 "일부" 없는 문구, 다시 시도 뒤 `#kpi`·`#chart-monthly` 에 `data-motion` 없음(no-preference 모션 켠 상태), 실패 뒤 달 이동으로 모두 성공하면 문구·버튼 없음 |
+| UX-27 | 통과 | `/manifest.json` 200, JSON, standalone, start_url "/", 아이콘 192·512·maskable 512 모두 200 `image/png` 이고 PNG 헤더 크기 일치. index·login 에 manifest 링크, theme-color, apple-touch-icon 180x180 PNG(200) |
+| UX-28 | 통과 | 라이트/다크 전환 시 `meta[name=theme-color]` == `--color-bg` 계산값, 다크 저장 후 새로고침도 다크 값, 콘솔 오류·CSP 위반 0, `public/icons/` 파일 수 HEAD 와 같음 |
+| UX-29 | 통과 | 64자 이메일: `text-overflow` != ellipsis, 전체 글자 표시(scrollWidth ≤ clientWidth), 가로 스크롤 없음(360) |
+| UX-30 | 통과 | `npm test` 391 통과. e2e 전체 936 통과 / 1 실패(C-H24, 단독 재실행 통과) / 56 skip(기존 skip 포함) |
+| UX-31 | 통과 | 금지 영역(src/backend, docs/api.md, vercel.json, schema.sql, tokens.css, components.css, lib/spring.js, lib/motion.js) 변경 0, 변경 파일 모두 허용 경로. |
+
+## 갱신한 기존 e2e 와 이유 (모두 의도된 변경, 결함 아님)
+
+| 파일 | 시험 | 원인 / 갱신 |
+|---|---|---|
+| `category-history.spec.js` | C-H10~C-H25, T1-1~T2-4 (mobile·tablet 각 23개) | `#month-cats` 기본 접힘이라 막대 버튼이 안 보임. 열기 도우미로 `openUi` 에서 `localStorage['mb-month-cats']='open'` 을 addInitScript 로 미리 넣음 |
+| `frontend.spec.js` C29, `design.spec.js` C-D25 (mobile·tablet) | 삭제 시 confirm("삭제할까요") 기대 | 활성 카테고리 거래는 확인창 없이 삭제 + 되돌리기(U3). dialog 가 뜨지 않고 "삭제했어요" + `#flash-undo` 보임으로 기대값 변경. 사용 안 함 카테고리의 confirm 은 ux1 UX-14 가 검증 |
+| `followup-2.spec.js` C-S6, C-S8(4단계) | 삭제 뒤 되돌리기 버튼 없음 / 삭제 시 이전 버튼 사라짐 | 삭제 되돌리기 도입. C-S6 는 버튼 보임 + 접근 이름 "방금 삭제한 기록 되돌리기", C-S8 4단계는 이전 저장 버튼이 삭제 되돌리기 버튼으로 바뀜을 확인 |
+| `followup-2.spec.js` C-S22, `redesign.spec.js` C-R25 | `theme-init.js` 변경 금지 | plan-ux1 4.7 에서 theme-color 를 맞추도록 `theme-init.js` 를 고치게 되어 있음 -> 금지 목록에서 제외 |
+| `redesign.spec.js` C-R7 (mobile·tablet) | 이메일 `ellipsis`·`nowrap` | U9 로 줄바꿈 표시. 기대값을 `not ellipsis`, `not nowrap` 으로 변경 |
+| `followup-2b.spec.js` "Tab 으로 #save-btn" (mobile-360) | `scrollY < max-20` | 날짜 빠른 선택 줄 추가로 폼이 길어져 정상 스크롤이 문서 끝(390) 가까이(379)까지 감. 의도(끝까지 튀지 않음)는 유지하되 여유를 20px -> 5px 로 줄임. 약해진 기준이므로 reviewer 가 판단할 것 |
+| `playwright.config.js` | tablet 대상 목록 | `ux1` 추가 |
+
+예상했으나 실제로는 깨지지 않은 것: `dashboard-ui.spec.js:371`, `design.spec.js:299`, `categories-ui`·`improvements`·`redesign` 의 `#month-cats` 의존 부분, 날짜 요약 "어제" 시험, 대시보드 오류 문구 시험, `#amount` 포커스 시험(수정 후 포커스를 보던 시험도 포함) 모두 갱신 없이 통과.
+
+## 참고 (결함은 아님)
+
+1. 카테고리 막대를 접어도 거래 첫 행이 360x740 첫 화면 안에 들어오지 않는다(문서 위치 1045px, 12건 기준). 접힘의 이득은 약 215px 절약이다. 기대한 "목록이 바로 보임" 효과가 부족할 수 있으니 필요하면 폼 높이 쪽을 별도로 검토.
+2. 삭제 후 포커스는 기존 규칙대로 마지막 행을 지우면 이전 행으로 가고, 목록이 비었을 때만 월 제목으로 간다(plan 4.3 표현 "없으면 월 제목"과는 같은 의미).
+3. C-H24 출렁임(no-preference)은 전체 실행에서 1회 실패, 단독 재실행에서 통과 — 부하에 민감한 기존 시험.
+
+## 실행한 명령
+
+```
+# 서버: DB_DRIVER=pglite QA_TOOLS=true COOKIE_SECURE=false TRUST_PROXY=true PGLITE_DIR=<임시> PORT=3000 node src/backend/scripts/dev-server.js  (migrate + seed 후)
+cd e2e && SEED_EMAIL=seed-ui@example.com SEED_PASSWORD=... SEED_TODAY=2026-10-19 BASE_URL=http://localhost:3000 TRUST_PROXY=true QA_AUX_PORT_BASE=3520 \
+  npx playwright test --project=mobile-360 --project=tablet-768
+  # 1차(갱신 전): 815 통과 / 63 실패 / 53 skip.  최종: 936 통과 / 1 실패(C-H24, 재실행 통과) / 56 skip
+npx playwright test tests/ux1.spec.js   # 59 통과 + 3 skip
+npm test                                 # 391 통과
+```
+
+정리: 서버 종료, 임시 폴더 삭제, 시험이 덮어쓴 `docs/qa-shots-*` PNG 는 `git checkout` 으로 되돌림. 커밋하지 않음.
+
+재검증(삭제 되돌리기 실패 문구 변경): UX-15 와 followup-2.spec.js(C-S 계열, DELETE/PUT 문구 불변 확인 포함)를 mobile-360·tablet-768 에서 실행, 34 통과 / 6 skip / 0 실패.

@@ -381,6 +381,8 @@ async function openUi(browser, testInfo, { user, scheme = 'light', motion = 'red
     if (r.url().includes('/api/category-history') && r.status() === 400) { const t = await r.text().catch(() => ''); if (t.includes('"cursor"')) cursor400.push(t); }
   });
   await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(e.violatedDirective)); });
+  // UX 묶음 1(U5): 카테고리 막대 블록은 기본 접힘이다. 이 파일은 막대를 누르는 시험이라 저장소에 '펼침'을 미리 넣어 연다.
+  await page.addInitScript(() => { try { localStorage.setItem('mb-month-cats', 'open'); } catch { /* 무시 */ } });
   if (init) await page.addInitScript(init);
   await page.goto('/#record');
   await expect(page.locator('#user-name')).toBeVisible();

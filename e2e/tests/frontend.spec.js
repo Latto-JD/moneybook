@@ -544,17 +544,14 @@ test.describe('C29 기록 입력', () => {
     await page.locator('#save-btn').click();
     await expect(page.locator('#flash')).toHaveText('수정했어요');
     await expect(page.locator('#tx-list .tx-row')).toContainText('4,500원');
-    // 삭제: confirm 취소
+    // 삭제(UX 묶음 1 U3): 활성 카테고리 거래는 확인창 없이 바로 지우고 [되돌리기]를 준다 (사용 안 함 카테고리의 확인창은 ux1.spec.js UX-14)
     let msg = '';
     page.removeAllListeners('dialog');
-    page.once('dialog', async (d) => { msg = d.message(); await d.dismiss(); });
-    await page.locator('.tx-del').click();
-    await expect(page.locator('#tx-list .tx-row')).toHaveCount(1);
-    expect(msg).toContain('삭제할까요');
-    // 삭제: 확인
-    page.once('dialog', (d) => d.accept());
+    page.on('dialog', async (d) => { msg = d.message(); await d.dismiss(); });
     await page.locator('.tx-del').click();
     await expect(page.locator('#flash')).toHaveText('삭제했어요');
+    await expect(page.locator('#flash-undo')).toBeVisible();
+    expect(msg).toBe('');
     await expect(page.locator('#tx-list .tx-row')).toHaveCount(0);
     await expect(page.locator('#tx-list')).toContainText('아직 기록이 없어요');
     await ctx.close();
