@@ -62,6 +62,10 @@ create index if not exists categories_user_type_sort_idx on categories (user_id,
 alter table categories add column if not exists color smallint
   check (color is null or color between 1 and 12);
 
+-- v6: 지출 카테고리 월 예산(원). null = 예산 없음. 매달 같은 값. 추가 전용, 재실행해도 아무 일도 하지 않는다.
+alter table categories add column if not exists budget integer
+  check (budget is null or budget between 1 and 100000000);
+
 -- 기본 세트: 카테고리 행이 하나도 없는 사용자에게만 넣는다. (재실행해도 사용자가 바꾼 이름·상태를 되살리지 않는다)
 -- 목록은 src/backend/lib/categories.js 의 DEFAULT_CATEGORIES 와 같아야 한다 (db.test.js 가 확인).
 insert into categories (user_id, type, name, name_key, sort_order, color)

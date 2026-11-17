@@ -288,7 +288,8 @@ test.describe('CC UI', () => {
     // 행 맨 앞
     const labels = await row(page, '여행').locator('.cat-actions button').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
     expect(labels[0]).toBe('여행 색 바꾸기, 지금 주황·X 교차');
-    expect(labels).toHaveLength(3);
+    expect(labels).toHaveLength(4); // plan-budget: 색, 예산, 이름 바꾸기, 사용 안 함
+    expect(labels[1]).toBe('여행 예산 정하기');
     await btn.click();
     const group = row(page, '여행').locator('[role="radiogroup"]');
     await expect(group).toHaveAccessibleName('여행 색');

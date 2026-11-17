@@ -41,7 +41,7 @@ test('C-C6 가입 직후: 기본 세트 12행, expense/income 은 기존 목록�
   assert.deepEqual(r.json.income, DEFAULT_CATEGORIES.income);
   assert.equal(r.json.items.length, 12);
   assert.ok(r.json.items.every((i) => i.active === true && i.usedCount === 0));
-  assert.deepEqual(Object.keys(r.json.items[0]).sort(), ['active', 'color', 'id', 'name', 'sortOrder', 'type', 'usedCount']);
+  assert.deepEqual(Object.keys(r.json.items[0]).sort(), ['active', 'budget', 'color', 'id', 'name', 'sortOrder', 'type', 'usedCount']);
   assert.deepEqual(r.json.items.map((i) => i.type), [...Array(8).fill('expense'), ...Array(4).fill('income')]);
   assert.equal((await app.db.query('select count(*)::int n from categories where user_id = $1', [u.id])).rows[0].n, 12);
 });
@@ -364,7 +364,7 @@ test('PATCH 검증: 필드 없음/타입 오류는 400, 검사 순서(400 이 40
   const cat = await find(u, 'expense', '식비');
   const none = await patchCat(u, cat.id, {});
   assert.equal(none.status, 400);
-  assert.equal(none.json.error.message, 'name, active, color 중 하나는 보내 주세요.');
+  assert.equal(none.json.error.message, 'name, active, color, budget 중 하나는 보내 주세요.');
   assert.equal(none.json.error.fields, undefined);
   for (const body of [{ active: 'true' }, { active: 1 }, { active: null }, { name: null }, { name: '' }, { name: 5 }, { name: '가'.repeat(16) }]) {
     const r = await patchCat(u, cat.id, body);

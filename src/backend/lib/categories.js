@@ -46,6 +46,7 @@ export function toCategory(row, usedCount = 0) {
     sortOrder: Number(row.sort_order),
     usedCount: Number(usedCount),
     color: row.color == null ? null : Number(row.color),
+    budget: row.budget == null ? null : Number(row.budget),
   };
 }
 
@@ -84,7 +85,7 @@ const byOrder = (a, b) => a.sort_order - b.sort_order || koCompare(a.name, b.nam
 
 // 사용자의 카테고리 행 전체 (지출 먼저, 유형 안에서 sortOrder 순). 행이 0개면 기본 세트를 만든다.
 export async function loadUserCategories(db, userId) {
-  const select = () => db.query('select id, type, name, active, sort_order, color from categories where user_id = $1', [userId]);
+  const select = () => db.query('select id, type, name, active, sort_order, color, budget from categories where user_id = $1', [userId]);
   let { rows } = await select();
   if (!rows.length) {
     await ensureDefaults(db, userId);

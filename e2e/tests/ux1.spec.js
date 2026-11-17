@@ -671,7 +671,7 @@ test.describe('회귀', () => {
     const files = out.split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));
     const banned = files.filter((f) => /^src\/backend\//.test(f) || /(^|\/)docs\/api\.md$/.test(f) || /vercel\.json$/.test(f) || /schema\.sql$/.test(f) || /css\/(tokens|components)\.css$/.test(f) || /js\/lib\/(spring|motion)\.js$/.test(f));
     // plan-category-color: 카테고리 색 기능의 변경 파일은 ux1 금지 영역 검사에서 제외한다
-    const COLOR_FILES = /^(docs\/api\.md|src\/backend\/(categories\/routes\.js|lib\/categories\.js|db\/schema\.sql|test\/categories\.test\.js|test\/category-color\.test\.js)|src\/frontend\/public\/css\/(tokens|components)\.css)$/;
+    const COLOR_FILES = /^(docs\/api\.md|src\/backend\/(categories\/routes\.js|lib\/categories\.js|db\/schema\.sql|test\/categories\.test\.js|test\/category-color\.test\.js|test\/category-budget\.test\.js)|src\/frontend\/public\/css\/(tokens|components)\.css)$/;
     expect(banned.filter((f) => !COLOR_FILES.test(f))).toEqual([]);
     const allowed = /^(src\/frontend\/(public\/|test\/)|e2e\/|docs\/|design_handoff_moneybook\/|README\.md$)/;
     expect(files.filter((f) => !allowed.test(f) && !COLOR_FILES.test(f))).toEqual([]);

@@ -184,7 +184,7 @@ test.describe('재검증 4 다크 금색 선, 라이트 불변', () => {
     expect(darkBlock.match(/--color-focus:\s*#7DB6FE/gi)?.length, '포커스 링 색 불변').toBeGreaterThanOrEqual(2);
     // 라이트 블록(:root {...} 시작~다크 미디어 직전)은 직전 커밋과 --color-* 값이 같다(신규 field-line 두 줄만 추가)
     const { execFileSync } = await import('node:child_process');
-    const old = execFileSync('git', ['show', 'HEAD:src/frontend/public/css/tokens.css'], { cwd: resolve(HERE, '..', '..'), encoding: 'utf8' }).replace(/\r\n/g, '\n');
+    const old = execFileSync('git', ['show', '17bc134:src/frontend/public/css/tokens.css'], { cwd: resolve(HERE, '..', '..'), encoding: 'utf8' }).replace(/\r\n/g, '\n');
     const oldLight = old.slice(old.indexOf(':root {'), old.indexOf('@media (prefers-color-scheme: dark)'));
     const props = (b) => Object.fromEntries([...b.matchAll(/(--[a-z0-9-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
     const [pn, po] = [props(lightBlock), props(oldLight)];

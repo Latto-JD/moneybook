@@ -6,6 +6,7 @@ import { currentFormType } from './record.js';
 import { openHistory, returnTarget, takeHistoryFocus } from './history.js';
 import { stableVizMap, vizOf, vizName, VIZ_COUNT } from './lib/viz.js';
 import { loadCategories, categoryResponse, categoryStatus, categoryError } from './categories.js';
+import { budgetInputDisplay, parseBudgetInput, budgetDraft, categoryMeta, budgetButtonLabel, budgetSavedText } from './lib/budget-data.js';
 import {
   MAX_ACTIVE, TYPE_LABEL, splitItems, validateCategoryName, renameNote, disableConfirmText, limitText,
 } from './lib/categories-data.js';
@@ -14,6 +15,8 @@ const ui = {
   type: 'expense',
   renamingId: null,
   colorId: null, // 색 고르기 영역이 열린 카테고리 id (한 번에 한 행)
+  budgetId: null, // 예산 입력 행이 열린 카테고리 id (색·이름·예산 중 한 번에 한 행)
+  budgetDraft: '', // 예산 입력칸 값 (오류로 다시 그려도 유지)
   draft: '', // 이름 바꾸는 입력칸 값 (오류로 다시 그려도 유지)
   rowError: null, // { id, text }
   restoreId: null, // CATEGORY_INACTIVE 로 알게 된 복구 대상
@@ -50,7 +53,7 @@ let vizMap = new Map(); // 렌더마다 유형별 목록 순서(비활성 포함
 /** 이름 + "기록 N건". 기록이 있으면 버튼 하나가 되어 그 카테고리의 사용 이력을 연다 */
 function infoBlock(item) {
   const n = item.usedCount || 0;
-  const parts = [el('span', { class: 'cat-name' }, item.name), el('span', { class: 'cat-used' }, `기록 ${n}건`)];
+  const parts = [el('span', { class: 'cat-name' }, item.name), el('span', { class: 'cat-used' }, categoryMeta(item))];
   if (n === 0) {
     const info = el('div', { class: 'cat-info' });
     info.append(...parts);
@@ -73,11 +76,13 @@ function activeRow(item) {
   line.appendChild(infoBlock(item));
   const actions = el('div', { class: 'cat-actions' });
   actions.appendChild(colorButton(item));
+  if (item.type === 'expense') actions.appendChild(budgetButton(item));
   actions.appendChild(actionButton('이름 바꾸기', item.name, () => startRename(item)));
   actions.appendChild(actionButton('사용 안 함', item.name, () => disable(item)));
   line.appendChild(actions);
   li.appendChild(line);
   if (ui.colorId === item.id) li.appendChild(colorPicker(item));
+  if (ui.budgetId === item.id && item.type === 'expense') return budgetRow(li, item);
   li.appendChild(rowErrorEl(item.id));
   return li;
 }
@@ -96,6 +101,53 @@ function inactiveRow(item) {
   li.appendChild(line);
   if (ui.colorId === item.id) li.appendChild(colorPicker(item));
   li.appendChild(rowErrorEl(item.id));
+  return li;
+}
+
+/** "예산" 버튼 (지출 활성 행만). 열려 있으면 aria-expanded */
+function budgetButton(item) {
+  const b = el('button', {
+    type: 'button', class: 'btn btn--ghost btn--sm', 'data-budget-btn': item.id, 'aria-expanded': String(ui.budgetId === item.id),
+    'aria-label': budgetButtonLabel(item),
+  }, '예산');
+  b.addEventListener('click', () => toggleBudget(item));
+  return b;
+}
+
+/** 예산 인라인 입력 행 (라인 아래에 붙는다). 빈 칸으로 저장하면 예산을 지운다 */
+function budgetRow(li, item) {
+  const inputId = `catm-budget-${item.id}`;
+  const noteId = `${inputId}-note`;
+  li.appendChild(el('label', { for: inputId, class: 'visually-hidden' }, `${item.name} 월 예산(원)`));
+  const input = el('input', {
+    type: 'text', id: inputId, class: 'input', inputmode: 'numeric', enterkeyhint: 'done', autocomplete: 'off',
+    'aria-describedby': `${noteId} ${inputId}-error`,
+  });
+  input.value = ui.budgetDraft;
+  input.addEventListener('input', () => {
+    input.value = budgetInputDisplay(input.value);
+    ui.budgetDraft = input.value;
+  });
+  input.addEventListener('keydown', (ev) => {
+    if (ev.isComposing) return;
+    if (ev.key === 'Enter') { ev.preventDefault(); saveBudget(item, input); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); closeBudget(item); }
+  });
+  const row = el('div', { class: 'cat-rename cat-budget' });
+  row.appendChild(input);
+  row.appendChild(el('span', { class: 'cat-budget__unit', 'aria-hidden': 'true' }, '원'));
+  const save = el('button', { type: 'button', class: 'btn btn-primary btn--primary btn--sm', 'aria-label': `${item.name} 예산 저장` }, '저장');
+  save.addEventListener('click', () => saveBudget(item, input));
+  const cancel = el('button', { type: 'button', class: 'btn btn--ghost btn--sm', 'aria-label': `${item.name} 예산 정하기 취소` }, '취소');
+  cancel.addEventListener('click', () => closeBudget(item));
+  row.appendChild(save);
+  row.appendChild(cancel);
+  li.appendChild(row);
+  li.appendChild(el('p', { class: 'hint', id: noteId }, '비워 두고 저장하면 예산을 지워요'));
+  const err = rowErrorEl(item.id);
+  err.id = `${inputId}-error`;
+  li.appendChild(err);
+  if (ui.rowError && ui.rowError.id === item.id) input.setAttribute('aria-invalid', 'true');
   return li;
 }
 
@@ -220,7 +272,9 @@ function render() {
     : [el('li', { class: 'hint empty-line' }, `사용 안 함인 ${typeLabel} 카테고리가 없어요`)]));
   $('catm-name-label').textContent = `새 ${typeLabel} 카테고리 이름`;
   $('catm-restore').hidden = !ui.restoreId;
-  const ren = document.querySelector('.cat-rename input');
+  const ren = document.querySelector('.cat-rename:not(.cat-budget) input');
+  const bud = document.querySelector('.cat-budget input');
+  if (bud && document.activeElement === document.body) bud.focus();
   if (ren && document.activeElement === document.body) ren.focus();
 }
 
@@ -234,6 +288,7 @@ function toggleColor(item) {
   if (busy) return;
   const open = ui.colorId !== item.id;
   ui.colorId = open ? item.id : null;
+  ui.budgetId = null;
   ui.renamingId = null;
   ui.rowError = null;
   render();
@@ -271,9 +326,51 @@ async function pickColor(item, n) {
   }
 }
 
+function toggleBudget(item) {
+  if (busy) return;
+  if (ui.budgetId === item.id) { closeBudget(item); return; }
+  ui.budgetId = item.id;
+  ui.colorId = null;
+  ui.renamingId = null;
+  ui.budgetDraft = budgetDraft(item.budget);
+  ui.rowError = null;
+  render();
+  const input = $(`catm-budget-${item.id}`);
+  if (input) { input.focus(); input.select(); }
+}
+
+function closeBudget(item) {
+  ui.budgetId = null;
+  ui.rowError = null;
+  render();
+  rowButton(item.id, '예산')?.focus();
+}
+
+async function saveBudget(item, input) {
+  if (busy) return;
+  const v = parseBudgetInput(input.value);
+  if (!v.ok) { ui.rowError = { id: item.id, text: v.message }; render(); $(`catm-budget-${item.id}`)?.focus(); return; }
+  busy = true;
+  ui.rowError = null;
+  try {
+    await api.updateCategory(item.id, { budget: v.value });
+    ui.budgetId = null;
+    await refresh({ dataChanged: true });
+    setStatus(budgetSavedText(item.name, v.value));
+    rowButton(item.id, '예산')?.focus();
+  } catch (e) {
+    ui.rowError = { id: item.id, text: errText(e) };
+    render();
+    $(`catm-budget-${item.id}`)?.focus();
+  } finally {
+    busy = false;
+  }
+}
+
 function startRename(item) {
   if (busy) return;
   ui.colorId = null;
+  ui.budgetId = null;
   ui.renamingId = item.id;
   ui.draft = item.name;
   ui.rowError = null;
@@ -413,6 +510,7 @@ function setType(type) {
   ui.type = type;
   ui.renamingId = null;
   ui.colorId = null;
+  ui.budgetId = null;
   ui.rowError = null;
   ui.restoreId = null;
   $('catm-add-error').textContent = '';
@@ -454,6 +552,7 @@ export function initCategoryManager() {
       ui.type = back ? back.type : currentFormType();
       ui.renamingId = null;
       ui.colorId = null;
+      ui.budgetId = null;
       ui.rowError = null;
       ui.restoreId = null;
       setStatus('');

@@ -8,6 +8,8 @@ import { categoryResponse } from './categories.js';
 import { stableVizMap } from './lib/viz.js';
 import { todayLocal, monthOf, shiftMonth, monthTitle, trailingRange } from './lib/date.js';
 import { openHistory, takeHistoryFocus } from './history.js';
+import { renderBudgetCard } from './budget-card.js';
+import { budgetItems, buildBudgetCard } from './lib/budget-data.js';
 import { renderDonut, renderGroupedBars, renderBars } from './charts.js';
 import {
   dashErrorText, buildKpi, balanceRate, balanceLabel, summaryLabel, NO_PREV_TEXT, NO_PREV_ALL_TEXT, donutItemsFrom, groupDonutItems, trendCategories, defaultTrendCategory, seriesFor,
@@ -70,7 +72,7 @@ function renderTrend(motion = motionFor('chip', 'trend')) {
 
 // 요청 종류별 순서 번호: 더 최근 요청이 있으면 오래된 응답을 버린다.
 // 달 변경·탭 진입은 전부(loadAll), 기간(6/12개월) 변경은 월별·추이만, 보기(지출/수입) 변경은 카테고리·추이만 다시 받는다.
-const seqs = { monthly: 0, cat: 0, trend: 0 };
+const seqs = { monthly: 0, cat: 0, trend: 0, budget: 0 };
 // 실패한 요청 모음(종류 -> 문구). 같은 종류의 최신 요청이 성공하면 지우고, 달 이동·탭 진입(loadAll)은 비우고 새로 시작한다. 오래된 응답은 손대지 않는다.
 const failures = new Map();
 const failText = (e) => (e && e.message) || '데이터를 불러오지 못했어요.';
@@ -97,6 +99,26 @@ async function loadMonthly(reason) {
     succeed('monthly');
   } catch (e) {
     if (my === seqs.monthly) fail('monthly', e);
+  }
+}
+
+/** 예산 카드: 보기(지출/수입)와 무관하게 항상 지출 기준으로 따로 받는다. 예산이 없으면 요청하지 않고 숨긴다 */
+async function loadBudget() {
+  const my = ++seqs.budget;
+  const base = state.base;
+  const cats = categoryResponse();
+  if (!budgetItems(cats).length) {
+    renderBudgetCard(null);
+    succeed('budget');
+    return;
+  }
+  try {
+    const stats = await api.statsCategories(base, base, 'expense');
+    if (my !== seqs.budget) return;
+    renderBudgetCard(buildBudgetCard(categoryResponse(), stats), base, monthOf(todayLocal()), stableVizMap(categoryResponse().items, 'expense'));
+    succeed('budget');
+  } catch (e) {
+    if (my === seqs.budget) fail('budget', { message: '예산 사용액을 불러오지 못했어요.' });
   }
 }
 
@@ -155,6 +177,7 @@ function loadAll(reason) {
   renderErrors();
   loadInsightsTracked(motionFor(reason, 'insights').fade); // 인사이트는 달이 바뀔 때와 탭에 들어올 때만
   loadMonthly(reason);
+  loadBudget();
   loadTrend(reason, loadCat(reason));
 }
 
@@ -172,6 +195,7 @@ async function onRetry() {
   const jobs = [];
   if (failures.has('insights')) jobs.push(loadInsightsTracked(false));
   if (failures.has('monthly')) jobs.push(loadMonthly('retry'));
+  if (failures.has('budget')) jobs.push(loadBudget());
   if (failures.has('cat')) jobs.push(loadTrend('retry', loadCat('retry')));
   else if (failures.has('trend')) jobs.push(loadTrend('retry'));
   try { await Promise.allSettled(jobs); } finally { b.removeAttribute('aria-disabled'); }

@@ -1,6 +1,17 @@
-# API 계약 (v4.5)
+# API 계약 (v4.6)
 
-작성: backend / 기준: `docs/plan.md` v2.1 + `docs/plan-categories.md` + `docs/plan-theme-name.md` + `docs/plan-category-history.md` v1.1 + `docs/plan-category-color.md` / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+작성: backend / 기준: `docs/plan.md` v2.1 + `docs/plan-categories.md` + `docs/plan-theme-name.md` + `docs/plan-category-history.md` v1.1 + `docs/plan-category-color.md` + `docs/plan-budget.md` / 변경 시 backend가 수정 후 메인 세션에 알린다. frontend는 계약을 임의로 바꾸지 않는다.
+
+## 0G. v4.6 변경 요약 (카테고리 월 예산, 추가 전용, 운영 마이그레이션 필요 - v4.5 색과 같은 실행)
+
+| 구분 | 변경 | 호환 |
+|---|---|---|
+| 추가 | 카테고리 객체 `budget` (1~100000000 정수 또는 `null`). GET 목록 `items`, POST·PATCH 응답 모두 포함 (3A.1) | 응답 필드 추가라 호환 |
+| 추가 | `POST /api/categories`: 본문 `budget` 은 무시, 새 카테고리는 `null` (3A.3) | 요청 형식 불변 |
+| 추가 | `PATCH /api/categories/:id`: 본문 `budget`(정수 또는 `null`) 허용, `name`·`active`·`color`·`budget` 중 1개 이상 필요. 잘못된 값 400 `fields.budget`, 수입 카테고리에 숫자는 400 (3A.4) | 기존 요청은 그대로 동작 |
+| 스키마 | `categories.budget integer` nullable + check 1..100000000, 백필 없음 (8.7) | 구버전 코드는 열을 몰라도 동작. **새 코드는 열이 없으면 500 이므로 마이그레이션 먼저** (8.6 과 한 번에) |
+
+거래·집계·인사이트·이력 API 는 바뀌지 않는다. 사용액은 기존 `GET /api/stats/categories`(5.3)로 계산한다.
 
 ## 0F. v4.5 변경 요약 (카테고리 색, 추가 전용, 운영 마이그레이션 필요)
 
@@ -229,7 +240,7 @@ DB 연결 실패 시 **200** `{ "status": "ok", "db": "error" }` (프로세스�
 ### 3A.1 카테고리 객체
 
 ```json
-{ "id": "0b9e6c3a-6a0e-4d0f-9c55-3d6f1a2b7e10", "type": "expense", "name": "식비", "active": true, "sortOrder": 0, "usedCount": 21, "color": 1 }
+{ "id": "0b9e6c3a-6a0e-4d0f-9c55-3d6f1a2b7e10", "type": "expense", "name": "식비", "active": true, "sortOrder": 0, "usedCount": 21, "color": 1, "budget": 400000 }
 ```
 
 | 필드 | 설명 |
@@ -241,6 +252,7 @@ DB 연결 실패 시 **200** `{ "status": "ok", "db": "error" }` (프로세스�
 | sortOrder | 유형별 정렬 순서(0부터, 정수, 오름차순). 유형 안에서 유일하다는 보장은 없다(동률이면 `name` 가나다순). 새 카테고리는 그 유형의 `max(sortOrder)+1`(비활성 포함), 다시 사용해도 값 유지 |
 | usedCount | 세션 사용자의 같은 유형·같은 이름 거래 건수(전 기간, 비활성 카테고리 포함). 기본 0 |
 | color | (v4.5) 색·무늬 번호, 1~12 정수. 마이그레이션 전에 구버전 코드로 만든 행이면 `null` 일 수 있다(화면이 목록 순서 규칙으로 정한다). 같은 유형의 다른 카테고리와 같아도 된다. 이름 변경·사용 안 함·다시 사용해도 유지(id 기준) |
+| budget | (v4.6) 매달 같은 월 예산, 원 단위 정수 1~100000000 또는 `null`(예산 없음). 수입 카테고리는 항상 `null`. 이름 변경·사용 안 함·다시 사용해도 유지(id 기준). 새 카테고리는 `null` |
 
 **이름 규칙** (POST의 `name`, PATCH의 `name` 공통)
 1. 문자열이어야 한다(아니면 400).
@@ -274,9 +286,9 @@ v2 형식을 유지하고 `items`를 추가한다.
   "expense": ["식비", "카페/간식", "교통", "쇼핑", "주거/통신", "의료/건강", "문화/여가", "기타", "반려동물"],
   "income": ["급여", "용돈", "부수입", "기타"],
   "items": [
-    { "id": "0b9e6c3a-6a0e-4d0f-9c55-3d6f1a2b7e10", "type": "expense", "name": "식비", "active": true, "sortOrder": 0, "usedCount": 21, "color": 1 },
-    { "id": "7c1d2e4f-1b3a-4a55-8f20-9e6d5c4b3a21", "type": "expense", "name": "경조사", "active": false, "sortOrder": 8, "usedCount": 4, "color": 9 },
-    { "id": "f2a4c6e8-0b1d-4c3e-a5f7-192837465abc", "type": "income", "name": "급여", "active": true, "sortOrder": 0, "usedCount": 6, "color": 1 }
+    { "id": "0b9e6c3a-6a0e-4d0f-9c55-3d6f1a2b7e10", "type": "expense", "name": "식비", "active": true, "sortOrder": 0, "usedCount": 21, "color": 1, "budget": 400000 },
+    { "id": "7c1d2e4f-1b3a-4a55-8f20-9e6d5c4b3a21", "type": "expense", "name": "경조사", "active": false, "sortOrder": 8, "usedCount": 4, "color": 9, "budget": null },
+    { "id": "f2a4c6e8-0b1d-4c3e-a5f7-192837465abc", "type": "income", "name": "급여", "active": true, "sortOrder": 0, "usedCount": 6, "color": 1, "budget": null }
   ]
 }
 ```
@@ -293,8 +305,10 @@ Origin 필수. 요청:
 ```
 **201** (카테고리 객체 자체, 래핑 없음):
 ```json
-{ "id": "a1b2c3d4-0000-4000-8000-00000000abcd", "type": "income", "name": "이자", "active": true, "sortOrder": 4, "usedCount": 0, "color": 5 }
+{ "id": "a1b2c3d4-0000-4000-8000-00000000abcd", "type": "income", "name": "이자", "active": true, "sortOrder": 4, "usedCount": 0, "color": 5, "budget": null }
 ```
+**예산 (v4.6)**: 본문에 `budget` 을 보내도 무시한다. 새 카테고리의 `budget` 은 항상 `null` (정하려면 PATCH).
+
 **색 자동 배정 (v4.5)**: 본문에 `color` 를 보내도 무시한다. 서버가 같은 트랜잭션의 사용자 잠금 아래에서 같은 사용자·같은 유형의 **모든** 행(비활성 포함, `color` 가 null 인 행은 센 번호 없음)이 쓰는 번호를 빼고 남은 가장 작은 번호(1~12)를 쓴다. 12개를 모두 쓰고 있으면 가장 적게 쓰인 번호 중 가장 작은 것을 쓴다. 예: 지출이 1~10번을 쓰면 다음은 11, 그다음 12, 그다음은 가장 적게 쓴 번호 중 최소(모두 1회면 1). 위 예시의 수입 카테고리는 1~4번 사용 중이라 5.
 
 `usedCount`는 같은 이름의 과거 거래가 이미 있으면 0이 아닐 수 있다(예: 이름 변경으로 비워진 이름을 다시 만든 경우).
@@ -328,25 +342,26 @@ Origin 필수. 요청:
 
 ### 3A.4 PATCH /api/categories/:id
 
-Origin 필수. 본문에 `name`, `active`, `color`(v4.5) 중 **1개 이상**. 여러 개가 있으면 한 트랜잭션에서 이름 변경 -> 상태 변경 -> 색 변경 순으로 처리하고, 어느 하나가 실패하면 모두 반영되지 않는다. 본문의 `type`, `userId`, `id`, `sortOrder` 등 그 밖의 필드는 무시한다(유형·소유자 불변). 값이 `undefined`(키 없음)인 필드만 "없음"으로 본다(`null`이면 있는 것으로 보고 타입 검증에 걸려 400).
+Origin 필수. 본문에 `name`, `active`, `color`(v4.5), `budget`(v4.6) 중 **1개 이상**. 여러 개가 있으면 한 트랜잭션에서 이름 변경 -> 상태 변경 -> 색 변경 -> 예산 변경 순으로 처리하고, 어느 하나가 실패하면 모두 반영되지 않는다. 본문의 `type`, `userId`, `id`, `sortOrder` 등 그 밖의 필드는 무시한다(유형·소유자 불변). 값이 `undefined`(키 없음)인 필드만 "없음"으로 본다(`null`이면 있는 것으로 보고 타입 검증에 걸려 400).
 
 요청 예 (이름 변경):
 ```json
 { "name": "커피" }
 ```
 요청 예 (색 변경, v4.5): `{ "color": 5 }`
+요청 예 (예산 정하기·바꾸기, v4.6): `{ "budget": 400000 }` / (예산 지우기): `{ "budget": null }`
 요청 예 (사용 안 함): `{ "active": false }` / (다시 사용): `{ "active": true }` / (둘 다): `{ "name": "커피", "active": true }`
 
 **200** 갱신된 카테고리 객체:
 ```json
-{ "id": "...", "type": "expense", "name": "커피", "active": true, "sortOrder": 1, "usedCount": 5, "color": 2 }
+{ "id": "...", "type": "expense", "name": "커피", "active": true, "sortOrder": 1, "usedCount": 5, "color": 2, "budget": null }
 ```
 
-검사 순서: 입력 검증(400) -> 대상 조회(404) -> 이름 중복(409 EXISTS) -> 마지막 활성(409 LAST_ACTIVE) -> 한도(409 LIMIT).
+검사 순서: 입력 검증(400) -> 대상 조회(404) -> 금지 이름·수입 예산(400) -> 이름 중복(409 EXISTS) -> 마지막 활성(409 LAST_ACTIVE) -> 한도(409 LIMIT).
 
 | 상태 | code | 상황 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | `name`/`active`/`color` 모두 없음(`fields` 없이 message만: "name, active, color 중 하나는 보내 주세요."); `name` 규칙 위반 -> `fields.name`; `active`가 boolean 아님 -> `fields.active`; `color`가 1~12 정수가 아님(0, 13, `"5"`, `1.5`, `null` 등) -> `fields.color` = "색은 1~12 중 하나여야 해요." |
+| 400 | `VALIDATION_ERROR` | `name`/`active`/`color`/`budget` 모두 없음(`fields` 없이 message만: "name, active, color, budget 중 하나는 보내 주세요."); `budget` 이 `null` 도 1~100000000 정수도 아님(0, -1, 100000001, `"5000"`, `1.5`, `true`) -> `fields.budget` = "예산은 1원 이상 1억원 이하의 정수여야 해요."; 대상이 수입 카테고리인데 `budget` 이 `null` 이 아님(대상 조회 404 뒤에 검사) -> `fields.budget` = "예산은 지출 카테고리에만 정할 수 있어요."; `name` 규칙 위반 -> `fields.name`; `active`가 boolean 아님 -> `fields.active`; `color`가 1~12 정수가 아님(0, 13, `"5"`, `1.5`, `null` 등) -> `fields.color` = "색은 1~12 중 하나여야 해요." |
 | 404 | `NOT_FOUND` | 없는 id, 다른 사용자의 id, UUID 형식이 아닌 id (message "카테고리를 찾을 수 없어요.") |
 | 409 | `CATEGORY_EXISTS` | 새 이름의 키가 같은 유형의 **다른** 카테고리(활성·비활성 모두)와 같음. 병합은 지원하지 않는다 |
 | 409 | `CATEGORY_LAST_ACTIVE` | 그 유형의 활성 카테고리가 이 하나뿐인데 `active:false`로 바꾸려 함. message "카테고리가 하나는 있어야 해요." |
@@ -358,6 +373,7 @@ Origin 필수. 본문에 `name`, `active`, `color`(v4.5) 중 **1개 이상**. �
 - 이미 같은 상태로 바꾸는 요청(`active:true`인데 이미 활성, `active:false`인데 이미 비활성)은 200, 변화 없음(멱등). 이 경우 LAST_ACTIVE/LIMIT 검사는 하지 않는다.
 - 비활성 카테고리도 이름 변경이 가능하다(활성 여부와 무관).
 - **색 변경 (v4.5)**: 같은 유형의 다른 카테고리와 색이 겹쳐도 허용한다(검사·409 없음). 이미 같은 색이면 200, 변화 없음. 이름을 바꾸거나 사용 안 함으로 바꿔도 색은 유지된다. 응답 이후 모든 GET 이 새 `color` 를 돌려준다. 거래·집계 API 는 바뀌지 않는다.
+- **예산 변경 (v4.6)**: `budget` 은 `null`(지우기) 또는 1~100000000 정수. 같은 값이면 200, 변화 없음. 수입 카테고리에 `null` 은 200, 변화 없음(멱등), 숫자는 400. 사용 안 함 카테고리에도 정할 수 있다(API 는 막지 않는다). 이름 변경·사용 안 함·색 변경 뒤에도 유지. 어느 하나(예: `name`)가 실패하면 `budget` 도 반영되지 않는다. 오류 예: `{ "error": { "code": "VALIDATION_ERROR", "message": "예산은 지출 카테고리에만 정할 수 있어요.", "fields": { "budget": "예산은 지출 카테고리에만 정할 수 있어요." } } }`
 - 사용 안 함은 **새 입력에서만** 빠진다. 그 카테고리의 과거 거래는 조회·집계·R3/R4/R5에 그대로 나온다.
 - 이름 변경과 거래 쓰기가 동시에 일어나도 "목록에 없는 옛 이름을 가진 새 거래"가 생기지 않도록 서버가 보장한다. 구현: 카테고리 POST/PATCH와 거래 POST/PUT은 모두 시작할 때 세션 사용자의 `users` 행에 `FOR NO KEY UPDATE` 잠금을 걸어 같은 사용자의 쓰기를 직렬화한다(거래 INSERT의 FK 확인과는 충돌하지 않는다). 카테고리 행 공유 잠금 방식은 PUT(거래 행 -> 카테고리 행)과 이름 변경(카테고리 행 -> 거래 행)의 잠금 순서가 엇갈려 교착될 수 있어 쓰지 않는다.
 
@@ -690,3 +706,20 @@ update categories c set color = r.color
   - 유형별: `select type, count(*) filter (where color is null) as nulls, min(color), max(color) from categories group by type;` = `nulls` 0
   - 거래 불변: `select count(*), sum(amount) from transactions;` 가 실행 전과 같음
 - 롤백: 코드를 이전 커밋으로 되돌려도 컬럼이 남아 문제없다. 컬럼 DROP 은 하지 않는다.
+
+### 8.7 카테고리 예산 컬럼 (v4.6)
+
+`schema.sql` 의 8.6 색 `alter` 바로 뒤에 추가한다. 추가 전용·멱등·백필 없음이다.
+
+```sql
+alter table categories add column if not exists budget integer
+  check (budget is null or budget between 1 and 100000000);
+```
+- 기존 행은 모두 `null`. 기본 세트·방어용 insert·색 update 는 `budget` 을 언급하지 않는다. "지출만" 규칙은 DB check 가 아니라 API 에서 지킨다.
+- **8.6 과 같은 실행으로 반영한다**(운영 마이그레이션 1회). 여러 번 실행해도 오류·변화가 없다. 출력 형식은 변하지 않는다.
+- 운영 반영 순서는 8.6 과 같다(백업 브랜치 -> `npm run db:migrate:prod -- --yes` -> 확인 쿼리 -> 푸시). 코드를 먼저 배포하면 카테고리 API 가 500 이다.
+- 확인 쿼리(default 브랜치, 숫자만):
+  - `select column_name, data_type from information_schema.columns where table_name = 'categories' and column_name in ('budget', 'color') order by column_name;` = 2행 (`budget integer`, `color smallint`)
+  - `select count(*) as total, count(*) filter (where color is null) as nulls, count(*) filter (where color between 1 and 12) as ok, count(*) filter (where budget is not null) as budgets from categories;` = `nulls` 0, `ok` = `total`, `budgets` 0
+  - 거래 불변: `select count(*), sum(amount) from transactions;` 와 `select count(*) from categories;` 가 실행 전과 같음
+- 롤백: 코드만 이전 커밋으로 되돌린다. 컬럼은 남긴다(DROP 하지 않음).

@@ -563,7 +563,7 @@ test.describe('C-M14~C-M15 회귀·범위', () => {
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
     expect(git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend/rules', 'src/backend/transactions', 'src/frontend/office' /* plan-category-color: db(schema.sql)·tokens·components 는 의도적으로 바뀐다 */).trim()).toBe('');
     const changed = git('status', '--porcelain').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));
-    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(history\/|router\.js$|test\/history\.test\.js$|categories\/routes\.js$|lib\/categories\.js$|db\/schema\.sql$|test\/categories\.test\.js$|test\/category-color\.test\.js$)|e2e\/|docs\/|design_handoff_moneybook\/)/;
+    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(history\/|router\.js$|test\/history\.test\.js$|categories\/routes\.js$|lib\/categories\.js$|db\/schema\.sql$|test\/categories\.test\.js$|test\/category-color\.test\.js$|test\/category-budget\.test\.js$)|e2e\/|docs\/|design_handoff_moneybook\/)/;
     expect(changed.filter((f) => !allowed.test(f)), '허용 폴더 밖 변경').toEqual([]);
   });
 });

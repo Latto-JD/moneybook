@@ -874,6 +874,8 @@ test.describe('C-R24~C-R26 회귀·범위·스크린샷', () => {
 /** 고정 커밋 17bc134(카테고리 색 직전) 대비 작업 트리: tokens.css·components.css 의 추가·삭제 줄 중 plan-category-color(--viz-9..12, 그 견본·채움 규칙, 바뀐 제목 주석)가 아닌 것 */
 function vizOnlyCssDiff(git) {
   const out = git('diff', '-U0', '17bc134', '--', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css');
+  // plan-budget: components.css 의 추가 줄 중 월 예산 규칙(.budget-*, .cat-budget*, 제목 주석, 이어진 mask 줄, 빈 줄)은 허용한다. 삭제 줄은 허용하지 않는다
+  const budgetAdd = /^(\.(budget|cat-budget)|-webkit-mask: var\(--pattern, none\) 0 0 \/ 6px|\/\* (── 월 예산 카드|카테고리 관리: 예산 입력 행)|$)/;
   const ok = /--viz-(9|1[0-2])(?!\d)|data-viz="(9|1[0-2])"|^\.viz-fill-9 |데이터 시각화|순서대로 배치할 것/;
-  return out.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l)).map((l) => l.slice(1).trim()).filter((l) => !ok.test(l));
+  return out.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l)).filter((l) => !(l[0] === '+' && budgetAdd.test(l.slice(1).trim()))).map((l) => l.slice(1).trim()).filter((l) => !ok.test(l));
 }

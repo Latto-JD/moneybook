@@ -183,7 +183,8 @@ test.describe('11.1 자산 · CSP', () => {
       ['components.css', [], ['.icon--reset    { --icon: url("../icons/reset.svg"); }']],
     ]) {
       // plan-category-color: 팔레트 12색 확장(--viz-9..12 값과 바뀐 제목 주석 2줄)은 의도한 차이라 비교에서 뺀다. 값은 category-color.spec.js CC-15 가 확인
-      const viz = (l) => /^--viz-(9|1[0-2]):|^--viz-9: #F2884B; --viz-10|데이터 시각화|^순서대로 배치할 것|^\[data-viz="(9|1[0-2])"\]|^\.viz-fill-9 /.test(l);
+      // plan-budget: 월 예산 카드·입력 행 규칙(추가 전용)도 의도한 차이
+      const viz = (l) => /^\.(budget|cat-budget)|^-webkit-mask: var\(--pattern, none\) 0 0 \/ 6px|^\/\* (── 월 예산 카드|카테고리 관리: 예산 입력 행)|^$|^--viz-(9|1[0-2]):|^--viz-9: #F2884B; --viz-10|데이터 시각화|^순서대로 배치할 것|^\[data-viz="(9|1[0-2])"\]|^\.viz-fill-9 /.test(l);
       const a = fileLines(join(HANDOFF, name)).filter((l) => !viz(l)); const b = fileLines(join(PUBLIC, 'css', name)).filter((l) => !viz(l));
       expect(a.filter((l) => !b.includes(l)), `${name} 원본에서 사라진 줄`).toEqual(removed);
       expect(b.filter((l) => !a.includes(l)), `${name} 새로 생긴 줄`).toEqual(added);
@@ -1189,7 +1190,7 @@ test.describe('11.6 카테고리 관리', () => {
     const rowsInfo = () => page.locator('#catm-active .cat-row').evaluateAll((els) => els.map((r) => { const s = r.querySelector('.swatch'); const bs = [...r.querySelectorAll('button')]; return { name: r.querySelector('.cat-name').textContent, viz: s.getAttribute('data-viz'), size: s.getBoundingClientRect().width, used: r.querySelector('.cat-used').textContent, btns: bs.map((b) => b.getAttribute('aria-label')), lastBorder: getComputedStyle(r.closest('li') || r).borderBottomWidth }; }));
     const before = await rowsInfo();
     expect(before.map((r) => r.viz)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']); // plan-category-color: 9번째부터 9.. (회색 없음)
-    for (const r of before) { expect(r.size).toBe(28); expect(r.used).toMatch(/^기록 \d+건$/); expect(r.btns.filter((b) => !/ 색 바꾸기, 지금 /.test(b))).toEqual(r.used === '기록 0건' ? [`${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`] : [`${r.name} 사용 이력 보기, ${r.used}`, `${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`]); expect(r.btns.filter((b) => b.startsWith(`${r.name} 색 바꾸기, 지금 `))).toHaveLength(1); } // 튠업 T2: 기록 있는 행은 이름/기록 N건 이 이력 버튼
+    for (const r of before) { expect(r.size).toBe(28); expect(r.used).toMatch(/^기록 \d+건$/); expect(r.btns.filter((b) => !/ 색 바꾸기, 지금 /.test(b) && !/ 예산 (정하기|바꾸기)/.test(b))).toEqual(r.used === '기록 0건' ? [`${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`] : [`${r.name} 사용 이력 보기, ${r.used}`, `${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`]); expect(r.btns.filter((b) => b.startsWith(`${r.name} 색 바꾸기, 지금 `))).toHaveLength(1); } // 튠업 T2: 기록 있는 행은 이름/기록 N건 이 이력 버튼
     expect(before.find((r) => r.name === '교통').used).toBe('기록 1건');
     const last = await page.locator('#catm-active > li').last().evaluate((li) => { const cs = getComputedStyle(li); return { b: cs.borderBottomWidth, bs: cs.borderBottomStyle, inner: li.querySelector('.cat-row') ? getComputedStyle(li.querySelector('.cat-row')).borderBottomWidth : null }; });
     const first = await page.locator('#catm-active > li').first().evaluate((li) => getComputedStyle(li).borderBottomWidth);

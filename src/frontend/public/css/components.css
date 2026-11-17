@@ -202,3 +202,29 @@ body {
 .viz-table td.num, .viz-table th.num { text-align: right; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* ── 월 예산 카드 (대시보드) ───────────── */
+.budget-card { padding-top: var(--space-4); }
+.budget-card .card-title { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-bold); }
+.budget-sum { display: flex; flex-direction: column; gap: var(--space-1); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-line); }
+.budget-sum__text { display: flex; align-items: center; gap: var(--space-1); font-weight: var(--fw-semibold); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.budget-sum__text .icon { width: 18px; height: 18px; color: var(--color-expense); }
+.budget-list { margin: 0; padding: 0; list-style: none; }
+.budget-row { padding: var(--space-3) 0; border-bottom: 1px solid var(--color-line); }
+.budget-row:last-child { border-bottom: 0; padding-bottom: var(--space-1); }
+.budget-row__vis { display: flex; flex-direction: column; gap: var(--space-1); }
+.budget-row__head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.budget-row__name { flex: 1 1 auto; min-width: 0; font-weight: var(--fw-medium); overflow-wrap: anywhere; }
+.budget-row__amount { flex: none; font-size: var(--fs-caption); color: var(--color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.budget-bar { display: block; height: 8px; border-radius: var(--radius-pill); background: var(--color-surface-sunken); overflow: hidden; }
+.budget-bar__fill { display: block; position: relative; height: 100%; border-radius: var(--radius-pill); background: var(--swatch, var(--color-expense)); overflow: hidden; }
+.budget-bar__fill[data-viz]:not([data-viz="1"]):not([data-viz="none"])::after { content: ""; position: absolute; inset: 0; background: var(--viz-pattern-ink);
+  -webkit-mask: var(--pattern, none) 0 0 / 6px 6px repeat; mask: var(--pattern, none) 0 0 / 6px 6px repeat; }
+.budget-bar--over .budget-bar__fill { box-shadow: inset -3px 0 0 var(--color-text), inset -5px 0 0 var(--color-surface); } /* 초과: 색 외에 끝 굵은 테두리(막대 색과 달라 보이도록 글자색 + 틈) */
+.budget-remain { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.budget-remain--over { color: var(--color-expense); font-weight: var(--fw-semibold); }
+.budget-remain .icon { width: 14px; height: 14px; }
+
+/* 카테고리 관리: 예산 입력 행 */
+.cat-budget .cat-budget__unit { color: var(--color-text-muted); }
+.cat-budget input { text-align: right; font-variant-numeric: tabular-nums; }

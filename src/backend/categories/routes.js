@@ -17,7 +17,10 @@ import {
 import { isReservedCategoryName } from '../lib/text.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ROW = 'id, type, name, name_key, active, sort_order, color';
+const ROW = 'id, type, name, name_key, active, sort_order, color, budget';
+const BUDGET_MAX = 100000000;
+const BUDGET_FORMAT_ERROR = '예산은 1원 이상 1억원 이하의 정수여야 해요.';
+const BUDGET_TYPE_ERROR = '예산은 지출 카테고리에만 정할 수 있어요.';
 
 const validation = (field, message) => new ApiError(400, 'VALIDATION_ERROR', message, { fields: { [field]: message } });
 const notFound = () => new ApiError(404, 'NOT_FOUND', '카테고리를 찾을 수 없어요.');
@@ -104,8 +107,9 @@ async function patch({ db, user, params, body }) {
   const hasName = body.name !== undefined;
   const hasActive = body.active !== undefined;
   const hasColor = body.color !== undefined;
-  if (!hasName && !hasActive && !hasColor) {
-    throw new ApiError(400, 'VALIDATION_ERROR', 'name, active, color 중 하나는 보내 주세요.');
+  const hasBudget = body.budget !== undefined;
+  if (!hasName && !hasActive && !hasColor && !hasBudget) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'name, active, color, budget 중 하나는 보내 주세요.');
   }
   const fields = {};
   let n;
@@ -116,6 +120,9 @@ async function patch({ db, user, params, body }) {
   if (hasActive && typeof body.active !== 'boolean') fields.active = 'active 는 true 또는 false 여야 해요.';
   if (hasColor && !(Number.isInteger(body.color) && body.color >= 1 && body.color <= COLOR_COUNT)) {
     fields.color = `색은 1~${COLOR_COUNT} 중 하나여야 해요.`;
+  }
+  if (hasBudget && body.budget !== null && !(Number.isInteger(body.budget) && body.budget >= 1 && body.budget <= BUDGET_MAX)) {
+    fields.budget = BUDGET_FORMAT_ERROR;
   }
   if (Object.keys(fields).length) {
     throw new ApiError(400, 'VALIDATION_ERROR', Object.values(fields)[0], { fields });
@@ -130,6 +137,7 @@ async function patch({ db, user, params, body }) {
     ]);
     let cur = rows[0];
     if (!cur) throw notFound();
+    if (hasBudget && body.budget !== null && cur.type !== 'expense') throw validation('budget', BUDGET_TYPE_ERROR);
 
     if (hasName && n.name !== cur.name) {
       // 이미 저장된 "그 외 N개" 이름은 그대로 두고, 새로 바꿔 쓰는 경우만 막는다
@@ -178,6 +186,17 @@ async function patch({ db, user, params, body }) {
         `update categories set color = $2, updated_at = now() where id = $1 returning ${ROW}`,
         [cur.id, body.color],
       ));
+    }
+
+    if (hasBudget) {
+      const next = body.budget;
+      const curBudget = cur.budget == null ? null : Number(cur.budget);
+      if (next !== curBudget) {
+        ({ rows: [cur] } = await tx.query(
+          `update categories set budget = $2, updated_at = now() where id = $1 returning ${ROW}`,
+          [cur.id, next],
+        ));
+      }
     }
     return cur;
   });
