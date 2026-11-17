@@ -61,17 +61,25 @@ test('dashErrorText: 0개 빈 문구, 1개 그대로, 2개 이상 접두 + 첫 �
   assert.equal(dashErrorText(['A', 'B']), '일부 내용을 불러오지 못했어요. A');
 });
 
-test('정적: manifest 없음(일반 브라우저 탭으로 열림), 홈 화면 아이콘 PNG, head 태그', () => {
-  assert.ok(!existsSync(new URL('../public/manifest.json', import.meta.url)), 'manifest.json 파일 없음');
-  for (const [name, size] of [['app-192.png', 192], ['app-512.png', 512], ['app-maskable-512.png', 512]]) {
-    const buf = readFileSync(new URL(`../public/app-icons/${name}`, import.meta.url));
-    assert.equal(`${buf.readUInt32BE(16)}x${buf.readUInt32BE(20)}`, `${size}x${size}`, name); // PNG IHDR
+test('정적: manifest.json 과 앱 아이콘 PNG, head 태그', () => {
+  const m = JSON.parse(read('manifest.json'));
+  assert.equal(m.display, 'standalone');
+  assert.equal(m.start_url, '/');
+  assert.equal(m.scope, '/');
+  assert.equal(m.name, '가계부');
+  assert.deepEqual(m.icons.map((i) => i.purpose).sort(), ['any', 'any', 'maskable']);
+  for (const i of m.icons) {
+    const file = new URL(`../public/${i.src}`, import.meta.url);
+    assert.ok(existsSync(file), i.src);
+    const buf = readFileSync(file);
+    const [w, h] = [buf.readUInt32BE(16), buf.readUInt32BE(20)]; // PNG IHDR
+    assert.equal(`${w}x${h}`, i.sizes, i.src);
   }
   const apple = readFileSync(new URL('../public/app-icons/apple-touch-icon-180.png', import.meta.url));
   assert.equal(apple.readUInt32BE(16), 180);
   for (const f of ['index.html', 'login.html']) {
     const html = read(f);
-    assert.doesNotMatch(html, /rel="manifest"/, f);
+    assert.match(html, /<link rel="manifest" href="manifest\.json">/, f);
     assert.match(html, /<link rel="apple-touch-icon" href="app-icons\/apple-touch-icon-180\.png">/, f);
     assert.match(html, /<meta name="theme-color" content="#[0-9A-Fa-f]{6}">/, f);
     assert.ok(html.indexOf('name="theme-color"') < html.indexOf('theme-init.js'), `${f}: theme-color meta 가 theme-init 보다 앞`);
