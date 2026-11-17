@@ -2,6 +2,8 @@
 import { ApiError } from '../http.js';
 import {
   CATEGORY_LIMITS,
+  COLOR_COUNT,
+  pickColor,
   TYPES,
   TYPE_LABEL,
   ensureDefaults,
@@ -15,7 +17,7 @@ import {
 import { isReservedCategoryName } from '../lib/text.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ROW = 'id, type, name, name_key, active, sort_order';
+const ROW = 'id, type, name, name_key, active, sort_order, color';
 
 const validation = (field, message) => new ApiError(400, 'VALIDATION_ERROR', message, { fields: { [field]: message } });
 const notFound = () => new ApiError(404, 'NOT_FOUND', '카테고리를 찾을 수 없어요.');
@@ -83,10 +85,15 @@ async function create({ db, user, body }) {
     if (s.total >= CATEGORY_LIMITS.total) {
       throw new ApiError(409, 'CATEGORY_LIMIT', `카테고리는 모두 합쳐 ${CATEGORY_LIMITS.total}개까지 만들 수 있어요.`);
     }
+    const { rows: used } = await tx.query(
+      'select color from categories where user_id = $1 and type = $2 and color is not null',
+      [user.id, type],
+    );
+    const color = pickColor(used.map((r) => Number(r.color)));
     const { rows } = await tx.query(
-      `insert into categories (user_id, type, name, name_key, sort_order) values ($1, $2, $3, $4, $5)
+      `insert into categories (user_id, type, name, name_key, sort_order, color) values ($1, $2, $3, $4, $5, $6)
        returning ${ROW}`,
-      [user.id, type, n.name, n.key, s.max_sort + 1],
+      [user.id, type, n.name, n.key, s.max_sort + 1, color],
     );
     return rows[0];
   });
@@ -96,8 +103,9 @@ async function create({ db, user, body }) {
 async function patch({ db, user, params, body }) {
   const hasName = body.name !== undefined;
   const hasActive = body.active !== undefined;
-  if (!hasName && !hasActive) {
-    throw new ApiError(400, 'VALIDATION_ERROR', 'name 또는 active 중 하나는 보내 주세요.');
+  const hasColor = body.color !== undefined;
+  if (!hasName && !hasActive && !hasColor) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'name, active, color 중 하나는 보내 주세요.');
   }
   const fields = {};
   let n;
@@ -106,6 +114,9 @@ async function patch({ db, user, params, body }) {
     if (n.error) fields.name = n.error;
   }
   if (hasActive && typeof body.active !== 'boolean') fields.active = 'active 는 true 또는 false 여야 해요.';
+  if (hasColor && !(Number.isInteger(body.color) && body.color >= 1 && body.color <= COLOR_COUNT)) {
+    fields.color = `색은 1~${COLOR_COUNT} 중 하나여야 해요.`;
+  }
   if (Object.keys(fields).length) {
     throw new ApiError(400, 'VALIDATION_ERROR', Object.values(fields)[0], { fields });
   }
@@ -159,6 +170,13 @@ async function patch({ db, user, params, body }) {
       ({ rows: [cur] } = await tx.query(
         `update categories set active = $2, updated_at = now() where id = $1 returning ${ROW}`,
         [cur.id, body.active],
+      ));
+    }
+
+    if (hasColor && body.color !== cur.color) {
+      ({ rows: [cur] } = await tx.query(
+        `update categories set color = $2, updated_at = now() where id = $1 returning ${ROW}`,
+        [cur.id, body.color],
       ));
     }
     return cur;

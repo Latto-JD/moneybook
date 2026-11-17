@@ -127,6 +127,10 @@ body {
 [data-viz="6"] { --swatch: var(--viz-6); --pattern: url("../patterns/viz-6.svg"); }
 [data-viz="7"] { --swatch: var(--viz-7); --pattern: url("../patterns/viz-7.svg"); }
 [data-viz="8"] { --swatch: var(--viz-8); --pattern: url("../patterns/viz-8.svg"); }
+[data-viz="9"] { --swatch: var(--viz-9); --pattern: url("../patterns/viz-9.svg"); }
+[data-viz="10"] { --swatch: var(--viz-10); --pattern: url("../patterns/viz-10.svg"); }
+[data-viz="11"] { --swatch: var(--viz-11); --pattern: url("../patterns/viz-11.svg"); }
+[data-viz="12"] { --swatch: var(--viz-12); --pattern: url("../patterns/viz-12.svg"); }
 
 /* ── 세그먼트 (지출/수입 등) ──────────── */
 .segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; background: var(--color-surface-sunken); border-radius: var(--radius-md); }
@@ -190,6 +194,7 @@ body {
 .viz-ink-stroke { stroke: var(--viz-pattern-ink); fill: none; }
 .viz-fill-1 { fill: var(--viz-1); } .viz-fill-2 { fill: var(--viz-2); } .viz-fill-3 { fill: var(--viz-3); } .viz-fill-4 { fill: var(--viz-4); }
 .viz-fill-5 { fill: var(--viz-5); } .viz-fill-6 { fill: var(--viz-6); } .viz-fill-7 { fill: var(--viz-7); } .viz-fill-8 { fill: var(--viz-8); }
+.viz-fill-9 { fill: var(--viz-9); } .viz-fill-10 { fill: var(--viz-10); } .viz-fill-11 { fill: var(--viz-11); } .viz-fill-12 { fill: var(--viz-12); }
 .viz-table__name { display: flex; align-items: center; gap: var(--space-2); }
 .viz-table { width: 100%; border-collapse: collapse; font-size: var(--fs-label); }
 .viz-table th, .viz-table td { padding: var(--space-3) var(--space-2); border-bottom: 1px solid var(--color-line); text-align: left; }

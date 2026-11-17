@@ -1,23 +1,31 @@
-// 카테고리 색·무늬 번호 (순수 함수). 번호 1..8 은 tokens.css 의 --viz-N, 무늬는 patterns/viz-N.svg 와 1:1.
-// 서버에 번호를 저장하지 않으므로 목록 순서(sortOrder)로 정한다: 유형별로 비활성 포함 1~8번째 = 1..8. 9번째부터는 고정 번호 없음.
-export const VIZ_COUNT = 8;
+// 카테고리 색·무늬 번호 (순수 함수). 번호 1..12 는 tokens.css 의 --viz-N, 무늬는 patterns/viz-N.svg 와 1:1.
+// 서버가 카테고리마다 color(1..12)를 저장한다. 값이 없으면(null) 목록 순서로 정한다: 유형별로 비활성 포함 n번째 = ((n-1) % 12) + 1.
+export const VIZ_COUNT = 12;
+
+/** 스크린리더용 색 이름 (번호 - 1 이 인덱스). tokens.css 주석과 같은 이름·무늬 */
+export const VIZ_NAMES = [
+  '하늘·무늬 없음', '밤색·사선', '겨자·점', '남보라·가로줄', '청록·격자', '와인·세로줄',
+  '올리브·체크', '자두·역사선', '주황·X 교차', '분홍·큰 점', '회청·지그재그', '보라·굵은 역사선',
+];
+export const vizName = (n) => VIZ_NAMES[n - 1] || '';
 
 const byOrder = (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || String(a.name).localeCompare(String(b.name), 'ko');
+export const validViz = (n) => Number.isInteger(n) && n >= 1 && n <= VIZ_COUNT;
 
-/** GET /api/categories 의 items + 유형 -> Map(이름 -> 1..8). 비활성도 순위에 넣어 사용 안 함으로 바꿔도 다른 색이 밀리지 않는다. */
+/** GET /api/categories 의 items + 유형 -> Map(이름 -> 1..12). 저장된 color 우선, 없으면 비활성 포함 목록 순서 공식 */
 export function stableVizMap(items, type) {
   const list = (Array.isArray(items) ? items : []).filter((i) => i && i.type === type && typeof i.name === 'string');
   const map = new Map();
-  list.sort(byOrder).slice(0, VIZ_COUNT).forEach((it, i) => map.set(it.name, i + 1));
+  list.sort(byOrder).forEach((it, i) => map.set(it.name, validViz(it.color) ? it.color : (i % VIZ_COUNT) + 1));
   return map;
 }
 
-/** 목록 순서 기준 번호. 고정 번호가 없는 이름(9번째 이후, 모르는 이름)은 'none'. */
+/** 목록에 없는 이름(삭제된 이름 등)만 'none' */
 export const vizOf = (map, name) => (map && map.get(name)) || 'none';
 
 /**
- * 도넛 조각마다 서로 다른 번호를 준다. slices: [{label, members?}] (members 가 있으면 "그 외 N개" 묶음).
- * 고정 번호(map)가 있고 겹치지 않으면 그것을, 없으면 남은 번호 중 가장 작은 것을 쓴다. 묶음은 'other'.
+ * 도넛 조각의 색·무늬 번호. slices: [{label, members?}] (members 가 있으면 "그 외 N개" 묶음 = 'other').
+ * 저장된 번호(map)는 다른 조각과 겹쳐도 그대로 쓴다 (다른 화면과 같은 색). 번호가 없는 조각만 남은 가장 작은 번호를 쓴다.
  */
 export function assignDonutViz(slices, map) {
   const out = new Array(slices.length).fill(null);
@@ -25,13 +33,13 @@ export function assignDonutViz(slices, map) {
   slices.forEach((s, i) => {
     if (Array.isArray(s.members)) { out[i] = 'other'; return; }
     const n = map && map.get(s.label);
-    if (n && !used.has(n)) { out[i] = n; used.add(n); }
+    if (n) { out[i] = n; used.add(n); }
   });
   slices.forEach((s, i) => {
     if (out[i] !== null) return;
     let n = 1;
     while (used.has(n) && n < VIZ_COUNT) n++;
-    out[i] = n; // 일반 조각은 최대 8개라 항상 남는다. 넘치면 마지막 번호를 재사용
+    out[i] = n;
     used.add(n);
   });
   return out;

@@ -58,10 +58,14 @@ create table if not exists categories (
 );
 create index if not exists categories_user_type_sort_idx on categories (user_id, type, sort_order);
 
+-- v5: 카테고리 색·무늬 번호(1..12). null 이면 화면이 목록 순서 규칙으로 정한다. 추가 전용, 재실행해도 아무 일도 하지 않는다.
+alter table categories add column if not exists color smallint
+  check (color is null or color between 1 and 12);
+
 -- 기본 세트: 카테고리 행이 하나도 없는 사용자에게만 넣는다. (재실행해도 사용자가 바꾼 이름·상태를 되살리지 않는다)
 -- 목록은 src/backend/lib/categories.js 의 DEFAULT_CATEGORIES 와 같아야 한다 (db.test.js 가 확인).
-insert into categories (user_id, type, name, name_key, sort_order)
-select u.id, d.type, d.name, lower(d.name), d.ord
+insert into categories (user_id, type, name, name_key, sort_order, color)
+select u.id, d.type, d.name, lower(d.name), d.ord, d.ord + 1
   from users u
  cross join (values
    ('expense', '식비', 0), ('expense', '카페/간식', 1), ('expense', '교통', 2), ('expense', '쇼핑', 3),
@@ -87,3 +91,10 @@ select x.user_id, x.type, x.category, x.key, false,
    select 1 from categories c where c.user_id = x.user_id and c.type = x.type and c.name_key = x.key
  )
 on conflict do nothing;
+
+-- v5: 색이 비어 있는 행만 채운다. 유형별 sort_order, name 순 n번째 -> ((n-1) % 12) + 1
+-- (1~8번째는 기존 화면 색과 같고 9번째부터 9.. 를 받는다). 사용자가 고른 색은 덮어쓰지 않는다.
+update categories c set color = r.color
+  from (select id, ((row_number() over (partition by user_id, type order by sort_order, name) - 1) % 12 + 1)::smallint as color
+          from categories) r
+ where c.id = r.id and c.color is null;

@@ -1505,3 +1505,82 @@ npm test                                 # 391 통과
 정리: 서버 종료, 임시 폴더 삭제, 시험이 덮어쓴 `docs/qa-shots-*` PNG 는 `git checkout` 으로 되돌림. 커밋하지 않음.
 
 재검증(삭제 되돌리기 실패 문구 변경): UX-15 와 followup-2.spec.js(C-S 계열, DELETE/PUT 문구 불변 확인 포함)를 mobile-360·tablet-768 에서 실행, 34 통과 / 6 skip / 0 실패.
+
+
+---
+
+# 카테고리 색 QA (plan-category-color, CC-01~CC-18)
+
+작성: qa / 대상: 미커밋 작업 트리 (backend·frontend 구현, api.md v4.5) / 환경: PGlite dev 서버(임시 폴더, TRUST_PROXY=true), mobile-360·tablet-768
+
+## 요약
+
+- **결과: 통과 18 / 실패 0 / 검증 불가 0** (CC-18 의 줄 단위 변경 검토는 reviewer 몫). 결함 0건.
+- 새 e2e `e2e/tests/category-color.spec.js`: mobile-360 15개 + tablet-768 9개(UI 항목), 전부 통과.
+- 전체 e2e 1차: 938 통과 / 23 실패(기존 시험 갱신 필요 21 + 불안정 C-H24 2) / 62 skip. 갱신 후 해당 시험 재실행 모두 통과(C-H24 만 단독 실행에서 통과·실패가 번갈아 나옴, 기존에도 불안정).
+- `npm test` 410 통과 / 0 실패.
+- 가장 심각한 문제(없음에 가까움): 1) 결함 없음. 2) 기존 시험 21개가 "금지 파일 변경 없음", "행 버튼 2개", "9번째부터 none" 처럼 이번 변경 전의 사실을 고정하고 있어 갱신함(아래 표). 3) C-H24 출렁임 시험은 이번 변경과 무관하게 불안정.
+
+## 기준별 결과
+
+| ID | 결과 | 근거 |
+|---|---|---|
+| CC-01 | 통과 | e2e: 직전 커밋 `17bc134` 을 git archive 로 풀어 color 열 없는 DB 생성(열 0개 확인) -> 구버전 서버로 가입·지출 10개·거래 10건·비활성 1개 -> 새 migrate 2회. 지출 color 가 정렬 순서대로 1..10(1~8 은 화면 번호, 9·10 은 9·10), 수입 1..4, null 0, 비활성 유지, 거래(category·amount·date) 전후 동일, 사용자가 바꾼 식비=12 는 2회차 후에도 12, 나머지 불변, check 제약 존재. backend 단위 테스트(`category-color.test.js` CC-01 2건, check 제약 1건)도 통과 |
+| CC-02 | 통과 | e2e 신규 가입: 지출 1..8, 수입 1..4 |
+| CC-03 | 통과 | e2e: 추가 4번 -> 9,10,11,12. 13번째는 1(모두 1회씩, 본문 color:7 무시), 14번째는 2. 수입에서 비활성(용돈=2)도 사용 중으로 세어 새 수입이 5. 가운데 빈 번호(급여를 12 로 바꿔 1이 빔) -> 다음 수입이 1 |
+| CC-04 | 통과 | e2e: color 5 -> 200·GET 반영. 0, 13, "5", 1.5, null, true, -1, [5], {} 모두 400 `VALIDATION_ERROR` `fields.color`="색은 1~12 중 하나여야 해요.". 다른 사용자 id 404 후 색 불변. `{name:'교통'(중복), color:9}`·`{name:'', color:9}` 실패 시 색 불변(원자성). 빈 본문 400 |
+| CC-05 | 통과 | e2e: 이름 바꾸기·사용 안 함·다시 사용 뒤 color 유지, 3개 필드 동시 PATCH 200 |
+| CC-06 | 통과 | 전체 e2e 의 기존 카테고리·거래·집계·이력·인사이트 API 시험 통과(응답 키 목록을 정확히 비교하던 2건만 `color` 추가로 갱신) |
+| CC-07 | 통과 | e2e(360·768): 식비 1 -> 12 로 바꾼 뒤 새로고침 없이(해시 이동만) 관리 행 견본, 이력 머리줄, 기록 칸 칩, 거래 목록 행, 도넛 조각 `data-viz`, 범례 견본, 범례 막대, 추이 범례·막대 패턴(`viz-fill-12`)이 모두 12. 새로고침 뒤에도 유지, 서버값 12. 알림 "'식비' 색을 보라·굵은 역사선(으)로 바꿨어요", 포커스는 "색" 버튼 |
+| CC-08 | 통과 | e2e: 지출 10개 사용자의 기록 칸·거래 목록·관리 화면에 `data-viz="none"` 0개, 각 칩·행 번호가 API color 와 같음(여행=9, 반려=10) |
+| CC-09 | 통과 | e2e: 식비·카페/간식을 같은 색 1 로 두면 도넛 조각·범례 모두 둘 다 1. 범례 [식비 1, 카페/간식 1, 교통 3, ..., 그 외 3개 other], 저장 번호와 일치 |
+| CC-10 | 통과 | e2e: GET /api/categories 응답을 가로채 color 를 전부 null 로 바꿈 -> 칩·관리 행이 1..10(순서 공식), none 0개 |
+| CC-11 | 통과 | e2e(360·768): 색 버튼이 행 맨 앞(버튼 3개), 접근 이름 "여행 색 바꾸기, 지금 주황·X 교차", 높이 44 이상. 누르면 radiogroup(이름 "여행 색") 12칸, 칸마다 44x44 이상, 접근 이름이 12색 이름과 같고 `aria-checked` 는 현재색만 true, 체크 아이콘은 현재색 칸만 보임 |
+| CC-12 | 통과 | e2e: 1번 칸 이름 "하늘·무늬 없음, 식비에서 사용 중". 골라서 저장되는 것은 CC-03/07/13 시험에서 같은 색 중복(카페/간식=식비=1)으로 확인 |
+| CC-13 | 통과 | e2e: Enter 로 열면 현재색 칸에 포커스, 화살표(좌우상하) 이동·양끝 순환·로빙 tabindex 1개, Esc 로 닫고 "색" 버튼 포커스(저장 안 됨), Enter·Space 로 저장(알림 `#catm-status` aria-live=polite, 포커스 "색" 버튼), 현재색을 다시 고르면 PATCH 0회로 닫힘. 응답 500 가로채기: 행 오류 "서버에 문제가 생겼어요." 표시, 영역 열린 채, 선택 표시·행 견본·서버값은 저장 전 색으로 복원. 느린 응답(600ms) 중 연타 3회 -> PATCH 1회 |
+| CC-14 | 통과 | e2e: 360 에서 가로 스크롤 없음, 12칸이 6칸 x 2줄(768 은 2줄 이내). 다른 행의 색을 열면 앞 행이 닫혀 radiogroup 은 항상 1개, 이름 바꾸기를 열면 색 영역이 닫히고 반대도 동일 |
+| CC-15 | 통과 | 대비 측정(`--color-surface` 기준, e2e 가 tokens.css 를 읽어 계산): 라이트(#FFFFFF) 9 #C2410C 5.18, 10 #C42A6A 5.40, 11 #5B6B7F 5.45, 12 #8E44CC 5.46. 다크(#1F1E1B) 9 #F2884B 6.67, 10 #F28DB0 7.31, 11 #98A8BE 6.89, 12 #B58AE8 6.16. 기존 1~8 도 라이트 3.89~12.8, 다크 3.33~10.3 로 모두 3:1 이상. 라이트·`@media dark`·`[data-theme=dark]` 세 블록 모두 12색 존재, 두 다크 블록 값 동일, 라이트 12색 모두 다름. 스크린샷(아래)으로 무늬 확인: 9 X 교차, 10 큰 점, 11 지그재그, 12 굵은 역사선이 6px 견본(관리 행)과 8px 패턴(도넛·추이)에서 보이고 기존 무늬와 다름. 11개 무늬 파일의 내용이 모두 서로 다름 |
+| CC-16 | 통과 | e2e: patterns/viz-2..12 11개 파일(1번은 단색이라 파일 없음), 새 4개에 metadata·title·desc·script·image·http(s)·data:·xlink 없음(xmlns 선언 1개만). 12칸·도넛·기록·대시보드 시험에서 CSP 위반 이벤트 0, 콘솔 오류 0 |
+| CC-17 | 통과 | `npm test` 410 통과. 전체 e2e 1차 938 통과 / 23 실패 -> 갱신 후 실패 시험 재실행 모두 통과(아래 표). C-H24 는 단독 반복 실행에서 통과·실패가 번갈아 나옴(요약 카드 출렁임 샘플 0), 기존부터 알려진 불안정 시험 |
+| CC-18 | 통과 | 변경 파일 목록은 계획 범위 안(backend: schema.sql, lib/categories.js, categories/routes.js, 테스트 2개 / frontend: css 3, index.html, js 4, 테스트 2, 패턴 4 / docs/api.md). 거래·집계·인사이트·이력 API 코드 변경 0은 `git status` 의 backend 변경이 카테고리 파일뿐인 것으로 확인. "의도 외 변경 없음"의 줄 단위 검토는 reviewer 몫이라 하지 않음 |
+
+## 결함
+
+없음.
+
+## 화면·대비 확인
+
+스크린샷: `docs/qa-shots-color/` (picker·dashboard·record x 라이트·다크 x 360·768, 12개). 12번째까지 카테고리를 만들어 12칸 견본이 모두 화면에 있다.
+- 12칸 radiogroup: 360 에서 6칸 x 2줄, 선택 칸에 체크 아이콘 + 굵은 테두리, 다른 카테고리가 쓰는 색은 칸 아래 점. 라이트·다크 모두 12색이 서로 구분되고 무늬가 보임.
+- 12칸 견본의 계산된 색(배경·테두리 쌍)이 11종 이상 서로 다름(1번 단색 포함 구분).
+- 다크에서 새 4색(주황·분홍·회청·보라)이 어두운 배경에서 충분히 밝게 보임. 수입(파랑)·지출(황토) 의미색과 헷갈리지 않음(분홍·주황이 지출색 #DFB390 과 약간 가까운 계열이지만 무늬가 다르고 사용처가 카테고리 견본이라 문제 없다고 판단. 주관적 판단이므로 reviewer 가 확인).
+- 전체 페이지 스크린샷에서 하단 탭바가 중간에 찍혀 보이는 것은 fullPage 캡처 특성이다(앱 결함 아님).
+- 도넛은 지출 12개일 때 큰 7개 + 그 외로 그려져 12색 전부가 한 도넛에 나오지는 않는다(설계대로, "차트에는 금액이 큰 7개와 '그 외'로 보여요"). 새 색 9..12 가 도넛·추이에서 쓰이는 것은 CC-07 시험에서 12번으로 확인.
+
+## 갱신한 기존 시험과 이유 (모두 의도된 변경, 결함 아님)
+
+| 파일 | 시험 | 이유 |
+|---|---|---|
+| `categories-ui.spec.js` | C-C32 (행 버튼 개수·순서) | 행 맨 앞에 "색" 버튼이 생겨 2개 -> 3개, 순서 "색,이름 바꾸기,사용 안 함" |
+| `categories-ui.spec.js` | 접근성: 모든 행 버튼 접근 이름 | 첫 버튼 "{이름} 색 바꾸기, 지금 {색}" 추가 |
+| `categories.spec.js` | C-C6, C-C18 | 카테고리 객체 키 목록에 `color` 추가 |
+| `design.spec.js` | C-D24 | 10번째 칸까지 data-viz 가 `none, none` -> `9, 10` |
+| `design.spec.js` | C-D35/C-D37 | 11번째 행까지 `none` -> 9, 10, 11. 버튼 목록 비교에서 색 버튼을 따로 검사 |
+| `design.spec.js` | C-D1 | 원본 대비 의도한 차이에 --viz-9..12, 제목 주석, `[data-viz=9..12]`, `.viz-fill-9..12`, 패턴 svg 7 -> 11개 추가 |
+| `followup-2c.spec.js` | 토큰 값 | 라이트 신규 토큰 `--viz-9..12` 허용 |
+| `category-history.spec.js` C-H5·C-H26, `followup-2.spec.js` C-S22·C-S23, `motion.spec.js` C-M1·C-M15, `redesign.spec.js` C-R5·C-R25, `ux1.spec.js` UX-31 | 범위 가드 9개 | "schema.sql·tokens.css·components.css·카테고리 backend 변경 없음"을 확인하던 과거 기능의 가드. 이번 기능이 이 파일들을 의도적으로 바꾸므로 해당 파일만 예외 처리(다른 금지 파일·폴더 검사는 그대로). 가드가 약해졌으므로 reviewer 가 판단할 것 |
+| `redesign.spec.js` | C-R5, C-R25 (재조정) | 변경 검사를 통째로 없애지 않고, 고정 커밋 `17bc134` 대비 tokens.css·components.css 의 추가·삭제 줄이 `--viz-9..12`·견본/채움 규칙·바뀐 제목 주석뿐인지 검사(mobile-360·tablet-768 통과) |
+| `playwright.config.js` | tablet 대상 목록 | `category-color` 추가 |
+
+## 실행한 명령
+
+```
+# 서버: DB_DRIVER=pglite QA_TOOLS=true COOKIE_SECURE=false TRUST_PROXY=true PGLITE_DIR=<임시> PORT=3000 node src/backend/scripts/dev-server.js  (migrate + seed 후, 시작 전 3000 포트 비어 있음 확인)
+npm test                                                     # 410 통과 / 0 실패
+cd e2e && npx playwright test tests/category-color.spec.js --project=mobile-360 --project=tablet-768   # 1차 12/15 통과(실패 3건은 시험 작성 오류: xmlns 오탐, 화살표 순환 계산, 확인창 미수락), 수정 후 통과
+SEED_EMAIL=... SEED_TODAY=2026-10-19 BASE_URL=http://localhost:3000 TRUST_PROXY=true QA_AUX_PORT_BASE=3520 \
+  npx playwright test --project=mobile-360 --project=tablet-768   # 전체 1차: 938 통과 / 23 실패 / 62 skip
+# 갱신 후: 실패 시험(-g 로 지정) + category-color.spec.js 재실행 -> C-H24 외 전부 통과 (60 통과 / 16 skip)
+```
+
+정리: 서버 종료(3000 포트 비움 확인), 임시 PGlite 폴더 삭제, 시험이 덮어쓴 `docs/qa-shots-history|improvements|redesign|spring` PNG 는 `git checkout` 으로 되돌림. 커밋하지 않음. 마이그레이션 시험용 임시 폴더(qa-old-*, qa-pglite-*)는 afterAll 이 삭제.

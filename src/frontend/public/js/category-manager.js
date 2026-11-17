@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { el, $, swatch } from './dom.js';
 import { currentFormType } from './record.js';
 import { openHistory, returnTarget, takeHistoryFocus } from './history.js';
-import { stableVizMap, vizOf } from './lib/viz.js';
+import { stableVizMap, vizOf, vizName, VIZ_COUNT } from './lib/viz.js';
 import { loadCategories, categoryResponse, categoryStatus, categoryError } from './categories.js';
 import {
   MAX_ACTIVE, TYPE_LABEL, splitItems, validateCategoryName, renameNote, disableConfirmText, limitText,
@@ -13,6 +13,7 @@ import {
 const ui = {
   type: 'expense',
   renamingId: null,
+  colorId: null, // 색 고르기 영역이 열린 카테고리 id (한 번에 한 행)
   draft: '', // 이름 바꾸는 입력칸 값 (오류로 다시 그려도 유지)
   rowError: null, // { id, text }
   restoreId: null, // CATEGORY_INACTIVE 로 알게 된 복구 대상
@@ -71,10 +72,12 @@ function activeRow(item) {
   line.appendChild(swatch(vizOf(vizMap, item.name), 'lg'));
   line.appendChild(infoBlock(item));
   const actions = el('div', { class: 'cat-actions' });
+  actions.appendChild(colorButton(item));
   actions.appendChild(actionButton('이름 바꾸기', item.name, () => startRename(item)));
   actions.appendChild(actionButton('사용 안 함', item.name, () => disable(item)));
   line.appendChild(actions);
   li.appendChild(line);
+  if (ui.colorId === item.id) li.appendChild(colorPicker(item));
   li.appendChild(rowErrorEl(item.id));
   return li;
 }
@@ -86,12 +89,68 @@ function inactiveRow(item) {
   line.appendChild(swatch(vizOf(vizMap, item.name), 'lg'));
   line.appendChild(infoBlock(item));
   const actions = el('div', { class: 'cat-actions' });
+  actions.appendChild(colorButton(item));
   actions.appendChild(actionButton('이름 바꾸기', item.name, () => startRename(item)));
   actions.appendChild(actionButton('다시 사용', item.name, () => enable(item)));
   line.appendChild(actions);
   li.appendChild(line);
+  if (ui.colorId === item.id) li.appendChild(colorPicker(item));
   li.appendChild(rowErrorEl(item.id));
   return li;
+}
+
+/** "색" 버튼: 접근 이름에 지금 색 이름을 싣는다. 열려 있으면 aria-expanded */
+function colorButton(item) {
+  const b = el('button', {
+    type: 'button', class: 'btn btn--ghost btn--sm', 'data-color-btn': item.id, 'aria-expanded': String(ui.colorId === item.id),
+    'aria-label': `${item.name} 색 바꾸기, 지금 ${vizName(vizOf(vizMap, item.name))}`,
+  }, '색');
+  b.addEventListener('click', () => toggleColor(item));
+  return b;
+}
+
+/** 같은 유형에서 n번 색을 쓰는 다른 카테고리 이름 (비활성 포함) */
+function usedBy(item, n, items) {
+  const names = items.filter((i) => i.type === item.type && i.name !== item.name && vizMap.get(i.name) === n).map((i) => i.name);
+  if (names.length === 0) return '';
+  return names.length === 1 ? names[0] : `${names[0]} 외 ${names.length - 1}곳`;
+}
+
+/** 12칸 색 고르기 (radiogroup). 화살표로 이동, Enter/Space 로 고르기, Esc 로 닫기 */
+function colorPicker(item) {
+  const cur = vizOf(vizMap, item.name);
+  const items = (categoryResponse() && categoryResponse().items) || [];
+  const group = el('div', { class: 'color-picker', role: 'radiogroup', 'aria-label': `${item.name} 색` });
+  const cells = [];
+  for (let n = 1; n <= VIZ_COUNT; n++) {
+    const other = usedBy(item, n, items);
+    const checked = n === cur;
+    const b = el('button', {
+      type: 'button', class: 'color-cell', role: 'radio', 'data-n': String(n), 'aria-checked': String(checked),
+      tabindex: checked || (cur === 'none' && n === 1) ? '0' : '-1',
+      'aria-label': other ? `${vizName(n)}, ${other}에서 사용 중` : vizName(n),
+    });
+    b.appendChild(el('span', { class: 'swatch swatch--cell', 'data-viz': String(n), 'aria-hidden': 'true' }));
+    const badge = el('span', { class: 'color-cell__check', 'aria-hidden': 'true' });
+    badge.appendChild(el('span', { class: 'icon icon--check' }));
+    b.appendChild(badge);
+    b.addEventListener('click', () => pickColor(item, n));
+    b.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); closeColor(item); return; }
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[ev.key];
+      if (!step) return;
+      ev.preventDefault();
+      const next = cells[(n - 1 + step + VIZ_COUNT) % VIZ_COUNT];
+      cells.forEach((c) => c.setAttribute('tabindex', c === next ? '0' : '-1'));
+      next.focus();
+    });
+    cells.push(b);
+    const cell = el('div', { class: 'color-slot' });
+    cell.appendChild(b);
+    cell.appendChild(el('span', { class: other ? 'color-used' : 'color-used color-used--none', 'aria-hidden': 'true' }));
+    group.appendChild(cell);
+  }
+  return group;
 }
 
 function renameRow(li, item) {
@@ -171,8 +230,50 @@ function rowButton(id, label) {
 }
 
 // ---------------- 동작 ----------------
+function toggleColor(item) {
+  if (busy) return;
+  const open = ui.colorId !== item.id;
+  ui.colorId = open ? item.id : null;
+  ui.renamingId = null;
+  ui.rowError = null;
+  render();
+  if (open) document.querySelector(`#panel-categories .cat-row[data-id="${CSS.escape(item.id)}"] .color-cell[tabindex="0"]`)?.focus();
+  else rowButton(item.id, '색')?.focus();
+}
+
+function closeColor(item) {
+  ui.colorId = null;
+  ui.rowError = null;
+  render();
+  rowButton(item.id, '색')?.focus();
+}
+
+async function pickColor(item, n) {
+  if (busy) return;
+  const cur = vizOf(vizMap, item.name);
+  if (n === cur && item.color === n) { closeColor(item); return; }
+  busy = true;
+  ui.rowError = null;
+  const group = document.querySelector(`#panel-categories .cat-row[data-id="${CSS.escape(item.id)}"] .color-picker`);
+  group?.querySelectorAll('.color-cell').forEach((c) => c.setAttribute('aria-disabled', 'true'));
+  try {
+    await api.updateCategory(item.id, { color: n });
+    ui.colorId = null;
+    await refresh({ dataChanged: true });
+    setStatus(`'${item.name}' 색을 ${vizName(n)}(으)로 바꿨어요`);
+    rowButton(item.id, '색')?.focus();
+  } catch (e) {
+    ui.rowError = { id: item.id, text: errText(e) };
+    render(); // 선택 표시는 서버 값 그대로: 저장 전 색으로 돌아간다
+    document.querySelector(`#panel-categories .cat-row[data-id="${CSS.escape(item.id)}"] .color-cell[data-n="${n}"]`)?.focus();
+  } finally {
+    busy = false;
+  }
+}
+
 function startRename(item) {
   if (busy) return;
+  ui.colorId = null;
   ui.renamingId = item.id;
   ui.draft = item.name;
   ui.rowError = null;
@@ -311,6 +412,7 @@ function setType(type) {
   if (ui.type === type) return;
   ui.type = type;
   ui.renamingId = null;
+  ui.colorId = null;
   ui.rowError = null;
   ui.restoreId = null;
   $('catm-add-error').textContent = '';
@@ -351,6 +453,7 @@ export function initCategoryManager() {
       const back = returnTarget('categories'); // 이력에서 돌아오면 보던 유형 그대로
       ui.type = back ? back.type : currentFormType();
       ui.renamingId = null;
+      ui.colorId = null;
       ui.rowError = null;
       ui.restoreId = null;
       setStatus('');

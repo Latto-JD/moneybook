@@ -16,7 +16,7 @@ export const EMPTY_TEXT = '아직 이 기간에 기록이 없어요';
 const DONUT_OUTER = 92;
 const DONUT_INNER = 60;
 
-// 번호 2..8 의 무늬 (patterns/viz-N.svg 와 같은 모양). 1번은 단색. 선 색은 --viz-pattern-ink.
+// 번호 2..12 의 무늬 (patterns/viz-N.svg 와 같은 모양). 1번은 단색. 선 색은 --viz-pattern-ink.
 const VIZ_MARKS = {
   2: [['path', { d: 'M-2 2l4-4M0 8l8-8M6 10l4-4', 'stroke-width': 1.6, class: 'viz-ink-stroke' }]],
   3: [['circle', { cx: 2, cy: 2, r: 1.3, class: 'viz-ink' }], ['circle', { cx: 6, cy: 6, r: 1.3, class: 'viz-ink' }]],
@@ -25,6 +25,10 @@ const VIZ_MARKS = {
   6: [['path', { d: 'M2 0v8M6 0v8', 'stroke-width': 1.4, class: 'viz-ink-stroke' }]],
   7: [['rect', { x: 0, y: 0, width: 4, height: 4, class: 'viz-ink' }], ['rect', { x: 4, y: 4, width: 4, height: 4, class: 'viz-ink' }]],
   8: [['path', { d: 'M-2 6l4 4M0 0l8 8M6 -2l4 4', 'stroke-width': 1.6, class: 'viz-ink-stroke' }]],
+  9: [['path', { d: 'M0 0l8 8M8 0l-8 8', 'stroke-width': 1.2, class: 'viz-ink-stroke' }]],
+  10: [['circle', { cx: 4, cy: 4, r: 2.3, class: 'viz-ink' }]],
+  11: [['path', { d: 'M0 6l2-4 2 4 2-4 2 4', 'stroke-width': 1.3, class: 'viz-ink-stroke' }]],
+  12: [['path', { d: 'M-1 -1L9 9', 'stroke-width': 3, class: 'viz-ink-stroke' }]],
 };
 // 월별 막대: 수입 = / 사선, 지출 = \ 사선. 선 개수(밀도)를 같게 한다.
 const BAR_MARKS = {
@@ -48,7 +52,7 @@ function s(tag, attrs, text) {
   return e;
 }
 
-/** <defs> 에 번호 n(2..8) 의 색 + 무늬 패턴을 넣고 fill 값(url)을 반환 */
+/** <defs> 에 번호 n(2..12) 의 색 + 무늬 패턴을 넣고 fill 값(url)을 반환 */
 function addVizPattern(defs, id, n) {
   const p = s('pattern', { id, width: 8, height: 8, patternUnits: 'userSpaceOnUse' });
   p.appendChild(s('rect', { width: 8, height: 8, class: `viz-fill-${n}` }));
@@ -145,7 +149,7 @@ function legendItem(marker, label, extra) {
  * 도넛. opts: { title, periodLabel, items:[{label,value}], centerLabel='총 지출', noun='지출', vizMap }
  * onItem(label) 을 주면 묶음이 아닌 범례 행 안쪽이 버튼 하나가 되어 누를 때 부른다 (histType 은 data-hist-type 으로 붙는다).
  * 조각 순서 = 범례 순서 = 금액 내림차순 (12시 방향 시계방향).
- * 색·무늬 번호는 vizMap(이름 -> 1..8, lib/viz.js)의 고정 번호를 우선 쓰고, 없거나 겹치면 남은 가장 작은 번호.
+ * 색·무늬 번호는 vizMap(이름 -> 1..12, lib/viz.js)의 저장된 번호를 겹쳐도 그대로 쓰고, 번호가 없는 조각만 남은 가장 작은 번호.
  * items 에 { members:[{label,value}], pinLast:true } 인 "그 외 N개" 묶음이 있으면 마지막 조각(중립 단색)으로 그리고,
  * 범례에 묶인 이름을 나열하며, 표 대체에는 묶지 않은 전체 행을 싣는다.
  */
@@ -292,7 +296,7 @@ export function renderGroupedBars(container, opts) {
 /**
  * 단일 막대: 카테고리별 월 추이.
  * opts: { title, seriesName, months:["YYYY-MM"], totals:[number], viz?, colorIndex=0 }  (api category-monthly 의 한 series)
- * viz: 그 카테고리의 색·무늬 번호(1..8). 없으면 colorIndex 순서로 정한다.
+ * viz: 그 카테고리의 색·무늬 번호(1..12). 없으면 colorIndex 순서로 정한다.
  */
 export function renderBars(container, opts) {
   const { title, seriesName, months, totals, colorIndex = 0 } = opts;

@@ -13,6 +13,8 @@ export const TYPES = ['expense', 'income'];
 
 export const CATEGORY_LIMITS = { activePerType: 30, total: 120, nameMax: 15 };
 
+export const COLOR_COUNT = 12;
+
 export const TYPE_LABEL = { expense: '지출', income: '수입' };
 
 // 기본 세트 순서 인덱스 (목록에 없으면 맨 뒤). 사용자 카테고리를 모르는 순수 함수의 기본 동률 기준이다.
@@ -43,6 +45,7 @@ export function toCategory(row, usedCount = 0) {
     active: row.active,
     sortOrder: Number(row.sort_order),
     usedCount: Number(usedCount),
+    color: row.color == null ? null : Number(row.color),
   };
 }
 
@@ -60,8 +63,8 @@ export async function ensureDefaults(db, userId) {
     });
   }
   await db.query(
-    `insert into categories (user_id, type, name, name_key, sort_order)
-     select $1::uuid, d.type, d.name, lower(d.name), d.ord
+    `insert into categories (user_id, type, name, name_key, sort_order, color)
+     select $1::uuid, d.type, d.name, lower(d.name), d.ord, d.ord + 1
        from unnest($2::text[], $3::text[], $4::int[]) as d(type, name, ord)
       where not exists (select 1 from categories c where c.user_id = $1::uuid)
      on conflict do nothing`,
@@ -69,11 +72,19 @@ export async function ensureDefaults(db, userId) {
   );
 }
 
+// 새 카테고리 색: 사용 중인 번호(비활성 포함, null 제외)를 뺀 가장 작은 번호. 모두 쓰면 가장 적게 쓴 번호 중 가장 작은 것.
+export function pickColor(usedColors) {
+  const count = new Array(COLOR_COUNT + 1).fill(0);
+  for (const c of usedColors) if (Number.isInteger(c) && c >= 1 && c <= COLOR_COUNT) count[c] += 1;
+  const min = Math.min(...count.slice(1));
+  return count.findIndex((n, i) => i >= 1 && n === min);
+}
+
 const byOrder = (a, b) => a.sort_order - b.sort_order || koCompare(a.name, b.name);
 
 // 사용자의 카테고리 행 전체 (지출 먼저, 유형 안에서 sortOrder 순). 행이 0개면 기본 세트를 만든다.
 export async function loadUserCategories(db, userId) {
-  const select = () => db.query('select id, type, name, active, sort_order from categories where user_id = $1', [userId]);
+  const select = () => db.query('select id, type, name, active, sort_order, color from categories where user_id = $1', [userId]);
   let { rows } = await select();
   if (!rows.length) {
     await ensureDefaults(db, userId);

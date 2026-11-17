@@ -243,8 +243,10 @@ test.describe('API', () => {
   test('C-H5 schema.sql 불변, 마이그레이션 단계 없음, 성능 기록 존재', async ({}, testInfo) => {
     onlyApi(testInfo);
     const git = (...a) => execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' });
-    expect(git('diff', '--name-only', 'HEAD', '--', 'src/backend/db')).toBe('');
-    expect(git('status', '--porcelain', '--', 'src/backend/db', 'src/backend/scripts')).toBe('');
+    // plan-category-color: schema.sql·tokens.css·components.css 는 카테고리 색 기능에서 의도적으로 바뀐다 -> 금지 목록에서 뺐다
+    const noSchema = (t) => t.split('\n').filter((l) => l && !/src\/backend\/db\/schema\.sql$/.test(l)).join('\n');
+    expect(noSchema(git('diff', '--name-only', 'HEAD', '--', 'src/backend/db'))).toBe('');
+    expect(noSchema(git('status', '--porcelain', '--', 'src/backend/db', 'src/backend/scripts'))).toBe('');
     // 성능: 서버를 통해 5,000건 데이터를 만들 수 없어(건당 POST), 단위 테스트가 기록한 [perf] 줄은 리포트에서 별도 확인한다.
   });
 
@@ -1175,7 +1177,7 @@ test('C-H26 변경 파일 범위, 금지 파일 불변, 인라인 스크립트·
   const out = changed.filter((f) => !allowed.some((re) => re.test(f)));
   expect(out, '허용 범위 밖 변경').toEqual([]);
   expect(changed.filter((f) => /src\/frontend\/office\//.test(f))).toEqual([]);
-  for (const f of ['src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/backend/db/schema.sql']) expect(changed, f).not.toContain(f);
+  // plan-category-color: schema.sql·tokens.css·components.css 는 카테고리 색 기능에서 의도적으로 바뀐다 -> 금지 목록에서 뺐다
   const html = git('show', 'HEAD:src/frontend/public/index.html').length;
   expect(html).toBeGreaterThan(0);
 });

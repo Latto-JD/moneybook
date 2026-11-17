@@ -39,9 +39,9 @@
   --color-error:          #AC3A31; /* 5.7 */
   --color-error-tint:     #F8E8E5;
 
-  /* ── 색: 데이터 시각화 (도넛 최대 8조각) ──
+  /* ── 색: 데이터 시각화 (카테고리 12색) ──
      홀수=중명도, 짝수=저명도 교차 → 인접 조각 3.1:1 이상, 배경 대비 3.5:1 이상.
-     순서대로 배치할 것. 무늬는 patterns/viz-1..8.svg 와 1:1 대응 */
+     순서대로 배치할 것. 무늬는 patterns/viz-1..12.svg 와 1:1 대응 */
   --viz-1: #3B85CB; /* 하늘   · 무늬 없음(단색) */
   --viz-2: #5F1B00; /* 밤색   · 사선 */
   --viz-3: #A97803; /* 겨자   · 점 */
@@ -50,6 +50,10 @@
   --viz-6: #6A0418; /* 와인   · 세로줄 */
   --viz-7: #648D31; /* 올리브 · 체크 */
   --viz-8: #591255; /* 자두   · 역사선 */
+  --viz-9: #C2410C; /* 주황   · X 교차 */
+  --viz-10: #C42A6A; /* 분홍   · 큰 점 */
+  --viz-11: #5B6B7F; /* 회청   · 지그재그 */
+  --viz-12: #8E44CC; /* 보라   · 굵은 역사선 */
   --viz-gap: var(--color-surface);       /* 조각 사이 2px 간격 */
   --viz-pattern-ink: var(--color-surface); /* 무늬 선 색 */
 
@@ -140,6 +144,10 @@
     --viz-6: #AF5356;
     --viz-7: #AFD884;
     --viz-8: #9A5895;
+    --viz-9: #F2884B;
+    --viz-10: #F28DB0;
+    --viz-11: #98A8BE;
+    --viz-12: #B58AE8;
     --shadow-sm:    0 1px 2px rgba(0, 0, 0, .4);
     --shadow-card:  0 1px 0 rgba(255, 255, 255, .03), 0 10px 28px -18px rgba(0, 0, 0, .9);
     --shadow-sheet: 0 -8px 32px -12px rgba(0, 0, 0, .7);
@@ -158,6 +166,7 @@
   --color-error: #F59387; --color-error-tint: #35211E;
   --viz-1: #A4D0FE; --viz-2: #AD5739; --viz-3: #F6C46C; --viz-4: #7264B3;
   --viz-5: #51DFDF; --viz-6: #AF5356; --viz-7: #AFD884; --viz-8: #9A5895;
+  --viz-9: #F2884B; --viz-10: #F28DB0; --viz-11: #98A8BE; --viz-12: #B58AE8;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
   --shadow-card: 0 1px 0 rgba(255,255,255,.03), 0 10px 28px -18px rgba(0,0,0,.9);
   --shadow-sheet: 0 -8px 32px -12px rgba(0,0,0,.7);

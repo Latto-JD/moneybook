@@ -199,6 +199,18 @@ test('도넛 묶음 렌더: 조각 8개, 조각마다 (색,무늬) 다름, 범�
   assert.doesNotMatch(fig.textContent, BAD);
 });
 
+test('viz 9..12 는 수동 다크 블록(data-theme)에도 있고 미디어 쿼리 블록과 값이 같다', () => {
+  const manual = tokens.slice(tokens.indexOf(':root[data-theme="dark"]'));
+  for (let n = 1; n <= 12; n++) assert.equal(tokenOf(manual, `--viz-${n}`), tokenOf(darkBlock, `--viz-${n}`), `viz-${n}`);
+});
+
+test('도넛: 저장된 번호가 같으면 겹쳐도 그대로 (화면 간 같은 색)', () => {
+  const root = mount();
+  renderDonut(root, { title: 't', items: [{ label: 'a', value: 30 }, { label: 'b', value: 20 }, { label: 'c', value: 10 }], vizMap: new Map([['a', 9], ['b', 9], ['c', 12]]) });
+  const svg = byTag(root.children[0], 'svg').find((e) => e.attrs.role === 'img');
+  assert.deepEqual(svg.children.filter((p) => p.tag === 'path').map((p) => p.attrs['data-viz']), ['9', '9', '12']);
+});
+
 test('도넛: 수입 보기는 중심 라벨/문장이 수입', () => {
   const root = mount();
   renderDonut(root, { title: '카테고리 수입 비중', periodLabel: '2026년 10월', items: [{ label: '급여', value: 3000000 }], centerLabel: '총 수입', noun: '수입' });
@@ -221,12 +233,12 @@ const lum = (hex) => {
 };
 const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
 
-test('viz 1..8 과 수입/지출 색이 카드 배경 대비 3:1 이상, 중립(그 외) 색은 4.5:1 이상 (라이트·다크)', () => {
+test('viz 1..12 와 수입/지출 색이 카드 배경 대비 3:1 이상, 중립(그 외) 색은 4.5:1 이상 (라이트·다크)', () => {
   for (const [mode, block] of [['light', lightBlock], ['dark', darkBlock]]) {
     const surface = tokenOf(block, '--color-surface');
-    const colors = Array.from({ length: 8 }, (_, i) => tokenOf(block, `--viz-${i + 1}`));
+    const colors = Array.from({ length: 12 }, (_, i) => tokenOf(block, `--viz-${i + 1}`));
     colors.forEach((c, i) => assert.ok(contrast(c, surface) >= 3, `${mode} viz-${i + 1} ${c} ${contrast(c, surface).toFixed(2)}`));
-    assert.equal(new Set(colors).size, 8, `${mode}: 8색이 모두 다르다`);
+    assert.equal(new Set(colors).size, 12, `${mode}: 12색이 모두 다르다`);
     for (const t of ['--color-income', '--color-expense']) assert.ok(contrast(tokenOf(block, t), surface) >= 3, `${mode} ${t}`);
     assert.ok(contrast(tokenOf(block, '--color-text-muted'), surface) >= 4.5, `${mode} 중립색`);
   }

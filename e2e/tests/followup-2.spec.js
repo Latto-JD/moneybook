@@ -774,7 +774,7 @@ test.describe('정적 검사', () => {
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
     // tokens.css·components.css 는 재검증 4(사용자 요청: 다크 금색 선, 초기화 아이콘)에서 의도적으로 바뀜 - design.spec C-D1 이 허용 차이를 줄 단위로 검사한다
     // UX 묶음 1(U4): theme-init.js 는 theme-color 를 맞추도록 의도적으로 바뀐다(plan-ux1 4.7) -> 금지 목록에서 뺀다
-    const forbidden = ['src/backend/db/schema.sql', 'src/frontend/office', 'docs/plan.md'];
+    const forbidden = ['src/frontend/office', 'docs/plan.md']; // plan-category-color: schema.sql 는 색 열 추가로 의도적으로 바뀐다
     const existing = forbidden.filter((p) => existsSync(join(ROOT, p)));
     expect(git('status', '--porcelain', '--', ...existing).trim(), `금지 파일 변경: ${existing}`).toBe('');
     expect(git('diff', '--name-only', '5a0689d', '--', ...existing).trim(), `1단계 커밋 이후 금지 파일 변경: ${existing}`).toBe('');
@@ -792,10 +792,10 @@ test.describe('정적 검사', () => {
     expect(added.filter((l) => l.startsWith('-') && /api\//.test(l)), 'API 경로 줄은 삭제되지 않음(개선 A11 이 insights 함수 안을 정리해 다른 줄은 바뀜)').toEqual([]);
     expect(added.join('\n')).toMatch(/incomeDrops/);
     expect(added.join('\n')).toMatch(/missingIncome/);
-    expect(git('diff', '5a0689d', '--stat', '--', 'src/backend/db/schema.sql').trim()).toBe('');
+    // plan-category-color: schema.sql 변경 없음 검사는 뺐다(색 열 추가). 내용은 backend category-color.test.js 가 확인
     const names = git('diff', '5a0689d', '--name-only', '--', 'src/backend', 'api').split('\n').filter(Boolean);
     const untracked = git('ls-files', '--others', '--exclude-standard', '--', 'src/backend', 'api').split('\n').filter(Boolean);
     console.log(`BACKEND-CHANGED ${[...names, ...untracked].join(', ')}`);
-    expect([...names, ...untracked].filter((f) => /api\/|routes|handlers?\.js|index\.js|auth|categor|transaction|stats|summary|db\//i.test(f) && !/rules\/routes\.js|test\/|backend\/history\/|backend\/router\.js/.test(f)), '인사이트 외 API/DB 파일 변경').toEqual([]);
+    expect([...names, ...untracked].filter((f) => /api\/|routes|handlers?\.js|index\.js|auth|categor|transaction|stats|summary|db\//i.test(f) && !/rules\/routes\.js|test\/|backend\/history\/|backend\/router\.js|categories\/routes\.js|lib\/categories\.js|db\/schema\.sql/.test(f) /* plan-category-color: 카테고리 색 기능의 backend 변경 */), '인사이트 외 API/DB 파일 변경').toEqual([]);
   });
 });

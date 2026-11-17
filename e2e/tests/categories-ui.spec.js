@@ -803,9 +803,10 @@ test.describe('C-C32 수입·지출 대칭(관리 화면)', () => {
     expect(inc.nameInputs).toBe(1);
     expect(inc.addButtons).toBe(1);
     expect(inc.details).toBe(1);
-    expect(exp.rowButtons.every((n) => n === 2)).toBe(true);
-    expect(inc.rowButtons.every((n) => n === 2)).toBe(true);
-    expect(inc.rowLabels.every((l) => l.join() === '이름 바꾸기,사용 안 함')).toBe(true);
+    // plan-category-color: 행 맨 앞에 "색" 버튼이 생겨 2개 -> 3개
+    expect(exp.rowButtons.every((n) => n === 3)).toBe(true);
+    expect(inc.rowButtons.every((n) => n === 3)).toBe(true);
+    expect(inc.rowLabels.every((l) => l.join() === '색,이름 바꾸기,사용 안 함')).toBe(true);
     expect(inc.heading).toBe(exp.heading);
     expect(inc.addLabel).toBe(exp.addLabel);
     expect(exp.rows).toBe(8);
@@ -1348,7 +1349,7 @@ test.describe('이름 변경·R1/R2 연동 UI', () => {
     const names = await page.locator('#catm-active .cat-row').evaluateAll((rows) => rows.map((r) => ({
       name: r.querySelector('.cat-name').textContent, labels: [...r.querySelectorAll('button')].map((b) => b.getAttribute('aria-label')),
     })));
-    for (const r of names) expect(r.labels).toEqual([`${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`]);
+    for (const r of names) expect(r.labels).toEqual([expect.stringMatching(new RegExp(`^${r.name.replace(/[/\^$*+?.()|[\]{}]/g, '\$&')} 색 바꾸기, 지금 .+`)), `${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`]); // plan-category-color: 색 버튼 추가
     // h1 은 1개, 목록 제목 h2, 상태 영역 role=status
     expect(await page.locator('#panel-categories h1').count()).toBe(1);
     await expect(page.locator('#catm-status')).toHaveAttribute('role', 'status');

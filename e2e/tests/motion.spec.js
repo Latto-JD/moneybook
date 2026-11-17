@@ -110,7 +110,7 @@ test.describe('C-M1~C-M2, C-M6 공통값·규칙', () => {
     await a.ctx.close();
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-    expect(git('status', '--porcelain', '--untracked-files=no', '--', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css').trim()).toBe('');
+    // plan-category-color: tokens.css·components.css 는 팔레트 12색 확장으로 의도적으로 바뀐다 -> 변경 없음 검사 제외
   });
 
   test('C-M2 keyframes 는 opacity·translate·transform 뿐, fill-mode backwards 뿐, 끝나면 getAnimations 비고 opacity 1·translate none', async ({ browser }, testInfo) => {
@@ -561,9 +561,9 @@ test.describe('C-M14~C-M15 회귀·범위', () => {
   test('C-M15 변경 범위: backend·schema·api.md·tokens·components 변경 없음, 변경 파일은 허용 폴더 안', async ({}, testInfo) => {
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-    expect(git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend/db', 'src/backend/rules', 'src/backend/transactions', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office').trim()).toBe('');
+    expect(git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend/rules', 'src/backend/transactions', 'src/frontend/office' /* plan-category-color: db(schema.sql)·tokens·components 는 의도적으로 바뀐다 */).trim()).toBe('');
     const changed = git('status', '--porcelain').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));
-    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(history\/|router\.js$|test\/history\.test\.js$)|e2e\/|docs\/|design_handoff_moneybook\/)/;
+    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(history\/|router\.js$|test\/history\.test\.js$|categories\/routes\.js$|lib\/categories\.js$|db\/schema\.sql$|test\/categories\.test\.js$|test\/category-color\.test\.js$)|e2e\/|docs\/|design_handoff_moneybook\/)/;
     expect(changed.filter((f) => !allowed.test(f)), '허용 폴더 밖 변경').toEqual([]);
   });
 });

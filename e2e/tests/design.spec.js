@@ -182,7 +182,9 @@ test.describe('11.1 자산 · CSP', () => {
         ['--color-field-line:        var(--color-line);  /* 금액 입력 밑줄 */', '--color-field-line-active: var(--color-focus); /* 입력 중 밑줄 */', '--color-line:           #4B4231; /* 금색 계열 구분선 (장식) */', '--color-border:         #9A7E4A; /* 금색 테두리: 카드 4.4 / 눌린 면 3.8 */', '--color-field-line:        #9A7E4A;', '--color-field-line-active: var(--color-focus); /* 포커스 표시는 라이트와 같이 파랑 */', '--color-line: #4B4231; --color-border: #9A7E4A; --color-border-strong: #EEEBE3;', '--color-field-line: #9A7E4A; --color-field-line-active: var(--color-focus);']],
       ['components.css', [], ['.icon--reset    { --icon: url("../icons/reset.svg"); }']],
     ]) {
-      const a = fileLines(join(HANDOFF, name)); const b = fileLines(join(PUBLIC, 'css', name));
+      // plan-category-color: 팔레트 12색 확장(--viz-9..12 값과 바뀐 제목 주석 2줄)은 의도한 차이라 비교에서 뺀다. 값은 category-color.spec.js CC-15 가 확인
+      const viz = (l) => /^--viz-(9|1[0-2]):|^--viz-9: #F2884B; --viz-10|데이터 시각화|^순서대로 배치할 것|^\[data-viz="(9|1[0-2])"\]|^\.viz-fill-9 /.test(l);
+      const a = fileLines(join(HANDOFF, name)).filter((l) => !viz(l)); const b = fileLines(join(PUBLIC, 'css', name)).filter((l) => !viz(l));
       expect(a.filter((l) => !b.includes(l)), `${name} 원본에서 사라진 줄`).toEqual(removed);
       expect(b.filter((l) => !a.includes(l)), `${name} 새로 생긴 줄`).toEqual(added);
     }
@@ -220,12 +222,12 @@ test.describe('11.1 자산 · CSP', () => {
     const pubIcons = readdirSync(join(PUBLIC, 'icons')).filter((f) => f.endsWith('.svg'));
     expect(pubIcons, '배포 아이콘 19개 = 원본 15 + theme 2 + reset 1 + logout 1').toHaveLength(19);
     expect(pubIcons.filter((f) => !icons.includes(f)).sort()).toEqual(['logout.svg', 'reset.svg', 'theme-dark.svg', 'theme-light.svg']);
-    expect(readdirSync(join(PUBLIC, 'patterns')).filter((f) => f.endsWith('.svg'))).toHaveLength(7);
+    expect(readdirSync(join(PUBLIC, 'patterns')).filter((f) => f.endsWith('.svg'))).toHaveLength(11); // plan-category-color: 무늬 7 -> 11 (viz-9..12 추가)
     // 배포 svg 22개 + 새 3개: 메타데이터 문자열 없음
     for (const dir of ['icons', 'patterns']) for (const f of readdirSync(join(PUBLIC, dir)).filter((n) => n.endsWith('.svg'))) expect(read(PUBLIC, join(dir, f)), `${dir}/${f}`).not.toMatch(/c2pa|<metadata/i);
     // public/ 에 있는 자산 중 원본에 없는 것은 theme 아이콘 3개뿐
     for (const dir of ['fonts', 'icons', 'patterns']) {
-      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f) && !(dir === 'icons' && /^(theme-(light|dark)|reset|logout)\.svg$/.test(f)));
+      const extra = readdirSync(join(PUBLIC, dir)).filter((f) => !readdirSync(join(HANDOFF, dir)).includes(f) && !(dir === 'icons' && /^(theme-(light|dark)|reset|logout)\.svg$/.test(f)) && !(dir === 'patterns' && /^viz-(9|1[0-2])\.svg$/.test(f))); // plan-category-color: 새 무늬 4개 허용
       expect(extra, `${dir} 여분 파일`).toEqual([]);
     }
   });
@@ -901,7 +903,7 @@ test.describe('11.4 기록', () => {
     });
     expect(geo.rows).toBe(8);
     expect(geo.scrollable).toBe(false);
-    expect(geo.vizs).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', 'none', 'none']);
+    expect(geo.vizs).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']); // plan-category-color: 9번째부터도 저장된 색(9, 10)
     // 마지막 칸이 Tab 으로 닿고 보이는지
     await page.locator('#category-chips button').first().focus();
     for (let i = 0; i < 30; i++) await page.keyboard.press('Tab');
@@ -1186,8 +1188,8 @@ test.describe('11.6 카테고리 관리', () => {
     await expect(page.locator('#catm-active .cat-row')).toHaveCount(11);
     const rowsInfo = () => page.locator('#catm-active .cat-row').evaluateAll((els) => els.map((r) => { const s = r.querySelector('.swatch'); const bs = [...r.querySelectorAll('button')]; return { name: r.querySelector('.cat-name').textContent, viz: s.getAttribute('data-viz'), size: s.getBoundingClientRect().width, used: r.querySelector('.cat-used').textContent, btns: bs.map((b) => b.getAttribute('aria-label')), lastBorder: getComputedStyle(r.closest('li') || r).borderBottomWidth }; }));
     const before = await rowsInfo();
-    expect(before.map((r) => r.viz)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', 'none', 'none', 'none']);
-    for (const r of before) { expect(r.size).toBe(28); expect(r.used).toMatch(/^기록 \d+건$/); expect(r.btns).toEqual(r.used === '기록 0건' ? [`${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`] : [`${r.name} 사용 이력 보기, ${r.used}`, `${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`]); } // 튠업 T2: 기록 있는 행은 이름/기록 N건 이 이력 버튼
+    expect(before.map((r) => r.viz)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']); // plan-category-color: 9번째부터 9.. (회색 없음)
+    for (const r of before) { expect(r.size).toBe(28); expect(r.used).toMatch(/^기록 \d+건$/); expect(r.btns.filter((b) => !/ 색 바꾸기, 지금 /.test(b))).toEqual(r.used === '기록 0건' ? [`${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`] : [`${r.name} 사용 이력 보기, ${r.used}`, `${r.name} 이름 바꾸기`, `${r.name} 사용 안 함`]); expect(r.btns.filter((b) => b.startsWith(`${r.name} 색 바꾸기, 지금 `))).toHaveLength(1); } // 튠업 T2: 기록 있는 행은 이름/기록 N건 이 이력 버튼
     expect(before.find((r) => r.name === '교통').used).toBe('기록 1건');
     const last = await page.locator('#catm-active > li').last().evaluate((li) => { const cs = getComputedStyle(li); return { b: cs.borderBottomWidth, bs: cs.borderBottomStyle, inner: li.querySelector('.cat-row') ? getComputedStyle(li.querySelector('.cat-row')).borderBottomWidth : null }; });
     const first = await page.locator('#catm-active > li').first().evaluate((li) => getComputedStyle(li).borderBottomWidth);

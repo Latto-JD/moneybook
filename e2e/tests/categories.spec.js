@@ -39,7 +39,7 @@ test.describe('C-C6 기본 세트', () => {
     expect(b.items.filter((i) => i.type === 'income').map((i) => i.name)).toEqual(DEFAULT_INCOME);
     // 지출 먼저, 그다음 수입
     expect(b.items.map((i) => i.type)).toEqual([...Array(8).fill('expense'), ...Array(4).fill('income')]);
-    for (const i of b.items) expect(Object.keys(i).sort()).toEqual(['active', 'id', 'name', 'sortOrder', 'type', 'usedCount']);
+    for (const i of b.items) expect(Object.keys(i).sort()).toEqual(['active', 'color', 'id', 'name', 'sortOrder', 'type', 'usedCount']);
   });
 });
 
@@ -564,7 +564,7 @@ test.describe('C-C18 응답 형식/헤더', () => {
       expect(ok.headers()[h], h).toBe(ref.headers()[h]);
     }
     // 응답 본문에 userId/user_id/name_key 등 내부 필드 없음
-    expect(Object.keys(await ok.json()).sort()).toEqual(['active', 'id', 'name', 'sortOrder', 'type', 'usedCount']);
+    expect(Object.keys(await ok.json()).sort()).toEqual(['active', 'color', 'id', 'name', 'sortOrder', 'type', 'usedCount']);
   });
 });
 

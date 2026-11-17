@@ -187,10 +187,10 @@ test.describe('C-R1~C-R5 공통', () => {
     await a.ctx.close();
   });
 
-  test('C-R5 tokens.css·components.css 변경 없음(git), style.css·JS 에 hex·rgb 없음', async ({}, testInfo) => {
+  test('C-R5 tokens.css·components.css 는 --viz-9..12 관련 줄만 변경(git), style.css·JS 에 hex·rgb 없음', async ({}, testInfo) => {
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-    expect(git('status', '--porcelain', '--', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css').trim()).toBe('');
+    expect(vizOnlyCssDiff(git), 'tokens.css·components.css 에서 --viz-9..12 외 변경').toEqual([]); // plan-category-color: 팔레트 12색 확장만 허용
     const css = readFileSync(join(PUBLIC, 'css', 'style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
     for (const f of ['app.js', 'account.js', 'charts.js', 'dashboard.js', 'record.js', 'insights.js', 'summary-card.js', 'lib/category-grid.js', 'lib/summary-data.js']) {
@@ -802,14 +802,15 @@ test.describe('C-R19~C-R23 대시보드', () => {
 
 // ====================================================================== 회귀 · 범위 · 스크린샷
 test.describe('C-R24~C-R26 회귀·범위·스크린샷', () => {
-  test('C-R25 변경 범위: src/backend·schema.sql·docs/api.md·tokens.css·components.css 변경 없음, 변경 파일은 허용 폴더 안', async ({}, testInfo) => {
+  test('C-R25 변경 범위: office·금지 폴더의 새 파일 없음, tokens.css·components.css 는 --viz-9..12 관련 줄만 변경, 변경 파일은 허용 폴더 안', async ({}, testInfo) => {
     onlyMobile(testInfo);
     const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
-    const tracked = git('status', '--porcelain', '--untracked-files=no', '--', 'src/backend/db', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css', 'src/frontend/office').trim(); // UX 묶음 1(U4): theme-init.js 는 theme-color 때문에 의도적으로 바뀐다(plan-ux1 4.7) -> 금지 목록에서 뺐다
+    const tracked = git('status', '--porcelain', '--untracked-files=no', '--', 'src/frontend/office').trim(); // plan-category-color: schema.sql·tokens·components 는 의도적으로 바뀐다 -> // UX 묶음 1(U4): theme-init.js 는 theme-color 때문에 의도적으로 바뀐다(plan-ux1 4.7) -> 금지 목록에서 뺐다
     expect(tracked, `금지 파일 변경: ${tracked}`).toBe('');
+    expect(vizOnlyCssDiff(git), 'tokens.css·components.css 에서 --viz-9..12 외 변경').toEqual([]);
     expect(git('ls-files', '--others', '--exclude-standard', '--', 'src/backend/db', 'src/frontend/office').trim(), '금지 폴더의 새 파일').toBe('');
     const changed = git('status', '--porcelain').split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, ''));
-    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(rules|test|history)\/|src\/backend\/router\.js$|e2e\/|docs\/|design_handoff_moneybook\/)/; // 개선 작업(B4, A11)으로 backend rules 가 의도적으로 바뀜
+    const allowed = /^(src\/frontend\/public\/|src\/frontend\/test\/|src\/backend\/(rules|test|history)\/|src\/backend\/(router\.js|categories\/routes\.js|lib\/categories\.js|db\/schema\.sql)$|e2e\/|docs\/|design_handoff_moneybook\/)/; // 개선 작업(B4, A11)으로 backend rules 가 의도적으로 바뀜
     const outside = changed.filter((f) => !allowed.test(f));
     expect(outside, `허용 폴더 밖 변경: ${outside}`).toEqual([]);
   });
@@ -869,3 +870,10 @@ test.describe('C-R24~C-R26 회귀·범위·스크린샷', () => {
     await a.ctx.close();
   });
 });
+
+/** 고정 커밋 17bc134(카테고리 색 직전) 대비 작업 트리: tokens.css·components.css 의 추가·삭제 줄 중 plan-category-color(--viz-9..12, 그 견본·채움 규칙, 바뀐 제목 주석)가 아닌 것 */
+function vizOnlyCssDiff(git) {
+  const out = git('diff', '-U0', '17bc134', '--', 'src/frontend/public/css/tokens.css', 'src/frontend/public/css/components.css');
+  const ok = /--viz-(9|1[0-2])(?!\d)|data-viz="(9|1[0-2])"|^\.viz-fill-9 |데이터 시각화|순서대로 배치할 것/;
+  return out.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l)).map((l) => l.slice(1).trim()).filter((l) => !ok.test(l));
+}
